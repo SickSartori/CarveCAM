@@ -1,0 +1,145 @@
+Namespace Model
+
+    ''' <summary>Oggetto mesh importato, posizionato nella scena.</summary>
+    Public Class SceneObjectDef
+        Public Property MeshId As String
+        Public Property Name As String
+        Public Property Position As Double() = {0, 0, 0}
+        ''' <summary>Rotazione Euler XYZ in gradi (convenzione Three.js).</summary>
+        Public Property Rotation As Double() = {0, 0, 0}
+        Public Property Scale As Double() = {1, 1, 1}
+        ''' <summary>Se falso l'oggetto non viene considerato nel calcolo dei percorsi.</summary>
+        Public Property Include As Boolean = True
+    End Class
+
+    ''' <summary>Artefatto primitivo: box, cylinder, cone (tronco di cono), sphere. Centrato nella propria origine, asse lungo Z locale.</summary>
+    Public Class ArtifactDef
+        Public Property Id As String
+        Public Property Name As String
+        Public Property Kind As String = "box"
+        ''' <summary>Dimensioni del parallelepipedo (X,Y,Z).</summary>
+        Public Property Size As Double() = {20, 20, 20}
+        ''' <summary>Raggio (sfera, cilindro) o raggio inferiore (tronco di cono).</summary>
+        Public Property Radius As Double = 10
+        ''' <summary>Raggio superiore del tronco di cono.</summary>
+        Public Property Radius2 As Double = 5
+        Public Property Height As Double = 20
+        Public Property Position As Double() = {0, 0, 0}
+        Public Property Rotation As Double() = {0, 0, 0}
+        Public Property Include As Boolean = True
+    End Class
+
+    ''' <summary>Piano di lavoro: origine e assi (U,V nel piano, N normale = asse utensile).</summary>
+    Public Class PlaneDef
+        Public Property Origin As Double() = {0, 0, 0}
+        Public Property U As Double() = {1, 0, 0}
+        Public Property V As Double() = {0, 1, 0}
+        Public Property N As Double() = {0, 0, 1}
+    End Class
+
+    ''' <summary>Entità di sketch in coordinate piano (u,v). Kind: polyline, rect, circle, polygon.</summary>
+    Public Class SketchEntityDef
+        Public Property Id As String
+        Public Property Kind As String
+        Public Property Pts As Double()()
+        Public Property Closed As Boolean = True
+        Public Property X1 As Double
+        Public Property Y1 As Double
+        Public Property X2 As Double
+        Public Property Y2 As Double
+        Public Property Cx As Double
+        Public Property Cy As Double
+        Public Property R As Double
+        Public Property Sides As Integer = 6
+        ''' <summary>Rotazione in gradi (poligono regolare).</summary>
+        Public Property Rot As Double
+    End Class
+
+    Public Class ToolDef
+        Public Property Number As Integer = 1
+        ''' <summary>"flat" (fresa cilindrica), "ball" (fresa sferica) o "bull" (fresa torica).</summary>
+        Public Property Type As String = "flat"
+        Public Property Diameter As Double = 6
+        ''' <summary>Raggio di raccordo dello spigolo (solo fresa torica) [mm].</summary>
+        Public Property CornerRadius As Double = 1
+        Public ReadOnly Property Radius As Double
+            Get
+                Return Diameter / 2
+            End Get
+        End Property
+        Public ReadOnly Property IsBall As Boolean
+            Get
+                Return String.Equals(Type, "ball", StringComparison.OrdinalIgnoreCase)
+            End Get
+        End Property
+        Public ReadOnly Property IsBull As Boolean
+            Get
+                Return String.Equals(Type, "bull", StringComparison.OrdinalIgnoreCase)
+            End Get
+        End Property
+        ''' <summary>Raggio di raccordo effettivo: 0 cilindrica, R sferica, [0,R] torica.</summary>
+        Public ReadOnly Property EffectiveCorner As Double
+            Get
+                If IsBall Then Return Radius
+                If IsBull Then Return Math.Max(0, Math.Min(CornerRadius, Radius))
+                Return 0
+            End Get
+        End Property
+    End Class
+
+    ''' <summary>Parametri di una lavorazione.</summary>
+    Public Class OperationDef
+        Public Property Id As String
+        Public Property Name As String = "Lavorazione"
+        ''' <summary>"pocket" (svuotatura a terrazze) o "finish" (finitura in proiezione).</summary>
+        Public Property Kind As String = "pocket"
+        ''' <summary>"concentric" (offset) o "zigzag" (rettangolare).</summary>
+        Public Property Strategy As String = "concentric"
+        Public Property Tool As New ToolDef()
+        ''' <summary>Passo laterale [mm].</summary>
+        Public Property Stepover As Double = 2.5
+        ''' <summary>Passo verticale tra le terrazze [mm] (solo svuotatura).</summary>
+        Public Property Stepdown As Double = 1
+        ''' <summary>Profondità massima sotto il piano [mm].</summary>
+        Public Property MaxDepth As Double = 10
+        ''' <summary>Sovrametallo lasciato sugli oggetti [mm].</summary>
+        Public Property Stock As Double = 0
+        ''' <summary>Quota di sicurezza sopra il piano [mm].</summary>
+        Public Property SafeHeight As Double = 10
+        ''' <summary>Distanza di avvicinamento in rapido prima dell'affondo [mm].</summary>
+        Public Property Clearance As Double = 1
+        ''' <summary>Angolo delle passate zigzag [gradi].</summary>
+        Public Property Angle As Double = 0
+        ''' <summary>Fresatura concorde (climb) con mandrino M3.</summary>
+        Public Property Climb As Boolean = True
+        ''' <summary>Vero: l'utensile resta interamente dentro il contorno; falso: il centro utensile percorre il contorno.</summary>
+        Public Property ToolInside As Boolean = True
+        ''' <summary>Passata di contornatura finale ad ogni terrazza (zigzag).</summary>
+        Public Property ContourPass As Boolean = True
+        ''' <summary>Risoluzione della griglia di calcolo [mm], 0 = automatica.</summary>
+        Public Property Resolution As Double = 0
+        ''' <summary>Tolleranza cordale del percorso [mm].</summary>
+        Public Property Tolerance As Double = 0.01
+        Public Property Feed As Double = 1200
+        Public Property Plunge As Double = 300
+        Public Property Spindle As Double = 12000
+        ''' <summary>Ingresso nel materiale (svuotatura): "plunge" (affondo verticale), "ramp" (rampa), "helix" (elica).</summary>
+        Public Property Entry As String = "plunge"
+        ''' <summary>Angolo di discesa di rampa ed elica [gradi].</summary>
+        Public Property RampAngle As Double = 3
+        ''' <summary>Raggio dell'elica (percorso del centro utensile) [mm], 0 = automatico (metà raggio utensile).</summary>
+        Public Property HelixRadius As Double = 0
+        ''' <summary>Avanzamento in rampa/elica [mm/min], 0 = avanzamento di lavoro.</summary>
+        Public Property RampFeed As Double = 0
+    End Class
+
+    ''' <summary>Richiesta di calcolo percorso: tutto ciò che serve per essere autosufficiente.</summary>
+    Public Class ComputeRequest
+        Public Property Operation As OperationDef
+        Public Property Plane As PlaneDef
+        Public Property Boundary As List(Of SketchEntityDef)
+        Public Property Objects As List(Of SceneObjectDef)
+        Public Property Artifacts As List(Of ArtifactDef)
+    End Class
+
+End Namespace

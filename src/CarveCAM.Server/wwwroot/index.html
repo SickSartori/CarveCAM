@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CarveCAM</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header id="topbar">
+    <div id="titlebar">
+      <div class="brand" aria-label="CarveCAM">
+        <img class="brand-mark" src="favicon.svg" alt="" width="18" height="18">
+        <span class="brand-name">CarveCAM</span>
+      </div>
+      <nav id="menubar" role="menubar" aria-label="Menu principale"></nav>
+      <div class="title-center">
+        <input id="proj-name" class="proj-name" aria-label="Nome del progetto" title="Nome del progetto (clic per rinominare)" spellcheck="false">
+        <span id="proj-dirty" class="proj-dirty" title="Modifiche non ancora salvate nel file .ccam (Ctrl+S)" hidden></span>
+      </div>
+      <div class="title-right">
+        <button id="cmd-search" class="cmd-search" type="button" aria-label="Cerca un comando (Ctrl+K)">
+          <span class="cs-ico"></span><span class="cs-lbl">Cerca un comando</span><kbd>Ctrl K</kbd>
+        </button>
+        <span id="srv-status" class="srv" data-state="checking" title="Verifica del server in corso">
+          <span class="srv-dot" aria-hidden="true"></span><span class="srv-lbl">Server</span>
+        </span>
+        <button id="btn-help" class="tb-btn" type="button" aria-label="Scorciatoie da tastiera"></button>
+      </div>
+    </div>
+    <div id="toolbar" role="toolbar" aria-label="Strumenti"></div>
+  </header>
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+
+  <div id="main">
+    <aside id="sidebar">
+      <section id="tree-panel" class="panel">
+        <div class="panel-title">
+          <span>Navigatore</span>
+          <span class="panel-title-actions">
+            <button class="icon-btn" id="tree-collapse" title="Comprimi tutto">&#x2212;</button>
+            <button class="icon-btn" id="tree-expand" title="Espandi tutto">+</button>
+          </span>
+        </div>
+        <div id="tree" class="tree" tabindex="0"></div>
+      </section>
+      <div id="sidebar-split" class="hsplit" title="Trascina per ridimensionare"></div>
+      <section id="props-panel" class="panel">
+        <div class="panel-title"><span id="props-title">Proprietà</span></div>
+        <div id="props" class="props"></div>
+      </section>
+    </aside>
+    <div id="sidebar-resizer" class="vsplit" title="Trascina per ridimensionare"></div>
+
+    <div id="viewport">
+      <div id="view-tools" class="overlay view-tools">
+        <div id="view-cube" class="vc-hit" role="img" aria-label="Cubo di orientamento: clic su una faccia, uno spigolo o un vertice per orientare la vista, trascina per ruotare"></div>
+        <div class="vc-bar">
+          <button type="button" data-view="iso" data-ico="viewIso" aria-label="Vista isometrica" data-kbd="0"></button>
+          <button type="button" data-view="fit" data-ico="fit" aria-label="Adatta alla vista" data-kbd="F"></button>
+          <button type="button" data-view="proj" data-ico="ortho" id="btn-proj" aria-label="Proiezione ortogonale" data-kbd="5" aria-pressed="false"></button>
+          <span class="vc-sep" aria-hidden="true"></span>
+          <button type="button" data-view="plane" data-ico="planeView" class="vc-plane" aria-label="Piano dalla vista" data-hint="Crea un piano di lavoro con la normale verso di te"></button>
+        </div>
+      </div>
+
+      <div id="sketch-bar" class="overlay sketch-bar" hidden>
+        <span class="sk-title">Sketch <b id="sk-name"></b></span>
+        <span class="sep"></span>
+        <button data-tool="select" title="Seleziona entità (S)">Seleziona</button>
+        <button data-tool="polyline" title="Polilinea chiusa (L)">Polilinea</button>
+        <button data-tool="rect" title="Rettangolo (R)">Rettangolo</button>
+        <button data-tool="circle" title="Cerchio (C)">Cerchio</button>
+        <button data-tool="polygon" title="Poligono regolare (P)">Poligono</button>
+        <button data-tool="profile" title="Profilo dal modello 3D: clic su facce od oggetti, contorno proiettato sul piano (D)">Da 3D</button>
+        <span class="sk-draw">
+          <label title="Numero di lati del poligono">Lati <input id="sk-sides" type="number" value="6" min="3" max="128"></label>
+          <span class="sep"></span>
+          <label title="Aggancio alla griglia"><input type="checkbox" id="sk-snap" checked> Griglia</label>
+          <label title="Passo della griglia (mm)"><input id="sk-step" type="number" value="1" min="0.01" step="0.5"> mm</label>
+          <span class="sep"></span>
+          <input id="sk-input" class="sk-input" placeholder="x,y   @dx,dy   raggio" title="Coordinate: x,y assolute; @dx,dy relative all'ultimo punto; un numero = raggio (cerchio/poligono) o lato (rettangolo quadrato). Invio per confermare.">
+        </span>
+        <span id="sk-profile" class="sk-profile" hidden>
+          <span class="sk-seg" role="group" aria-label="Cosa selezionare">
+            <button type="button" data-pick="face" title="Seleziona singole facce (facce CAD per STEP e IGES)">Facce</button>
+            <button type="button" data-pick="object" title="Seleziona oggetti interi: se ne prende la sagoma">Oggetti</button>
+          </span>
+          <select id="sk-pmode" title="Unione: tutti gli elementi insieme. Sottrazione: il primo selezionato meno gli altri. Intersezione: solo la parte comune. Separati (non booleano): un contorno per elemento.">
+            <option value="union">Unione</option>
+            <option value="subtract">Sottrazione</option>
+            <option value="intersect">Intersezione</option>
+            <option value="separate">Separati</option>
+          </select>
+          <label title="Offset del profilo: positivo verso l'esterno, negativo verso l'interno">Offset <input id="sk-poffset" type="number" value="0" step="0.5"> mm</label>
+          <span id="sk-pcount" class="sk-pcount" aria-live="polite"></span>
+          <button type="button" id="sk-pclear" title="Svuota la selezione (Esc)">Svuota</button>
+          <button type="button" id="sk-pmake" class="primary" title="Aggiungi il profilo allo sketch (Invio)">Crea profilo</button>
+        </span>
+        <span class="sep"></span>
+        <button id="sk-done" class="primary" title="Esci dallo sketch (Esc con strumento Seleziona)">Termina sketch</button>
+      </div>
+
+      <div id="hint" class="overlay hint" hidden></div>
+
+      <div id="sim-bar" class="overlay sim-bar" hidden>
+        <button id="sim-play" class="primary" title="Avvia / pausa (Spazio)">&#9654;</button>
+        <button id="sim-rew" title="Dall'inizio">&#9198;</button>
+        <input id="sim-slider" type="range" min="0" max="1000" value="0">
+        <select id="sim-speed" title="Velocità">
+          <option value="1">x1</option><option value="5">x5</option><option value="20" selected>x20</option>
+          <option value="100">x100</option><option value="500">x500</option>
+        </select>
+        <span id="sim-time" class="mono">0:00 / 0:00</span>
+        <button id="sim-close" title="Chiudi simulazione">&#x2715;</button>
+      </div>
+
+      <div id="busy" class="busy" hidden>
+        <div class="busy-box">
+          <div class="spinner"></div>
+          <div id="busy-text">Calcolo in corso…</div>
+          <button id="busy-cancel">Annulla</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer id="statusbar">
+    <span id="st-msg">Pronto</span>
+    <span id="st-coords" class="mono"></span>
+    <span id="st-info"></span>
+  </footer>
+
+  <div id="menu-layer"></div>
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <input type="file" id="file-import" multiple hidden
+         accept=".stl,.obj,.ply,.off,.gltf,.glb,.fbx,.3mf,.dae,.3ds,.amf,.wrl,.vrml,.step,.stp,.iges,.igs,.brep,.brp">
+  <input type="file" id="file-open" accept=".ccam,.pcam,.m3dz" hidden>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

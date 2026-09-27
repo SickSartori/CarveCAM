@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "CarveCAM.Server": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:57801;http://localhost:57802"
+    }
+  }
+}
