@@ -132,7 +132,8 @@ export function createActions({ cmd, vp, sketch }) {
     { id: 'help.palette', label: 'Cerca un comando…', icon: 'search', kbd: 'Ctrl+K', run: () => cmd.openPalette?.() },
     { id: 'help.shortcuts', label: 'Scorciatoie da tastiera', icon: 'keyboard', run: cmd.shortcuts },
     { id: 'help.log', label: 'File di log…', icon: 'log', run: cmd.showLog, hint: 'Registro di diagnostica di server e interfaccia, per cercare errori e blocchi' },
-    { id: 'help.about', label: 'Informazioni su CarveCAM', icon: 'info', run: cmd.about },
+    { id: 'help.about', label: 'Informazioni su CarveCAM…', icon: 'info', run: cmd.about },
+    { id: 'help.credits', label: 'Crediti di sviluppo…', icon: 'credits', run: cmd.credits, hint: 'William Veronesi e Gabriel S. Sartori' },
   ];
   for (const a of list) {
     a.label = t(a.label);
@@ -181,7 +182,8 @@ export const MENUS = [
   { label: 'Lavorazioni', items: ['op.pocket', 'op.finish', '-', 'op.reorder', '-', 'op.compute', 'op.computeAll', '-', 'op.simulate', 'op.simulateAll', '-', 'file.gcode', 'file.cl'] },
   { label: 'Strumenti', items: ['tools.library', 'tools.setups', '-', 'tools.libExport', 'tools.libImport', '-', 'tools.options'] },
   { label: 'Vista', items: ['view.top', 'view.front', 'view.right', 'view.left', 'view.back', 'view.bottom', 'view.iso', '-', 'plane.normalView', 'view.fit', 'view.ortho', '-', 'view.grid', 'view.paths', 'view.rapids', 'view.wire'] },
-  { label: 'Aiuto', items: ['help.palette', 'help.shortcuts', '-', 'help.log', '-', 'file.demo', 'help.about'] },
+  { label: 'Aiuto', items: ['help.palette', 'help.shortcuts', '-', 'help.log', '-', 'file.demo'] },
+  { label: 'Info', items: ['help.about', 'help.credits'] },
 ];
 for (const m of MENUS) {
   m.label = t(m.label);

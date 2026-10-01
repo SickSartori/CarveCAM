@@ -1702,14 +1702,30 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     toast(t('Progetto di esempio caricato: premere "Ricalcola tutto" per generare i percorsi'), 'info', 6000);
   };
 
-  cmd.about = () => modal({
-    title: 'CarveCAM',
-    body: h('div', {},
-      h('img', { src: 'favicon.svg', alt: '', width: 56, height: 56, style: { display: 'block', margin: '2px 0 10px' } }),
-      h('p', {}, t('Software CAM web per mini CNC: svuotatura (pocketing) a terrazze e finitura in proiezione con fresa, su modelli 3D e artefatti primitivi.')),
-      h('p', {}, t('Server e motore di calcolo in VB.NET (.NET 10, ASP.NET Core): importazione mesh, drop-cutter, offset con Clipper2, verifica collisioni, post-processor G-code/CL. Interfaccia in Three.js.')),
-      h('p', { style: { color: 'var(--text-faint)' } }, t('Unità: millimetri. Utensili: fresa cilindrica, torica e sferica. Ingressi: affondo, rampa, elica.'))),
+  cmd.credits = () => modal({
+    title: t('Crediti di sviluppo'),
+    body: h('div', { class: 'about' },
+      h('div', { class: 'about-head' }, h('img', { src: 'favicon.svg', alt: '', width: 48, height: 48 }),
+        h('div', {}, h('div', { class: 'about-name' }, 'CarveCAM'), h('div', { class: 'p-note' }, t('CAM web per mini CNC')))),
+      h('div', { class: 'p-sec', style: { padding: '8px 0 4px' } }, t('Sviluppo')),
+      h('ul', { class: 'credits' }, h('li', {}, 'William Veronesi'), h('li', {}, 'Gabriel S. Sartori')),
+      h('div', { class: 'p-sec', style: { padding: '10px 0 4px' } }, t('Componenti di terze parti')),
+      h('p', { class: 'p-note', style: { margin: 0 } }, 'Three.js · Clipper2 · OpenCascade (occt-import-js) · ASP.NET Core')),
   });
+
+  cmd.about = () => {
+    const ver = h('div', { class: 'p-note' }, '');
+    fetch('/api/version').then(r => r.json()).then(j => { ver.textContent = `${t('Versione')} ${j.version}`; }).catch(() => {});
+    return modal({
+      title: t('Informazioni su CarveCAM'),
+      body: h('div', { class: 'about' },
+        h('div', { class: 'about-head' }, h('img', { src: 'favicon.svg', alt: '', width: 56, height: 56 }),
+          h('div', {}, h('div', { class: 'about-name' }, 'CarveCAM'), ver, h('div', { class: 'p-note' }, t('Sviluppato da William Veronesi e Gabriel S. Sartori')))),
+        h('p', {}, t('Software CAM web per mini CNC: svuotatura (pocketing) a terrazze e finitura in proiezione con fresa, su modelli 3D e artefatti primitivi.')),
+        h('p', {}, t('Server e motore di calcolo in VB.NET (.NET 10, ASP.NET Core): importazione mesh, drop-cutter, offset con Clipper2, verifica collisioni, post-processor G-code/CL. Interfaccia in Three.js.')),
+        h('p', { style: { color: 'var(--text-faint)' } }, t('Unità: millimetri. Utensili: fresa cilindrica, torica e sferica. Ingressi: affondo, rampa, elica.'))),
+    });
+  };
 
   // ================================================================ menu contestuale del navigatore
   cmd.contextItems = sel => {
