@@ -755,6 +755,7 @@ kbd {
 .about-head { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
 .about-name { font-size: 18px; font-weight: 600; letter-spacing: .2px; }
 .credits { margin: 0; padding-left: 18px; line-height: 1.8; font-size: 13px; }
+.modal-b .about-sec { padding: 12px 0 4px; border-top: 1px solid var(--border-soft); margin-top: 10px; }
 /* file delle opzioni */
 .opt-file { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border-soft); margin-top: auto; }
 .opt-file .p-note { margin: 0; }

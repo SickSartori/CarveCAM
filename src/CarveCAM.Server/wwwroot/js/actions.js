@@ -135,8 +135,7 @@ export function createActions({ cmd, vp, sketch }) {
     { id: 'help.log', label: 'File di log…', icon: 'log', run: cmd.showLog, hint: 'Registro di diagnostica di server e interfaccia, per cercare errori e blocchi' },
     { id: 'help.blackbox', label: 'Esporta blackbox…', icon: 'blackbox', run: cmd.exportBlackbox,
       hint: 'Archivio protetto da password con tutti i dati per riprodurre un problema da segnalare' },
-    { id: 'help.about', label: 'Informazioni su CarveCAM…', icon: 'info', run: cmd.about },
-    { id: 'help.credits', label: 'Crediti di sviluppo…', icon: 'credits', run: cmd.credits, hint: 'William Veronesi e Gabriel S. Sartori' },
+    { id: 'help.about', label: 'Informazioni su CarveCAM…', icon: 'info', run: cmd.about, hint: 'Versione, crediti di sviluppo e componenti di terze parti' },
   ];
   for (const a of list) {
     a.label = t(a.label);
@@ -186,7 +185,7 @@ export const MENUS = [
   { label: 'Strumenti', items: ['tools.library', 'tools.setups', '-', 'tools.libExport', 'tools.libImport', '-', 'tools.options'] },
   { label: 'Vista', items: ['view.top', 'view.front', 'view.right', 'view.left', 'view.back', 'view.bottom', 'view.iso', '-', 'plane.normalView', 'view.fit', 'view.ortho', '-', 'view.grid', 'view.paths', 'view.rapids', 'view.wire'] },
   { label: 'Aiuto', items: ['help.palette', 'help.shortcuts', '-', 'help.log', 'help.blackbox', '-', 'file.demo'] },
-  { label: 'Info', items: ['help.about', 'help.credits'] },
+  { label: 'Info', items: ['help.about'] },
 ];
 for (const m of MENUS) {
   m.label = t(m.label);
