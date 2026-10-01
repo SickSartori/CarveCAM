@@ -21,7 +21,7 @@ Namespace Cam
             Dim sw = Stopwatch.StartNew()
             Dim op = req.Operation
             If op Is Nothing Then Throw New ArgumentException("Parametri della lavorazione mancanti.")
-            If op.Tool Is Nothing OrElse op.Tool.Diameter <= 0 Then Throw New ArgumentException("Diametro utensile non valido.")
+            If op.Tool Is Nothing OrElse op.Tool.Diameter < 0 OrElse (op.Tool.Diameter = 0 AndAlso Not op.Tool.IsTaper) Then Throw New ArgumentException("Diametro utensile non valido.")
             If op.MaxDepth <= 0 Then Throw New ArgumentException("La profondità massima deve essere maggiore di zero.")
             If op.Stepover <= 0 Then Throw New ArgumentException("Il passo laterale deve essere maggiore di zero.")
             Dim isPocket = Not String.Equals(op.Kind, "finish", StringComparison.OrdinalIgnoreCase)
@@ -29,9 +29,10 @@ Namespace Cam
 
             Dim pl = If(req.Plane, New PlaneDef())
             Dim frame As New PlaneFrame(Vec3.FromArray(pl.Origin, Vec3.Zero), Vec3.FromArray(pl.U, Vec3.UnitX), Vec3.FromArray(pl.N, Vec3.UnitZ))
-            Dim R = op.Tool.Radius
+            ' raggio di lavoro (fresa conica: alla profondità massima) e ingombro massimo del tagliente
+            Dim R = op.Tool.WorkRadius(op.MaxDepth)
             Dim stock = Math.Max(0, op.Stock)
-            Dim stepover = Math.Min(op.Stepover, op.Tool.Diameter * 0.95)
+            Dim stepover = Math.Min(op.Stepover, Math.Max(op.Tool.Diameter, 2 * R) * 0.95)
 
             Dim tp As New Toolpath With {
                 .Id = Guid.NewGuid().ToString("N"),
@@ -43,6 +44,9 @@ Namespace Cam
                 tp.Warnings.Add($"Raggio di raccordo della fresa torica limitato a {op.Tool.EffectiveCorner:0.###} mm.")
             End If
             If stepover < op.Stepover Then tp.Warnings.Add($"Passo laterale ridotto a {stepover:0.###} mm (max 95% del diametro).")
+            If op.Tool.IsTaper AndAlso op.MaxDepth > op.Tool.ConeHeight Then
+                tp.Warnings.Add($"Profondità massima ({op.MaxDepth:0.###} mm) oltre l'altezza del cono ({op.Tool.ConeHeight:0.###} mm): sopra il cono non si verificano collisioni.")
+            End If
 
             ' ---- regione di contenimento
             Dim boundary = SketchGeometry.BoundaryRegion(req.Boundary)
@@ -54,7 +58,7 @@ Namespace Cam
 
             ' ---- ostacoli: oggetti e artefatti in coordinate locali del piano
             Dim floor = -op.MaxDepth
-            Dim margin = R + stock + 0.5
+            Dim margin = Math.Max(R, op.Tool.MaxRadius) + stock + 0.5
             Dim winMinU = bb.MinX - margin, winMaxU = bb.MaxX + margin, winMinV = bb.MinY - margin, winMaxV = bb.MaxY + margin
             Dim tris As New List(Of LocalTri)()
             Dim addPositions = Sub(pos As Single(), m As Mat4)
@@ -122,8 +126,12 @@ Namespace Cam
         Private Sub ComputePocket(tp As Toolpath, op As OperationDef, dc As DropCutter, region0 As Paths64,
                                   bb As (MinX As Double, MinY As Double, MaxX As Double, MaxY As Double),
                                   stepover As Double, safeW As Double, ct As CancellationToken)
-            Dim R = op.Tool.Radius
-            Dim res = If(op.Resolution > 0, op.Resolution, Math.Max(0.05, Math.Min(1.0, R / 4)))
+            Dim R = op.Tool.WorkRadius(op.MaxDepth)
+            ' raggio di curvatura minimo dei contorni delle zone bloccate: per la fresa conica è quello della punta
+            ' (attorno agli spigoli degli ostacoli appena sopra la terrazza tocca solo la punta)
+            Dim rCurv = If(op.Tool.IsTaper, Math.Max(op.Tool.Radius, 0.05), R)
+            Dim res = If(op.Resolution > 0, op.Resolution,
+                         If(op.Tool.IsTaper, Math.Max(0.05, Math.Min(1.0, Math.Max(op.Tool.Radius, R / 8) / 3)), Math.Max(0.05, Math.Min(1.0, R / 4))))
             Dim w = bb.MaxX - bb.MinX + 4 * res, h = bb.MaxY - bb.MinY + 4 * res
             If w * h / (res * res) > 6000000.0 Then
                 res = Math.Sqrt(w * h / 6000000.0)
@@ -142,7 +150,7 @@ Namespace Cam
             End While
             levels.Add(floor)
 
-            Dim safety = res * res / (4 * R) + 0.003
+            Dim safety = res * res / (4 * Math.Max(rCurv, res / 2)) + 0.003
             Dim pb As New PathBuilder(tp)
             Dim prevL = 0.0
             Dim done = 0
@@ -227,7 +235,7 @@ Namespace Cam
 
         ''' <summary>Elica che passa per p0 (inizio e fine), interamente contenuta nella regione lavorabile.</summary>
         Private Function TryHelix(pb As PathBuilder, op As OperationDef, region As Paths64, p0 As Vec2, w0 As Double, L As Double) As Boolean
-            Dim rh = If(op.HelixRadius > 0, op.HelixRadius, op.Tool.Radius * 0.5)
+            Dim rh = If(op.HelixRadius > 0, op.HelixRadius, op.Tool.WorkRadius(op.MaxDepth) * 0.5)
             rh = Math.Max(0.05, rh)
             Dim tanA = RampTan(op)
             Dim n = Math.Max(24, Primitives.SegmentsFor(rh, Math.Max(0.002, op.Tolerance)))
@@ -292,7 +300,7 @@ Namespace Cam
                 pre.Add(path(i))
                 acc += d
             Next
-            If acc < Math.Max(0.5 * op.Tool.Radius, 0.2) Then Return False
+            If acc < Math.Max(0.5 * op.Tool.WorkRadius(op.MaxDepth), 0.2) Then Return False
             Dim m = pre.Count - 1
             Dim passes = Math.Max(1, CInt(Math.Ceiling(depth / (acc * tanA) - 0.000000001)))
             If Not closedLoop Then
@@ -318,9 +326,11 @@ Namespace Cam
         ' ================================================================ FINITURA
         Private Sub ComputeFinish(tp As Toolpath, op As OperationDef, dc As DropCutter, region0 As Paths64,
                                   stepover As Double, safeW As Double, ct As CancellationToken)
-            Dim R = op.Tool.Radius
+            Dim R = op.Tool.WorkRadius(op.MaxDepth)
             Dim floor = -op.MaxDepth
-            Dim stepLen = If(op.Resolution > 0, op.Resolution, Math.Max(0.02, Math.Min(0.5, R / 6)))
+            ' fresa conica: campionamento sulla scala della punta (i dettagli che tocca sono piccoli come la punta)
+            Dim rs = If(op.Tool.IsTaper, Math.Max(op.Tool.Radius, R / 8), R)
+            Dim stepLen = If(op.Resolution > 0, op.Resolution, Math.Max(0.02, Math.Min(0.5, rs / 6)))
             Dim tol = Math.Max(0.001, op.Tolerance)
             tp.Stats.Resolution = stepLen
 
@@ -410,12 +420,19 @@ Namespace Cam
                 Dim a = pts(seg.A), b = pts(seg.B)
                 Dim ab = b - a
                 Dim l2 = ab.Dot(ab)
+                Dim lxy2 = ab.X * ab.X + ab.Y * ab.Y
                 Dim bi = -1, bd = eps
                 For i = seg.A + 1 To seg.B - 1
                     Dim ap = pts(i) - a
                     Dim d As Double
                     If l2 < 1.0E-18 Then
                         d = ap.Length
+                    ElseIf lxy2 > 1.0E-18 Then
+                        ' scarto in pianta dalla corda e scarto di quota alla stessa posizione: sui fianchi ripidi
+                        ' un piccolo scarto in pianta corrisponde a un grande errore di quota (interferenza)
+                        Dim t = Math.Max(0, Math.Min(1, (ap.X * ab.X + ap.Y * ab.Y) / lxy2))
+                        Dim ex = ap.X - ab.X * t, ey = ap.Y - ab.Y * t, ez = ap.Z - ab.Z * t
+                        d = Math.Max(Math.Sqrt(ex * ex + ey * ey), Math.Abs(ez))
                     Else
                         Dim t = Math.Max(0, Math.Min(1, ap.Dot(ab) / l2))
                         d = (ap - ab * t).Length
@@ -442,7 +459,7 @@ Namespace Cam
         ''' </summary>
         Public Sub Verify(tp As Toolpath, dc As DropCutter, delta As Double, ct As CancellationToken)
             If dc.TriangleCount = 0 OrElse tp.Points.Count < 2 Then Return
-            Dim stepLen = Math.Max(0.05, dc.Radius / 4)
+            Dim stepLen = Math.Max(0.05, dc.DetailRadius / 4)
             Dim total = 0L
             For i = 1 To tp.Points.Count - 1
                 Dim a = tp.Points(i - 1), b = tp.Points(i)
