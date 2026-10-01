@@ -485,15 +485,20 @@ kbd {
 }
 .hint b { color: var(--accent); }
 .sim-bar {
-  left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px;
+  left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px;
   padding: 5px 8px; border-radius: 8px; background: var(--overlay); border: 1px solid var(--border); box-shadow: var(--shadow);
-  max-width: calc(100% - 24px);
+  width: max-content; max-width: calc(100% - 24px);
 }
-.sim-bar input[type=range] { width: 280px; min-width: 80px; accent-color: var(--accent); }
+/* nella vista stretta i comandi vanno a capo: nome e ambito sopra, riproduzione sotto */
+.sim-bar .sim-scope { flex-wrap: nowrap; flex: 0 0 auto; }
+.sim-bar .sep { flex: 0 0 1px; }
+.sim-bar input[type=range] { width: 280px; min-width: 80px; flex: 1 1 80px; accent-color: var(--accent); }
 .sim-bar select { height: 24px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; }
-.sim-bar .sim-op { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tone-op); font-weight: 500; padding: 0 4px; }
-.sim-bar .sim-scope { border: 1px solid var(--border); white-space: nowrap; }
-.sim-bar .sim-scope[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: rgba(63, 167, 255, .45); }
+.sim-bar .sim-op { max-width: 220px; min-width: 60px; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tone-op); font-weight: 500; padding: 0 4px; }
+.sim-bar .sim-lbl { color: var(--text-faint); font-size: 11px; padding-left: 4px; }
+.sim-bar .seg-btn { height: 24px; border-radius: 0; background: none; border: 0; border-right: 1px solid var(--border); }
+.sim-bar .seg-btn:last-child { border-right: 0; }
+.sim-bar .seg-btn[aria-checked="true"] { background: var(--accent); color: #fff; }
 /* coordinate TCP durante la simulazione */
 .tcp-box {
   top: 10px; left: 10px; min-width: 150px; padding: 6px 10px 7px;
@@ -624,6 +629,17 @@ kbd {
 .lib-io { justify-content: flex-start; }
 .tool-diff { margin: 3px 0 0; padding-left: 16px; font-size: 11.5px; color: var(--text-dim); }
 .warn-txt { color: var(--warn); }
+
+/* pulsanti a scelta singola */
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; background: var(--bg); }
+.seg-btn {
+  height: 24px; padding: 0 10px; border: 0; border-right: 1px solid var(--border); background: none; color: var(--text-dim);
+  cursor: pointer; white-space: nowrap; font-size: 12px;
+}
+.seg-btn:last-child { border-right: 0; }
+.seg-btn:hover:not(:disabled) { background: var(--panel-3); color: var(--text); }
+.seg-btn[aria-checked="true"] { background: var(--accent); color: #fff; }
+.seg-btn:disabled { color: var(--text-faint); cursor: default; opacity: .6; }
 /* sequenza delle lavorazioni */
 .op-order { margin: 0; padding: 0; list-style: none; counter-reset: op; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); max-height: 50vh; overflow: auto; }
 .op-order li { counter-increment: op; display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border-soft); }

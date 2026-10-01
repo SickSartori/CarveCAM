@@ -112,7 +112,11 @@
 
       <div id="sim-bar" class="overlay sim-bar" hidden>
         <span id="sim-op" class="sim-op"></span>
-        <button id="sim-scope" class="sim-scope" type="button" aria-pressed="false">Solo questa</button>
+        <span class="sim-lbl">Simula:</span>
+        <div id="sim-scope" class="seg sim-scope" role="radiogroup" aria-label="Lavorazioni da simulare">
+          <button type="button" class="seg-btn" role="radio" data-scope="one" title="Simula solo la lavorazione selezionata">Solo la selezionata</button>
+          <button type="button" class="seg-btn" role="radio" data-scope="rest" title="Simula la lavorazione selezionata e tutte le successive fino all'ultima">Dalla selezionata all'ultima</button>
+        </div>
         <span class="sep"></span>
         <button id="sim-play" class="primary" title="Avvia / pausa (Spazio)">&#9654;</button>
         <button id="sim-rew" title="Dall'inizio">&#9198;</button>

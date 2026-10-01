@@ -32,7 +32,7 @@ export class Simulator {
     this.playBtn.onclick = () => this.toggle();
     document.getElementById('sim-rew').onclick = () => { this.t = 0; this._apply(); };
     document.getElementById('sim-close').onclick = () => this.stop();
-    this.scopeBtn.onclick = () => this.setScope(this.scope === 'one' ? 'rest' : 'one');
+    for (const b of this.scopeBtn.querySelectorAll('[data-scope]')) b.onclick = () => { if (b.dataset.scope !== this.scope) this.setScope(b.dataset.scope); };
     this.slider.addEventListener('input', () => { this.t = (this.slider.value / 1000) * this.total; this._apply(); });
     this._buildTcp();
     this._syncScope();
@@ -122,13 +122,9 @@ export class Simulator {
     this._apply();
   }
 
+  /** Selettore dell'ambito: solo la lavorazione selezionata, oppure dalla selezionata fino all'ultima. */
   _syncScope() {
-    const rest = this.scope === 'rest';
-    this.scopeBtn.textContent = rest ? t('Fino all\'ultima') : t('Solo questa');
-    this.scopeBtn.setAttribute('aria-pressed', String(rest));
-    this.scopeBtn.title = rest
-      ? t('Simula la lavorazione selezionata e tutte le successive fino all\'ultima (clic: solo la selezionata)')
-      : t('Simula solo la lavorazione selezionata (clic: anche tutte le successive)');
+    for (const b of this.scopeBtn.querySelectorAll('[data-scope]')) b.setAttribute('aria-checked', String(b.dataset.scope === this.scope));
   }
 
   _tick(dt) {
