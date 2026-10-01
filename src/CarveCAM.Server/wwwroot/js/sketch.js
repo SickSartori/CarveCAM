@@ -351,6 +351,10 @@ export class SketchMode {
     this._add({ kind: 'polyline', pts: this.pts.map(p => [p[0], p[1]]), closed: true });
   }
 
+  /**
+   * Aggiunge l'entità appena disegnata: resta selezionata e si torna allo strumento Seleziona, così si vedono
+   * subito le sue maniglie (per disegnarne un'altra si riprende lo strumento).
+   */
   _add(ent) {
     const id = uid('e');
     const sid = this.sketchId;
@@ -360,8 +364,8 @@ export class SketchMode {
     });
     this.pts = [];
     select({ type: 'entity', id, sketchId: sid });
-    status(t('Entità aggiunta allo sketch'));
-    this._redraw();
+    this.setTool('select');
+    status(t('Entità aggiunta allo sketch: trascina i suoi punti per modificarla, o scegli uno strumento per disegnarne un\'altra'));
   }
 
   _pick(p, px, add = false) {
