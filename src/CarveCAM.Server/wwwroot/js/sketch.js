@@ -1,4 +1,4 @@
-// Modalità sketch: disegno 2D sul piano di lavoro (polilinea, rettangolo, cerchio, poligono) con aggancio e coordinate.
+// Modalità sketch: disegno 2D sul piano di lavoro (polilinea, rettangolo, cerchio, poligono) con aggancio.
 // Le entità selezionate mostrano i punti di riferimento (vertici, centro, quadranti, punti medi): trascinandoli
 // si modifica la geometria. La vista si orienta come fuori dallo sketch (rotazione, cubo, pan, zoom).
 import * as THREE from 'three';
@@ -14,9 +14,9 @@ const HINTS_IT = {
   profile: 'Clic su facce del modello per selezionarle (di nuovo per toglierle), trascina per ruotare · <b>Invio</b> crea il profilo · <b>Backspace</b> toglie l\'ultima · <b>Esc</b> svuota',
   select: 'Clic su un\'entità per selezionarla (<b>Ctrl</b>+clic per aggiungerla) · trascina i suoi punti per modificarla · <b>Canc</b> elimina · <b>Esc</b> termina sketch',
   polyline: 'Clic per aggiungere vertici · clic sul primo punto, doppio clic o <b>Invio</b> per chiudere · <b>Backspace</b> annulla vertice',
-  rect: 'Clic sul primo angolo, poi sull\'angolo opposto (o digita <b>@larghezza,altezza</b>)',
-  circle: 'Clic sul centro, poi sul raggio (o digita il raggio)',
-  polygon: 'Clic sul centro, poi su un vertice (o digita il raggio circoscritto)',
+  rect: 'Clic sul primo angolo, poi sull\'angolo opposto',
+  circle: 'Clic sul centro, poi sul raggio',
+  polygon: 'Clic sul centro, poi su un vertice',
 };
 const HINTS = Object.fromEntries(Object.entries(HINTS_IT).map(([k, v]) => [k, t(v)]));
 
@@ -38,17 +38,11 @@ export class SketchMode {
     vp.scene.add(this.group);
     this.bar = document.getElementById('sketch-bar');
     this.hint = document.getElementById('hint');
-    this.input = document.getElementById('sk-input');
     this.sides = document.getElementById('sk-sides');
     this.snapBox = document.getElementById('sk-snap');
     this.stepBox = document.getElementById('sk-step');
     for (const b of this.bar.querySelectorAll('[data-tool]')) b.addEventListener('click', () => this.setTool(b.dataset.tool));
     document.getElementById('sk-done').addEventListener('click', () => this.exit());
-    this.input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); this._typed(this.input.value); this.input.value = ''; }
-      if (e.key === 'Escape') { this.input.blur(); }
-      e.stopPropagation();
-    });
     for (const inp of [this.sides, this.stepBox]) inp.addEventListener('keydown', e => e.stopPropagation());
     this.stepBox.value = String(settings.grid.snapStep || 1);
     this.profile = new Profile3D(vp, this);
@@ -313,36 +307,6 @@ export class SketchMode {
     this._redraw();
   }
 
-  _typed(text) {
-    const s = text.trim();
-    if (!s) return;
-    const rel = s.startsWith('@');
-    const body = rel ? s.slice(1).trim() : s;
-    const last = this.pts[this.pts.length - 1];
-    // cerchio/poligono con centro già definito: il valore è il raggio
-    if ((this.tool === 'circle' || this.tool === 'polygon') && this.pts.length === 1 && !rel) {
-      const v = evalNum(body);
-      if (Number.isFinite(v) && v !== 0) { this._point([this.pts[0][0] + Math.abs(v), this.pts[0][1]]); return; }
-    }
-    const parts = body.includes(';') ? body.split(';') : /\s/.test(body) ? body.split(/\s+/) : body.split(',');
-    if (parts.length === 1) {
-      const v = evalNum(parts[0]);
-      if (this.tool === 'rect' && this.pts.length === 1 && Number.isFinite(v) && v !== 0) {
-        this._point([last[0] + v, last[1] + v]);
-      } else {
-        toast(t('Formato: x,y   x;y   oppure @dx,dy (relativo)'), 'warn');
-      }
-      return;
-    }
-    let x = evalNum(parts[0]), y = evalNum(parts[1]);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) { toast(t('Coordinate non valide'), 'err'); return; }
-    if (rel) {
-      const base = last || [0, 0];
-      x += base[0]; y += base[1];
-    }
-    if (this.tool === 'select') this.setTool('polyline');
-    this._point([x, y]);
-  }
   _finishPolyline() {
     if (this.pts.length < 3) {
       if (this.pts.length) toast(t('Servono almeno 3 vertici'), 'warn');
