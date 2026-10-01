@@ -22,7 +22,27 @@ Test del motore CAM:
 dotnet test
 ```
 
-### Progetto di prova
+### Progetto di esempio e guida
+
+*Aiuto › Progetto di esempio* (anche dalla schermata iniziale) crea una **targa 120 × 64 mm con cornice, logo e
+scritta "CarveCAM" in rilievo**: la mesh è generata nel browser come un modello importato (superficie a griglia
+fine solo dove non è piana) e caricata sul server una volta sola, poi riusata. Il progetto ha il piano superiore,
+uno sketch con due rettangoli (contorno della targa e zona della scritta), lo zero pezzo sullo spigolo anteriore
+sinistro e tre lavorazioni calcolate subito: sgrossatura concentrica con fresa torica Ø6 ed elica, finitura zigzag
+con sferica Ø3, ripresa della scritta a 90° con conica sferica Ø1 3° (solo il rettangolo della scritta).
+
+*Aiuto › Guida di CarveCAM* (**F1**, pulsante **?** in alto a destra) è la guida illustrata per chi comincia: 12
+capitoli nell'ordine del lavoro (interfaccia, vista, modelli, piani, sketch, lavorazioni, utensili, calcolo e
+simulazione, zero pezzo e G-code, progetti, scorciatoie), con ricerca, schemi vettoriali che seguono il tema,
+icone dei comandi, **schermate reali con richiami numerati** e pulsanti **Mostrami** che indicano il comando
+nella finestra. Le schermate (`wwwroot/img/guide/<lingua>/`, con `shots.json` per i richiami) si rigenerano con
+il server avviato:
+
+```bash
+node tools/guide-shots.mjs http://localhost:5080
+```
+
+### Progetto di prova del motore
 
 Il generatore `tools/CarveCAM.SampleProject` costruisce con il motore VB un progetto completo (pezzo
 "Stampo" con cupola, tronco di cono, nervatura e perni; staffe e perni come artefatti; piano superiore e
@@ -54,20 +74,28 @@ src/CarveCAM.Server    (VB.NET, ASP.NET Core) API REST + file statici
   wwwroot/            interfaccia web (Three.js)
 tests/CarveCAM.Tests   (VB.NET, xUnit)       test di motore, post, profili e importatori
 tools/CarveCAM.SampleProject (VB.NET)       generatore del progetto di prova
+tools/guide-shots.mjs                       schermate della guida (Chrome o Edge senza finestra)
 samples/blocco-L.stp                        STEP di prova (blocco a L con gradino e foro) per i profili da 3D
 ```
 
 ## Interfaccia
 
+- **Schermata iniziale:** dopo il caricamento, al posto dell'area di lavoro vuota: nuovo progetto, apri, importa,
+  progetto di esempio, il progetto da riprendere (con l'anteprima e le modifiche non salvate), i progetti recenti
+  con le miniature, la guida e il flusso di lavoro. Si riapre da *File › Schermata iniziale* o con un clic sul
+  logo; *Mostra all'avvio* (anche in *Opzioni › Avvio*) decide se compare all'avvio. Mentre è aperta la vista 3D
+  non viene disegnata.
 - **Barra del titolo:** menu a tendina con icone (File, Modifica, Inserisci, Origini, Piani, Sketch, Lavorazioni,
   Strumenti, Vista, Aiuto, Info; navigabili con le frecce), nome del progetto modificabile (Invio o uscita dal
   campo chiedono se salvare) con indicatore delle modifiche non salvate, ricerca comandi (**Ctrl+K**), stato del
-  server. Il menu File contiene il riquadro degli **ultimi 5 progetti** aperti o salvati; *Info* contiene le
-  informazioni sul programma e i **crediti di sviluppo** (William Veronesi e Gabriel S. Sartori).
+  server. Il menu File contiene il riquadro degli **ultimi 5 progetti** aperti o salvati; *Info › Informazioni
+  su CarveCAM* mostra versione, descrizione, **crediti di sviluppo** (William Veronesi e Gabriel S. Sartori) e
+  componenti di terze parti.
 - **Barra strumenti a flusso di lavoro:** i gruppi seguono le fasi Modello › Piani › Sketch › Lavorazioni ›
   Calcolo e uscita; una spia sotto ogni fase indica se è completata (verde) o in corso (gialla). I comandi non
   utilizzabili nel contesto corrente sono spenti (il suggerimento dice perché): durante la creazione di un piano
-  sono spenti i comandi *Modello*; durante il disegno di uno sketch anche quelli delle *Lavorazioni*.
+  e con un piano selezionato sono spenti i comandi *Modello*; durante il disegno di uno sketch anche quelli
+  delle *Lavorazioni*.
 - **Caricamento:** all'avvio e durante calcoli, aperture e importazioni compare il logo animato (la fresa scava
   la passata interna e poi la "C"), con la fase in corso e, dopo 2 s, il tempo trascorso; con il movimento
   ridotto attivo nel sistema il logo resta fermo e pulsa.
@@ -89,7 +117,7 @@ samples/blocco-L.stp                        STEP di prova (blocco a L con gradin
 - **Cubo di orientamento** (in alto a destra): clic su una faccia (Alto, Fronte, Destra…), uno spigolo o
   un vertice per le 26 viste standard, con breve rotazione animata; trascinandolo si ruota la vista.
   Sotto il cubo: vista isometrica, adatta alla vista, proiezione ortogonale, **vista normale al piano**.
-  Nelle *Opzioni › Vista iniziale* si memorizzano orientamento e zoom attuali come vista di partenza e come
+  Nelle *Opzioni › Avvio* si memorizzano orientamento e zoom attuali come vista di partenza e come
   vista isometrica.
 
 ### Posizionamento, origine e punti di origine
@@ -123,14 +151,17 @@ nella vista, diventi l'origine.
 2. **Aggiungi piano**: il comando attiva la creazione dei piani (finché non è attivo i comandi dei piani
    restano spenti). Si sceglie un **piano standard** dall'elenco (XY, XZ, YZ con normale positiva o negativa),
    oppure **da faccia**, **da 3 punti** o **dalla vista**.
-   La **normale** (frecce blu) è l'**asse utensile**: la fresa lavora dal lato delle frecce.
+   La **normale** (frecce blu) è l'**asse utensile**: la fresa lavora dal lato delle frecce. *Inverti normale*
+   la gira dall'altra parte senza spostare né specchiare gli sketch del piano (le entità vengono riscritte nel
+   sistema del piano capovolto, la rotazione nel piano cambia segno).
    *Piano dalla vista*: normale verso chi guarda, agganciata alla vista standard più vicina entro 1°
    (dall'alto si ottiene esattamente +Z), piano appoggiato al punto del modello più vicino all'osservatore,
    dimensionato sull'ingombro e con l'asse X come la destra dello schermo.
 3. Seleziona il piano, **Nuovo sketch** e disegna l'**area di contenimento** con polilinea, rettangolo,
    cerchio, poligono regolare, oppure ricavala dal modello con **Da 3D** (vedi sotto). Gli strumenti di
-   disegno sono attivi solo durante la modifica di uno sketch. Aggancio a griglia e punti; coordinate
-   digitate `x,y`, `@dx,dy`, raggio. Un contorno dentro un altro diventa un'isola esclusa (regola pari/dispari).
+   disegno sono attivi solo durante la modifica di uno sketch, con aggancio a griglia e punti; completata
+   un'entità si torna allo strumento Seleziona con l'entità selezionata. Un contorno dentro un altro diventa
+   un'isola esclusa (regola pari/dispari).
    Entrando nello sketch la vista si mette normale al piano (con la normale attuale) e si naviga come fuori
    dallo sketch. Con lo strumento **Seleziona**, l'entità selezionata mostra i **punti di riferimento**
    (vertici, punti medi dei lati, centro, quadranti): trascinandoli si modifica la geometria (il trascinamento
@@ -260,8 +291,8 @@ Verificare sempre il programma con il simulatore della propria macchina prima de
 
 - **Strumenti › Opzioni:** colori (sfondo, griglia, oggetti, bloccati, selezione, piani, sketch, percorsi…),
   dimensioni di manipolatore, frecce della normale, mirino e pallini, **lingua** (italiano, inglese),
-  parametri della **griglia**, **vista iniziale** (memorizza orientamento e zoom attuali) e **tema chiaro o
-  scuro**. Le opzioni sono salvate nel browser e si **esportano/importano** in un file `.json`.
+  parametri della **griglia**, **avvio** (schermata iniziale, vista iniziale con orientamento e zoom attuali) e
+  **tema chiaro o scuro**. Le opzioni sono salvate nel browser e si **esportano/importano** in un file `.json`.
   I testi dell'interfaccia sono in italiano e fanno da chiave per le traduzioni in `wwwroot/js/i18n-en.js`.
 - **Salvataggio:** con Chrome ed Edge il progetto si salva direttamente sul file aperto (File System Access
   API, *Salva con nome* per cambiarlo); negli altri browser il file viene scaricato. Il **nome del progetto
