@@ -42,6 +42,41 @@ function parsePoints(text) {
   return pts;
 }
 
+/**
+ * Freccette su/giù accanto a un campo numerico: un clic cambia il valore di step (Maiusc ×10, Alt ×0,1),
+ * tenendo premuto si ripete; con il campo attivo funziona anche la rotella del mouse.
+ */
+function withSpin(inp, step, apply) {
+  const bump = (dir, e) => {
+    if (inp.disabled) return;
+    const k = e?.shiftKey ? 10 : e?.altKey ? 0.1 : 1;
+    const cur = evalNum(inp.value) || 0;
+    inp.value = fmt(Math.round((cur + dir * step * k) * 1e6) / 1e6, 4);
+    apply();
+  };
+  const mk = (dir, label) => {
+    const b = h('button', { type: 'button', class: 'spin-btn', tabindex: '-1', disabled: inp.disabled, 'aria-label': dir > 0 ? t('Aumenta') : t('Diminuisci') }, label);
+    let timer = null;
+    const stop = () => { clearTimeout(timer); timer = null; };
+    b.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      b.setPointerCapture(e.pointerId);
+      const mods = { shiftKey: e.shiftKey, altKey: e.altKey };
+      bump(dir, mods);
+      const again = delay => { timer = setTimeout(() => { bump(dir, mods); again(70); }, delay); };
+      again(420);
+    });
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, stop);
+    return b;
+  };
+  inp.addEventListener('wheel', e => {
+    if (document.activeElement !== inp) return;
+    e.preventDefault();
+    bump(e.deltaY < 0 ? 1 : -1, e);
+  }, { passive: false });
+  return h('span', { class: 'spin' }, inp, h('span', { class: 'spin-btns' }, mk(1, '▴'), mk(-1, '▾')));
+}
+
 export class Props {
   constructor(el, cmd) {
     this.el = el;
@@ -163,14 +198,15 @@ export class Props {
     const a = r.item;
     const locked = !!a.locked;
     const dims = {
-      box: [{ key: 'size', label: 'Dimensioni X/Y/Z', type: 'vec3', unit: 'mm', min: 0.001 }],
-      cylinder: [{ key: 'radius', label: 'Raggio', type: 'num', unit: 'mm', min: 0.001 }, { key: 'height', label: 'Altezza', type: 'num', unit: 'mm', min: 0.001 }],
+      // misure con freccette su/giù (passo 1 mm, Maiusc ×10, Alt ×0,1)
+      box: [{ key: 'size', label: 'Dimensioni X/Y/Z', type: 'vec3', unit: 'mm', min: 0.001, spin: 1 }],
+      cylinder: [{ key: 'radius', label: 'Raggio', type: 'num', unit: 'mm', min: 0.001, spin: 1 }, { key: 'height', label: 'Altezza', type: 'num', unit: 'mm', min: 0.001, spin: 1 }],
       cone: [
-        { key: 'radius', label: 'Raggio inferiore', type: 'num', unit: 'mm', min: 0 },
-        { key: 'radius2', label: 'Raggio superiore', type: 'num', unit: 'mm', min: 0 },
-        { key: 'height', label: 'Altezza', type: 'num', unit: 'mm', min: 0.001 },
+        { key: 'radius', label: 'Raggio inferiore', type: 'num', unit: 'mm', min: 0, spin: 1 },
+        { key: 'radius2', label: 'Raggio superiore', type: 'num', unit: 'mm', min: 0, spin: 1 },
+        { key: 'height', label: 'Altezza', type: 'num', unit: 'mm', min: 0.001, spin: 1 },
       ],
-      sphere: [{ key: 'radius', label: 'Raggio', type: 'num', unit: 'mm', min: 0.001 }],
+      sphere: [{ key: 'radius', label: 'Raggio', type: 'num', unit: 'mm', min: 0.001, spin: 1 }],
     }[a.kind] || [];
     return [
       { sec: KIND_LABEL[a.kind] || 'Artefatto', tone: 'model' },
@@ -516,7 +552,7 @@ export class Props {
             apply();
           }
         });
-        field.append(inp);
+        field.append(f.spin ? withSpin(inp, f.spin, apply) : inp);
         if (f.unit) field.append(h('span', { class: 'unit' }, f.unit));
         this._bind(inp, it => fmt(getPath(it, f.key), 4));
         break;
@@ -539,7 +575,7 @@ export class Props {
             commit(v);
           });
           inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.dispatchEvent(new Event('change')); });
-          wrap.append(h('div', { class: 'ax', 'data-ax': ax }, inp));
+          wrap.append(h('div', { class: 'ax', 'data-ax': ax }, f.spin ? withSpin(inp, f.spin, () => inp.dispatchEvent(new Event('change'))) : inp));
           return inp;
         });
         field.append(wrap);

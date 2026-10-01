@@ -641,6 +641,16 @@ kbd {
 .seg-btn:hover:not(:disabled) { background: var(--panel-3); color: var(--text); }
 .seg-btn[aria-checked="true"] { background: var(--accent); color: #fff; }
 .seg-btn:disabled { color: var(--text-faint); cursor: default; opacity: .6; }
+/* freccette su/giù dei campi numerici */
+.spin { display: flex; align-items: stretch; flex: 1; min-width: 0; }
+.spin input { flex: 1; min-width: 0; border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; }
+.spin-btns { display: flex; flex-direction: column; width: 16px; flex: 0 0 16px; }
+.spin-btn { flex: 1; padding: 0; border: 1px solid var(--border); border-left: 0; background: var(--panel-2); color: var(--text-dim); font-size: 8px; line-height: 1; cursor: pointer; }
+.spin-btn:first-child { border-top-right-radius: 3px; border-bottom: 0; }
+.spin-btn:last-child { border-bottom-right-radius: 3px; }
+.spin-btn:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.spin-btn:active:not(:disabled) { background: var(--accent); color: #fff; }
+.spin-btn:disabled { opacity: .4; cursor: default; }
 /* sposta origine e riposiziona */
 .og-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
 .og-table th { text-align: left; font-weight: 600; font-size: 11px; color: var(--text-dim); padding: 4px 6px; border-bottom: 1px solid var(--border); }
