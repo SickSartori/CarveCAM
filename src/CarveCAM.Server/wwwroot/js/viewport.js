@@ -182,6 +182,27 @@ export class Viewport {
   _bindInput() {
     const dom = this.renderer.domElement;
     let down = null;
+    // presa di una maniglia (es. punti di un'entità dello sketch): handlers.grab(ev) restituisce { move, end }
+    // e il trascinamento non arriva a navigazione e manipolatore (ascoltatore in fase di cattura, eseguito prima)
+    dom.addEventListener('pointerdown', ev => {
+      if (ev.button !== 0 || !this.handlers.grab) return;
+      const g = this.handlers.grab(ev);
+      if (!g) return;
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+      dom.setPointerCapture(ev.pointerId);
+      const move = e => g.move?.(e);
+      const up = e => {
+        dom.removeEventListener('pointermove', move);
+        dom.removeEventListener('pointerup', up);
+        dom.removeEventListener('pointercancel', up);
+        try { dom.releasePointerCapture(e.pointerId); } catch { /* già rilasciato */ }
+        g.end?.(e, e.type === 'pointercancel');
+      };
+      dom.addEventListener('pointermove', move);
+      dom.addEventListener('pointerup', up);
+      dom.addEventListener('pointercancel', up);
+    }, true);
     dom.addEventListener('pointerdown', ev => {
       down = { x: ev.clientX, y: ev.clientY, b: ev.button };
       this.handlers.down?.(ev);

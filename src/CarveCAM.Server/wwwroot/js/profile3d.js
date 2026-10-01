@@ -49,8 +49,6 @@ export class Profile3D {
   activate() {
     this.active = true;
     this.el.hidden = false;
-    // si può ruotare la vista per raggiungere le facce; all'uscita dallo strumento si torna in pianta
-    this.vp.controls.enableRotate = true;
     this.vp.renderer.domElement.style.cursor = 'default';
     this._syncUi();
   }
@@ -62,10 +60,6 @@ export class Profile3D {
     this.clear();
     this._setHover(null);
     this.vp.renderer.domElement.style.cursor = '';
-    if (this.sketch.active) {
-      this.vp.controls.enableRotate = false;
-      this.vp.lookAlongFrame(this.sketch.frame, true, this.vp.camera.position.distanceTo(this.vp.controls.target));
-    }
   }
 
   // ---------------------------------------------------------------- selezione

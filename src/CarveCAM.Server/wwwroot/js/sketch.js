@@ -1,7 +1,9 @@
 // Modalità sketch: disegno 2D sul piano di lavoro (polilinea, rettangolo, cerchio, poligono) con aggancio e coordinate.
+// Le entità selezionate mostrano i punti di riferimento (vertici, centro, quadranti, punti medi): trascinandoli
+// si modifica la geometria. La vista si orienta come fuori dallo sketch (rotazione, cubo, pan, zoom).
 import * as THREE from 'three';
-import { App, emit, mutate, getSketch, select, toggleSelect, uid } from './state.js';
-import { planeFrame, frameMatrix, toLocal, entityLoop, entitySnapPoints, distToLoop, fmt } from './geom.js';
+import { App, emit, mutate, getSketch, select, toggleSelect, uid, snapshot, commitSnapshot } from './state.js';
+import { planeFrame, frameMatrix, toLocal, toWorld, entityLoop, entitySnapPoints, distToLoop, fmt } from './geom.js';
 import { status, toast } from './dialogs.js';
 import { evalNum } from './ui-props.js';
 import { Profile3D } from './profile3d.js';
@@ -10,7 +12,7 @@ import { t } from './i18n.js';
 
 const HINTS_IT = {
   profile: 'Clic su facce del modello per selezionarle (di nuovo per toglierle), trascina per ruotare · <b>Invio</b> crea il profilo · <b>Backspace</b> toglie l\'ultima · <b>Esc</b> svuota',
-  select: 'Clic su un\'entità per selezionarla (<b>Ctrl</b>+clic per aggiungerla) · <b>Canc</b> elimina · <b>Esc</b> termina sketch',
+  select: 'Clic su un\'entità per selezionarla (<b>Ctrl</b>+clic per aggiungerla) · trascina i suoi punti per modificarla · <b>Canc</b> elimina · <b>Esc</b> termina sketch',
   polyline: 'Clic per aggiungere vertici · clic sul primo punto, doppio clic o <b>Invio</b> per chiudere · <b>Backspace</b> annulla vertice',
   rect: 'Clic sul primo angolo, poi sull\'angolo opposto (o digita <b>@larghezza,altezza</b>)',
   circle: 'Clic sul centro, poi sul raggio (o digita il raggio)',
@@ -18,9 +20,14 @@ const HINTS_IT = {
 };
 const HINTS = Object.fromEntries(Object.entries(HINTS_IT).map(([k, v]) => [k, t(v)]));
 
+const GRIP_PX = 9;   // raggio di presa delle maniglie (pixel)
+
 export class SketchMode {
-  constructor(vp) {
+  constructor(vp, sync) {
     this.vp = vp;
+    this.sync = sync;
+    this.hoverGrip = null;
+    this.dragGrip = null;
     this.active = false;
     this.tool = 'select';
     this.pts = [];
@@ -59,8 +66,8 @@ export class SketchMode {
     this.group.matrix.copy(frameMatrix(this.frame));
     this.group.matrixWorldNeedsUpdate = true;
     this.vp.transform.detach();
-    this.vp.controls.enableRotate = false;
-    this.vp.lookAlongFrame(this.frame, true, Math.max(120, (r.plane.size || 100) * 1.6));
+    // vista normale al piano attuale, con la stessa convenzione (Z in alto) della navigazione normale
+    this.vp.lookAlongFrame(this.frame, false, Math.max(120, (r.plane.size || 100) * 1.6));
     this.vp.el.classList.add('sketching');
     document.getElementById('sk-name').textContent = `${r.plane.name} › ${r.sketch.name}`;
     this.bar.hidden = false;
@@ -77,23 +84,29 @@ export class SketchMode {
     App.sketch = null;
     this.pts = [];
     this._clearGraphics();
-    this.vp.controls.enableRotate = true;
-    this.vp.resetUp();
-    this.vp.el.classList.remove('sketching');
+    this.hoverGrip = null;
+    this.dragGrip = null;
+    this.vp.el.classList.remove('sketching', 'grip-hover');
     this.bar.hidden = true;
     this.hint.hidden = true;
     if (notify) { emit('sketch'); emit('project'); }
   }
 
-  /** Aggiorna il sistema di riferimento (es. piano modificato mentre si disegna). */
+  /** Aggiorna il sistema di riferimento (es. piano modificato mentre si disegna): se cambia la normale, riallinea la vista. */
   refreshFrame() {
     if (!this.active) return;
     const r = getSketch(this.sketchId);
     if (!r) { this.exit(); return; }
+    const prev = this.frame;
     this.frame = planeFrame(r.plane);
     this.group.matrix.copy(frameMatrix(this.frame));
     this.group.matrixWorldNeedsUpdate = true;
+    if (prev && prev.n.angleTo(this.frame.n) > 1e-6) this.vp.lookAlongFrame(this.frame, false);
+    this.redraw();
   }
+
+  /** Ridisegna anteprime e maniglie (selezione o geometria cambiate). */
+  redraw() { if (this.active && !this.dragGrip) this._redraw(); }
 
   setTool(t) {
     if (this.tool === 'profile' && t !== 'profile') this.profile.deactivate();
@@ -117,13 +130,14 @@ export class SketchMode {
     return { x: l.x, y: l.y, px };
   }
 
-  _snap(q) {
+  /** Aggancio a punti notevoli (escluse l'entità exclude) o alla griglia. */
+  _snap(q, exclude = null) {
     if (!q) return null;
     const tol = q.px * 9;
     let best = null, bd = tol;
     const r = getSketch(this.sketchId);
     const cands = [[0, 0], ...this.pts];
-    if (r) for (const e of r.sketch.entities) cands.push(...entitySnapPoints(e));
+    if (r) for (const e of r.sketch.entities) if (e.id !== exclude) cands.push(...entitySnapPoints(e));
     for (const c of cands) {
       const d = Math.hypot(c[0] - q.x, c[1] - q.y);
       if (d < bd) { bd = d; best = { x: c[0], y: c[1], snapped: 'punto' }; }
@@ -138,6 +152,9 @@ export class SketchMode {
 
   onMove(ev) {
     if (this.tool === 'profile') { this.profile.hover(ev); return; }
+    if (this.dragGrip) return;   // durante il trascinamento di una maniglia aggiorna grab()
+    this.hoverGrip = this._gripAt(ev);
+    this.vp.el.classList.toggle('grip-hover', !!this.hoverGrip);
     const q = this._snap(this._local(ev));
     if (!q) return;
     this.cursor = q;
@@ -147,6 +164,7 @@ export class SketchMode {
 
   onLeave() {
     this.cursor = null;
+    if (!this.dragGrip) { this.hoverGrip = null; this.vp.el.classList.remove('grip-hover'); }
     if (this.tool === 'profile') this.profile.leave();
     this._redraw();
   }
@@ -187,6 +205,81 @@ export class SketchMode {
     const map = { s: 'select', l: 'polyline', r: 'rect', c: 'circle', p: 'polygon', d: 'profile' };
     if (map[k.toLowerCase()]) { this.setTool(map[k.toLowerCase()]); return true; }
     return false;
+  }
+
+  // ---------------------------------------------------------------- maniglie delle entità selezionate
+  /** Maniglie delle entità selezionate di questo sketch (solo con lo strumento Seleziona). */
+  _grips() {
+    if (!this.active || this.tool !== 'select') return [];
+    const r = getSketch(this.sketchId);
+    if (!r) return [];
+    const ids = new Set(App.selected.filter(s => s.type === 'entity' && s.sketchId === this.sketchId).map(s => s.id));
+    const out = [];
+    for (const e of r.sketch.entities) if (ids.has(e.id)) out.push(...entityGrips(e));
+    return out;
+  }
+
+  /** Maniglia sotto il puntatore (la più vicina entro GRIP_PX pixel); i punti hanno la precedenza sui centri. */
+  _gripAt(ev) {
+    const grips = this._grips();
+    if (!grips.length) return null;
+    const m = this.vp.pointer(ev);
+    let best = null, bd = GRIP_PX;
+    for (const g of grips) {
+      const s = this.vp.toScreen(toWorld(this.frame, g.x, g.y));
+      if (!s) continue;
+      const d = Math.hypot(s.x - m.x, s.y - m.y) + (g.role === 'center' || g.role === 'insert' ? 0.5 : 0);
+      if (d < bd) { bd = d; best = g; }
+    }
+    return best;
+  }
+
+  /** Inizio del trascinamento di una maniglia (chiamato dalla vista prima della navigazione): { move, end } o null. */
+  grab(ev) {
+    if (!this.active || this.tool !== 'select' || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return null;
+    const g = this._gripAt(ev);
+    if (!g) return null;
+    const sid = this.sketchId;
+    const e0 = getSketch(sid)?.sketch.entities.find(x => x.id === g.id);
+    if (!e0) return null;
+    const orig = structuredClone(e0);
+    const snap = snapshot();
+    const entity = () => getSketch(sid)?.sketch.entities.find(x => x.id === g.id);
+    let moved = false;
+    this.dragGrip = g;
+    this.hoverGrip = g;
+    const refresh = () => {
+      this._redraw();
+      this.sync?.sync();
+      emit('transform');
+    };
+    return {
+      move: ev2 => {
+        const q = this._snap(this._local(ev2), g.id);
+        const ent = entity();
+        const next = q && ent && applyGrip(orig, g, [q.x, q.y]);
+        if (!next) return;
+        Object.assign(ent, next);
+        moved = true;
+        this.cursor = q;
+        document.getElementById('st-coords').textContent = `U ${fmt(q.x, 3)}  V ${fmt(q.y, 3)}${q.snapped ? `  [${q.snapped}]` : ''}`;
+        refresh();
+      },
+      end: (ev2, cancel) => {
+        this.dragGrip = null;
+        const ent = entity();
+        if (cancel && moved && ent) {
+          for (const k of Object.keys(ent)) delete ent[k];
+          Object.assign(ent, orig);
+        } else if (moved) {
+          commitSnapshot(snap);
+          status(t('Entità modificata: Ctrl+Z per annullare'));
+        }
+        this.hoverGrip = this._gripAt(ev2);
+        this.vp.el.classList.toggle('grip-hover', !!this.hoverGrip);
+        refresh();
+      },
+    };
   }
 
   _point(p, px = 0.1) {
@@ -294,8 +387,8 @@ export class SketchMode {
   _clearGraphics() {
     for (const c of [...this.group.children]) {
       c.removeFromParent();
-      c.geometry?.dispose();
-      c.material?.dispose();
+      // le texture delle maniglie sono condivise: material.dispose() non le libera
+      c.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); });
     }
   }
 
@@ -329,6 +422,9 @@ export class SketchMode {
     }
     // vertici già inseriti
     for (const p of this.pts) this.group.add(square(p, px * 3.5, 0x7cf2ff));
+    // maniglie delle entità selezionate
+    const grips = this._grips();
+    if (grips.length) this.group.add(gripPoints(grips, this.dragGrip || this.hoverGrip));
     // cursore a croce
     if (c) {
       const s = px * (settings.sizes.cursor || 14);
@@ -341,6 +437,146 @@ export class SketchMode {
       if (c.snapped === 'punto') this.group.add(square([c.x, c.y], px * 5, 0xff8a3d));
     }
   }
+}
+
+// ------------------------------------------------------------------ maniglie
+/** Punti di riferimento di un'entità: { id, role, i, x, y } in coordinate del piano. */
+function entityGrips(e) {
+  const g = (role, x, y, i = 0) => ({ id: e.id, role, i, x, y });
+  switch (e.kind) {
+    case 'rect': {
+      const mx = (e.x1 + e.x2) / 2, my = (e.y1 + e.y2) / 2;
+      return [
+        g('corner', e.x1, e.y1, 0), g('corner', e.x2, e.y1, 1), g('corner', e.x2, e.y2, 2), g('corner', e.x1, e.y2, 3),
+        g('edge', mx, e.y1, 0), g('edge', e.x2, my, 1), g('edge', mx, e.y2, 2), g('edge', e.x1, my, 3),
+        g('center', mx, my),
+      ];
+    }
+    case 'circle':
+      return [g('center', e.cx, e.cy), g('radius', e.cx + e.r, e.cy, 0), g('radius', e.cx, e.cy + e.r, 1), g('radius', e.cx - e.r, e.cy, 2), g('radius', e.cx, e.cy - e.r, 3)];
+    case 'polygon':
+      return [g('center', e.cx, e.cy), ...entityLoop(e).map((p, i) => g('pvertex', p[0], p[1], i))];
+    case 'polyline': {
+      const pts = e.pts || [];
+      if (!pts.length) return [];
+      const out = pts.map((p, i) => g('vertex', p[0], p[1], i));
+      // punti medi dei lati: trascinandoli si inserisce un vertice (solo per polilinee non troppo dense)
+      if (pts.length <= 400) {
+        for (let i = 0; i < pts.length; i++) {
+          const a = pts[i], b = pts[(i + 1) % pts.length];
+          out.push(g('insert', (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, i));
+        }
+      }
+      let cx = 0, cy = 0;
+      for (const p of pts) { cx += p[0]; cy += p[1]; }
+      out.push(g('center', cx / pts.length, cy / pts.length));
+      return out;
+    }
+  }
+  return [];
+}
+
+/** Nuova geometria dell'entità (dall'originale e0) con la maniglia g portata nel punto p; null se degenere. */
+function applyGrip(e0, g, p) {
+  const [x, y] = p;
+  const dx = x - g.x, dy = y - g.y;
+  const ok = v => Math.abs(v) > 1e-6;
+  switch (e0.kind) {
+    case 'rect': {
+      if (g.role === 'center') return { x1: e0.x1 + dx, y1: e0.y1 + dy, x2: e0.x2 + dx, y2: e0.y2 + dy };
+      let { x1, y1, x2, y2 } = e0;
+      if (g.role === 'corner') {
+        // l'angolo opposto resta fermo
+        const fx = g.i === 0 || g.i === 3 ? e0.x2 : e0.x1;
+        const fy = g.i === 0 || g.i === 1 ? e0.y2 : e0.y1;
+        [x1, x2] = [Math.min(fx, x), Math.max(fx, x)];
+        [y1, y2] = [Math.min(fy, y), Math.max(fy, y)];
+      } else if (g.role === 'edge') {
+        // il lato opposto resta fermo
+        if (g.i === 0) [y1, y2] = [Math.min(y, e0.y2), Math.max(y, e0.y2)];
+        if (g.i === 2) [y1, y2] = [Math.min(y, e0.y1), Math.max(y, e0.y1)];
+        if (g.i === 1) [x1, x2] = [Math.min(x, e0.x1), Math.max(x, e0.x1)];
+        if (g.i === 3) [x1, x2] = [Math.min(x, e0.x2), Math.max(x, e0.x2)];
+      }
+      return ok(x2 - x1) && ok(y2 - y1) ? { x1, y1, x2, y2 } : null;
+    }
+    case 'circle': {
+      if (g.role === 'center') return { cx: x, cy: y };
+      const r = Math.hypot(x - e0.cx, y - e0.cy);
+      return ok(r) ? { r } : null;
+    }
+    case 'polygon': {
+      if (g.role === 'center') return { cx: x, cy: y };
+      const r = Math.hypot(x - e0.cx, y - e0.cy);
+      if (!ok(r)) return null;
+      const n = Math.max(3, e0.sides | 0);
+      // il vertice trascinato segue il puntatore: cambiano raggio e rotazione
+      let rot = THREE.MathUtils.radToDeg(Math.atan2(y - e0.cy, x - e0.cx)) - g.i * 360 / n;
+      rot = ((rot % 360) + 540) % 360 - 180;
+      return { r, rot: Math.round(rot * 1e6) / 1e6 };
+    }
+    case 'polyline': {
+      const pts = (e0.pts || []).map(q => [q[0], q[1]]);
+      if (g.role === 'center') return { pts: pts.map(q => [q[0] + dx, q[1] + dy]) };
+      if (g.role === 'vertex') { pts[g.i] = [x, y]; return { pts }; }
+      if (g.role === 'insert') { pts.splice(g.i + 1, 0, [x, y]); return { pts }; }
+    }
+  }
+  return null;
+}
+
+function sameGrip(a, b) {
+  return a === b || (!!a && !!b && a.id === b.id && a.role === b.role && a.i === b.i);
+}
+
+const GRIP_TEX = {};
+/** Texture delle maniglie (create una volta): quadrato, cerchio, rombo bianchi con bordo scuro, tinti dal colore. */
+function gripTexture(shape) {
+  if (GRIP_TEX[shape]) return GRIP_TEX[shape];
+  const n = 32, cv = document.createElement('canvas');
+  cv.width = cv.height = n;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#ffffff';
+  c.strokeStyle = '#0b1220';
+  c.lineWidth = 4;
+  c.beginPath();
+  if (shape === 'circle') c.arc(n / 2, n / 2, n / 2 - 3, 0, Math.PI * 2);
+  else if (shape === 'diamond') { c.moveTo(n / 2, 2); c.lineTo(n - 2, n / 2); c.lineTo(n / 2, n - 2); c.lineTo(2, n / 2); c.closePath(); }
+  else c.rect(3, 3, n - 6, n - 6);
+  c.fill();
+  c.stroke();
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return (GRIP_TEX[shape] = tex);
+}
+
+/** Maniglie come punti di dimensione costante sullo schermo; quella sotto il puntatore è evidenziata. */
+function gripPoints(grips, hot) {
+  const g = new THREE.Group();
+  const kinds = [
+    { shape: 'square', size: 9, roles: ['corner', 'vertex', 'pvertex'], color: 0x7cf2ff },
+    { shape: 'diamond', size: 10, roles: ['edge', 'radius'], color: 0x7cf2ff },
+    { shape: 'diamond', size: 7, roles: ['insert'], color: 0x9fb4c8, opacity: 0.75 },
+    { shape: 'circle', size: 11, roles: ['center'], color: 0xffe066 },
+  ];
+  for (const k of kinds) {
+    const list = grips.filter(x => k.roles.includes(x.role));
+    if (!list.length) continue;
+    const add = (items, col, size) => {
+      const geo = new THREE.BufferGeometry().setFromPoints(items.map(x => new THREE.Vector3(x.x, x.y, 0.08)));
+      const pts = new THREE.Points(geo, new THREE.PointsMaterial({
+        size, sizeAttenuation: false, map: gripTexture(k.shape), color: col, transparent: true, opacity: k.opacity ?? 1,
+        alphaTest: 0.3, depthTest: false, depthWrite: false,
+      }));
+      pts.renderOrder = 22;
+      pts.raycast = () => {};
+      g.add(pts);
+    };
+    const cold = list.filter(x => !sameGrip(x, hot));
+    if (cold.length) add(cold, k.color, k.size);
+    if (cold.length < list.length) add(list.filter(x => sameGrip(x, hot)), 0xff8a3d, k.size + 4);
+  }
+  return g;
 }
 
 function square(p, s, color) {

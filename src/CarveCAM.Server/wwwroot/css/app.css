@@ -88,7 +88,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 [hidden] { display: none !important; }
 .grow { flex: 1; }
 #menu-layer, #modal-root { position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 1000; }
-#viewport.sketching .view-tools { display: none; }
 
 /* ------------------------------------------------------------------ intestazione: barra titolo + barra strumenti */
 #topbar {

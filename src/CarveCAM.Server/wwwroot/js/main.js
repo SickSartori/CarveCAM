@@ -31,7 +31,7 @@ translateDom();
 const vp = new Viewport(document.getElementById('viewport'));
 const viewCube = new ViewCube(vp, document.getElementById('view-cube'));
 const sync = new SceneSync(vp);
-const sketch = new SketchMode(vp);
+const sketch = new SketchMode(vp, sync);
 const sim = new Simulator(vp, sync);
 const gizmo = new GizmoController({ vp, sync, isBlocked: () => sketch.active || sim.active });
 const cmd = createCommands({ vp, sync, sketch, sim, gizmo });
@@ -155,6 +155,7 @@ function renderUi() {
   queueMicrotask(() => {
     renderQueued = false;
     sync.sync();
+    sketch.redraw();
     tree.render();
     props.refresh();
     infoBar();
@@ -172,6 +173,7 @@ on('selection', () => {
   if (sim.active && !(App.selected.length === 1 && App.selection?.type === 'operation' && App.selection.id === sim.opId)) sim.stop();
   if (App.pickMode?.kind === 'pivot') gizmo.cancelPivotPick();
   sync.sync();
+  sketch.redraw();
   tree.render();
   props.render();
   toolbar.update();
@@ -196,6 +198,8 @@ function hitItem(ev) {
 }
 const coordsEl = document.getElementById('st-coords');
 vp.handlers.down = () => gizmo.onPointerDown();
+// maniglie delle entità dello sketch: il trascinamento modifica la geometria invece di ruotare la vista
+vp.handlers.grab = ev => (sketch.active && !App.pickMode ? sketch.grab(ev) : null);
 vp.handlers.move = ev => {
   if (App.pickMode?.kind === 'pivot') { gizmo.pivotMove(ev); return; }
   if (sketch.active) { sketch.onMove(ev); return; }
