@@ -87,6 +87,18 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
 
   const lockedWarn = () => toast(t('Elemento bloccato: sbloccalo per spostarlo'), 'warn');
 
+  /** Comandi "Modello" non disponibili durante la creazione di un piano o il disegno di uno sketch. */
+  function modelBlocked() {
+    if (sketch.active) { toast(t('Termina lo sketch prima di modificare il modello'), 'warn'); return true; }
+    if (App.planeMode) { toast(t('Concludi o annulla (Esc) la creazione del piano prima di modificare il modello'), 'warn'); return true; }
+    return false;
+  }
+  const opsBlocked = () => {
+    if (!sketch.active) return false;
+    toast(t('Termina lo sketch prima di creare o modificare le lavorazioni'), 'warn');
+    return true;
+  };
+
   const confirmDiscard = async title => !App.dirty || confirmBox(title, t('Il progetto corrente ha modifiche non salvate che andranno perse.'), t('Continua'));
 
   // ================================================================ FILE
@@ -238,6 +250,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   };
 
   cmd.importModel = () => {
+    if (modelBlocked()) return;
     const inp = document.getElementById('file-import');
     inp.value = '';
     inp.onchange = () => cmd.importFiles([...inp.files]);
@@ -245,7 +258,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   };
 
   cmd.importFiles = async files => {
-    if (!files.length) return;
+    if (!files.length || modelBlocked()) return;
     busy(t('Importazione…'));
     let lastId = null;
     try {
@@ -633,6 +646,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
 
   // ================================================================ INSERISCI (artefatti)
   cmd.addArtifact = kind => {
+    if (modelBlocked()) return;
     const d = ARTIFACT_DEFAULTS[kind];
     const tg = vp.controls.target;
     const id = uid('art');
@@ -903,6 +917,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
    * l'utensile dal magazzino, poi il setup dei parametri.
    */
   cmd.newOperation = async (kind, sketchId) => {
+    if (opsBlocked()) return;
     const src = sketchId ? { sketchId, entityIds: null } : operationSource();
     if (!src) {
       modal({
@@ -1334,10 +1349,11 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     if (multi) {
       const items = [];
       if (movableSelected().length) items.push(lockItem(), { sep: true });
-      if (operationSource()) items.push({ label: t('Nuova svuotatura'), action: () => cmd.newOperation('pocket') }, { label: t('Nuova finitura'), action: () => cmd.newOperation('finish') }, { sep: true });
+      if (operationSource() && !sketch.active) items.push({ label: t('Nuova svuotatura'), action: () => cmd.newOperation('pocket') }, { label: t('Nuova finitura'), action: () => cmd.newOperation('finish') }, { sep: true });
       return [...items, ...common];
     }
     const locked = !!r?.item.locked;
+    const noSketch = () => !sketch.active;
     switch (sel.type) {
       case 'object':
       case 'artifact':
@@ -1350,13 +1366,13 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
           { label: t('Inverti normale'), enabled: () => !locked, action: () => cmd.flipNormal(sel.id) }, lockItem(), { sep: true }, ...common];
       case 'sketch':
         return [{ label: t('Modifica sketch'), action: () => cmd.editSketch(sel.id) },
-          { label: t('Nuova svuotatura'), action: () => cmd.newOperation('pocket', sel.id) },
-          { label: t('Nuova finitura'), action: () => cmd.newOperation('finish', sel.id) }, { sep: true }, ...common];
+          { label: t('Nuova svuotatura'), enabled: noSketch, action: () => cmd.newOperation('pocket', sel.id) },
+          { label: t('Nuova finitura'), enabled: noSketch, action: () => cmd.newOperation('finish', sel.id) }, { sep: true }, ...common];
       case 'entity':
-        return [{ label: t('Nuova svuotatura'), action: () => cmd.newOperation('pocket') },
-          { label: t('Nuova finitura'), action: () => cmd.newOperation('finish') }, { sep: true }, ...common];
+        return [{ label: t('Nuova svuotatura'), enabled: noSketch, action: () => cmd.newOperation('pocket') },
+          { label: t('Nuova finitura'), enabled: noSketch, action: () => cmd.newOperation('finish') }, { sep: true }, ...common];
       case 'operation':
-        return [{ label: t('Calcola'), kbd: 'F9', action: () => cmd.compute(sel.id) }, { label: t('Simula'), action: () => cmd.simulate(sel.id) },
+        return [{ label: t('Calcola'), kbd: 'F9', enabled: noSketch, action: () => cmd.compute(sel.id) }, { label: t('Simula'), enabled: noSketch, action: () => cmd.simulate(sel.id) },
           { label: t('Esporta G-code…'), action: () => cmd.exportGcode([sel.id]) }, { label: t('Salva come setup…'), action: () => cmd.saveAsSetup(sel.id) },
           { sep: true }, ...common];
     }

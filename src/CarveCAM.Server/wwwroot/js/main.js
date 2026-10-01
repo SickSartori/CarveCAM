@@ -276,8 +276,9 @@ document.addEventListener('keydown', e => {
   if (ctrl && e.shiftKey && k === 's') return key('saveAs', () => cmd.saveProjectAs());
   if (ctrl && k === 's') return key('save', () => cmd.saveProject());
   if (ctrl && k === 'o') return key('open', () => cmd.openProject());
-  if (ctrl && k === 'i') return key('import', () => cmd.importModel());
-  if (e.key === 'F9') return key('compute', () => cmd.computeSelected());
+  // le scorciatoie passano dalle azioni: valgono le stesse regole di abilitazione di menu e barra
+  if (ctrl && k === 'i') return key('import', () => actions.run('file.import'));
+  if (e.key === 'F9') return key('compute', () => actions.run('op.compute'));
   if (typing) return;
   if (ctrl && k === 'z' && !e.shiftKey) return key('undo', () => cmd.undo());
   if (ctrl && (k === 'y' || (k === 'z' && e.shiftKey))) return key('redo', () => cmd.redo());

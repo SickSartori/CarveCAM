@@ -15,6 +15,9 @@ export function createActions({ cmd, vp, sketch }) {
   const hasOps = () => App.project.operations.length > 0;
   const movable = () => resolveAll().some(x => MOVABLE.includes(x.type));
   const planeMode = () => App.planeMode && !sketch.active;
+  // comandi "Modello" fermi mentre si crea un piano o si disegna uno sketch; "Lavorazioni" fermi nello sketch
+  const modelOk = () => !App.planeMode && !App.pickMode && !sketch.active;
+  const opsOk = () => !sketch.active;
   const draw = tl => ({
     run: () => cmd.sketchTool(tl),
     checked: () => sketch.active && sketch.tool === tl,
@@ -29,7 +32,7 @@ export function createActions({ cmd, vp, sketch }) {
     { id: 'file.save', label: 'Salva progetto', icon: 'save', kbd: 'Ctrl+S', run: () => cmd.saveProject() },
     { id: 'file.saveAs', label: 'Salva con nome…', icon: 'saveAs', kbd: 'Ctrl+Shift+S', run: cmd.saveProjectAs },
     { id: 'file.rename', label: 'Rinomina progetto…', icon: 'rename', run: cmd.renameProject },
-    { id: 'file.import', label: 'Importa modello 3D…', short: 'Importa', icon: 'import', kbd: 'Ctrl+I', tone: 'model', run: cmd.importModel,
+    { id: 'file.import', label: 'Importa modello 3D…', short: 'Importa', icon: 'import', kbd: 'Ctrl+I', tone: 'model', run: cmd.importModel, enabled: modelOk,
       hint: 'STL, OBJ, PLY, OFF, glTF/GLB, FBX, 3MF, DAE, 3DS, STEP, IGES…' },
     { id: 'file.gcode', label: 'Esporta G-code…', short: 'G-code', icon: 'gcode', run: () => cmd.exportGcode(), enabled: hasOps },
     { id: 'file.cl', label: 'Esporta CL data…', icon: 'cldata', run: () => cmd.exportCl(), enabled: hasOps },
@@ -51,10 +54,10 @@ export function createActions({ cmd, vp, sketch }) {
     { id: 'gizmo.snap', label: 'Aggancio manipolatore 1 mm / 15°', icon: 'snap', run: cmd.toggleGizmoSnap, checked: () => App.view.gizmoSnap },
     { id: 'gizmo.local', label: 'Manipolatore su assi locali', icon: 'local', run: cmd.toggleGizmoSpace, checked: () => App.view.gizmoLocal },
     // ---- artefatti
-    { id: 'art.cylinder', label: 'Cilindro', icon: 'cylinder', tone: 'model', run: () => cmd.addArtifact('cylinder'), hint: 'Inserisci un artefatto cilindrico (ostacolo)' },
-    { id: 'art.cone', label: 'Tronco di cono', icon: 'cone', tone: 'model', run: () => cmd.addArtifact('cone'), hint: 'Inserisci un tronco di cono' },
-    { id: 'art.sphere', label: 'Sfera', icon: 'sphere', tone: 'model', run: () => cmd.addArtifact('sphere'), hint: 'Inserisci una sfera' },
-    { id: 'art.box', label: 'Parallelepipedo', icon: 'box', tone: 'model', run: () => cmd.addArtifact('box'), hint: 'Inserisci un parallelepipedo' },
+    { id: 'art.cylinder', label: 'Cilindro', icon: 'cylinder', tone: 'model', run: () => cmd.addArtifact('cylinder'), enabled: modelOk, hint: 'Inserisci un artefatto cilindrico (ostacolo)' },
+    { id: 'art.cone', label: 'Tronco di cono', icon: 'cone', tone: 'model', run: () => cmd.addArtifact('cone'), enabled: modelOk, hint: 'Inserisci un tronco di cono' },
+    { id: 'art.sphere', label: 'Sfera', icon: 'sphere', tone: 'model', run: () => cmd.addArtifact('sphere'), enabled: modelOk, hint: 'Inserisci una sfera' },
+    { id: 'art.box', label: 'Parallelepipedo', icon: 'box', tone: 'model', run: () => cmd.addArtifact('box'), enabled: modelOk, hint: 'Inserisci un parallelepipedo' },
     // ---- piani
     { id: 'plane.add', label: 'Aggiungi piano', short: 'Aggiungi piano', icon: 'planeAdd', tone: 'plane', run: cmd.togglePlaneMode,
       checked: () => App.planeMode, enabled: () => !sketch.active,
@@ -84,14 +87,14 @@ export function createActions({ cmd, vp, sketch }) {
     { id: 'tool.profile', label: 'Profilo dal modello 3D', short: 'Da 3D', icon: 'profile3d', tone: 'sketch', kbd: 'D', ...draw('profile'),
       hint: 'Clic su facce (anche CAD di STEP e IGES) od oggetti: contorno proiettato sul piano, con unione, sottrazione, intersezione o contorni separati' },
     // ---- lavorazioni
-    { id: 'op.pocket', label: 'Nuova svuotatura (pocketing)', short: 'Svuotatura', icon: 'pocket', tone: 'op', run: () => cmd.newOperation('pocket'), enabled: opSource,
+    { id: 'op.pocket', label: 'Nuova svuotatura (pocketing)', short: 'Svuotatura', icon: 'pocket', tone: 'op', run: () => cmd.newOperation('pocket'), enabled: () => opsOk() && opSource(),
       hint: 'Seleziona uno sketch, o una o più entità dello stesso sketch. Terrazze dal piano fino a ridosso degli oggetti' },
-    { id: 'op.finish', label: 'Nuova finitura (finishing)', short: 'Finitura', icon: 'finish', tone: 'op', run: () => cmd.newOperation('finish'), enabled: opSource,
+    { id: 'op.finish', label: 'Nuova finitura (finishing)', short: 'Finitura', icon: 'finish', tone: 'op', run: () => cmd.newOperation('finish'), enabled: () => opsOk() && opSource(),
       hint: 'Seleziona uno sketch, o una o più entità dello stesso sketch. Percorso proiettato lungo la normale sulle superfici' },
-    { id: 'op.compute', label: 'Calcola lavorazione selezionata', icon: 'compute', kbd: 'F9', run: cmd.computeSelected, enabled: hasOps },
-    { id: 'op.computeAll', label: 'Ricalcola tutto', short: 'Ricalcola tutto', icon: 'computeAll', run: cmd.computeAll, enabled: hasOps,
+    { id: 'op.compute', label: 'Calcola lavorazione selezionata', icon: 'compute', kbd: 'F9', run: cmd.computeSelected, enabled: () => opsOk() && hasOps() },
+    { id: 'op.computeAll', label: 'Ricalcola tutto', short: 'Ricalcola tutto', icon: 'computeAll', run: cmd.computeAll, enabled: () => opsOk() && hasOps(),
       hint: 'Ricalcola tutte le lavorazioni esistenti' },
-    { id: 'op.simulateAll', label: 'Simula tutto', short: 'Simula tutto', icon: 'simulate', run: cmd.simulateAll, enabled: hasOps,
+    { id: 'op.simulateAll', label: 'Simula tutto', short: 'Simula tutto', icon: 'simulate', run: cmd.simulateAll, enabled: () => opsOk() && hasOps(),
       hint: 'Simula tutte le lavorazioni in sequenza, dalla prima all\'ultima' },
     { id: 'op.simulate', label: 'Simula lavorazione selezionata', icon: 'simulate', run: () => cmd.simulate(), enabled: selIs('operation') },
     // ---- strumenti
@@ -186,7 +189,7 @@ export const TOOLBAR = [
   { caption: 'Modello', stage: 'model', items: [{ id: 'file.import', label: true }, 'art.cylinder', 'art.cone', 'art.sphere', 'art.box', '|', 'edit.origin'] },
   { caption: 'Piani', stage: 'planes', items: [{ id: 'plane.add', label: true }, 'plane.preset', 'plane.face', 'plane.3pt', 'plane.view'] },
   { caption: 'Sketch', stage: 'sketch', items: ['sketch.new', '|', 'tool.select', 'tool.polyline', 'tool.rect', 'tool.circle', 'tool.polygon', 'tool.profile'] },
-  { caption: 'Lavorazioni', stage: 'ops', items: [{ id: 'op.pocket', label: true }, { id: 'op.finish', label: true }, '|', 'tools.library'] },
+  { caption: 'Lavorazioni', stage: 'ops', items: [{ id: 'op.pocket', label: true }, { id: 'op.finish', label: true }] },
   { caption: 'Calcolo e uscita', stage: 'output', items: [{ id: 'op.computeAll', label: true, primary: true }, { id: 'op.simulateAll', label: true }, { id: 'file.gcode', label: true }] },
   { caption: 'Vista', end: true, items: ['gizmo.move', 'gizmo.rotate', 'edit.lock', '|', 'view.grid', 'view.paths', 'view.rapids', '|', 'view.fit'] },
 ];

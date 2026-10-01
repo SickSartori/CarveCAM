@@ -10,6 +10,8 @@ import { t, num } from './i18n.js';
 const KIND_LABEL = { box: 'Parallelepipedo', cylinder: 'Cilindro', cone: 'Tronco di cono', sphere: 'Sfera' };
 const ENT_LABEL = { polyline: 'Polilinea', rect: 'Rettangolo', circle: 'Cerchio', polygon: 'Poligono regolare' };
 const COLLAPSE_KEY = 'carvecam.props.collapsed';
+/** Comandi del modello fermi durante la creazione di un piano o il disegno di uno sketch. */
+const modelBusy = () => !!App.sketch || !!App.planeMode;
 
 /** Valuta un numero, ammettendo virgola decimale e semplici espressioni (es. 10/2+3). */
 export function evalNum(str) {
@@ -55,7 +57,7 @@ export class Props {
     if (!r) return 'none';
     const it = r.item;
     const rel = it.rel ? Object.keys(REL_PARAMS).map(k => (it.rel[k]?.on ? 1 : 0)).join('') : '';
-    return [r.type, it.id, it.kind, it.strategy, it.tool && it.tool.type, it.entry, !!it.locked, rel, it.entityIds?.length || 0].join('|');
+    return [r.type, it.id, it.kind, it.strategy, it.tool && it.tool.type, it.entry, !!it.locked, rel, it.entityIds?.length || 0, App.sketch?.sketchId || '', !!App.planeMode].join('|');
   }
 
   /** Aggiorna i valori se la struttura del modulo è invariata, altrimenti ricostruisce. */
@@ -113,7 +115,8 @@ export class Props {
     const btns = [];
     if (mov.length) btns.push({ label: mov.every(x => x.item.locked) ? t('Sblocca tutti') : t('Blocca tutti'), action: () => this.cmd.toggleLock() });
     if (all.every(x => x.type === 'entity') && new Set(all.map(x => x.sketch.id)).size === 1) {
-      btns.push({ label: t('Nuova svuotatura'), primary: true, action: () => this.cmd.newOperation('pocket') }, { label: t('Nuova finitura'), action: () => this.cmd.newOperation('finish') });
+      const off = !!App.sketch;
+      btns.push({ label: t('Nuova svuotatura'), primary: true, disabled: off, action: () => this.cmd.newOperation('pocket') }, { label: t('Nuova finitura'), disabled: off, action: () => this.cmd.newOperation('finish') });
     }
     btns.push({ label: t('Duplica'), action: () => this.cmd.duplicateSelected() }, { label: t('Elimina'), danger: true, action: () => this.cmd.deleteSelected() });
     this._field({ type: 'buttons', items: btns });
@@ -235,8 +238,8 @@ export class Props {
       { type: 'buttons', items: [
         { label: App.sketch && App.sketch.sketchId === s.id ? 'Termina modifica' : 'Modifica sketch', primary: true,
           action: () => (App.sketch && App.sketch.sketchId === s.id ? this.cmd.finishSketch() : this.cmd.editSketch(s.id)) },
-        { label: 'Nuova svuotatura', action: () => this.cmd.newOperation('pocket', s.id) },
-        { label: 'Nuova finitura', action: () => this.cmd.newOperation('finish', s.id) },
+        { label: 'Nuova svuotatura', disabled: !!App.sketch, action: () => this.cmd.newOperation('pocket', s.id) },
+        { label: 'Nuova finitura', disabled: !!App.sketch, action: () => this.cmd.newOperation('finish', s.id) },
       ] },
       { note: 'Le entità chiuse definiscono l\'area di contenimento della lavorazione. Un contorno contenuto in un altro diventa un\'isola esclusa. Per lavorare solo alcune entità selezionale con Ctrl+clic e crea la lavorazione.' },
     ];
@@ -264,7 +267,7 @@ export class Props {
     }
     f.push({ note: 'Coordinate nel sistema del piano (U,V).' },
       { type: 'buttons', items: [
-        { label: 'Nuova svuotatura', action: () => this.cmd.newOperation('pocket') },
+        { label: 'Nuova svuotatura', disabled: !!App.sketch, action: () => this.cmd.newOperation('pocket') },
         { label: 'Elimina entità', danger: true, action: () => this.cmd.deleteSelected() },
       ] });
     return f;
@@ -336,8 +339,8 @@ export class Props {
       { sec: 'Calcolo e risultato', tone: 'calc', id: 'result' },
       { key: 'visible', label: 'Mostra percorso', type: 'check' },
       { type: 'buttons', items: [
-        { label: 'Calcola (F9)', primary: true, action: () => this.cmd.compute(op.id) },
-        { label: 'Simula', action: () => this.cmd.simulate(op.id) },
+        { label: 'Calcola (F9)', primary: true, disabled: !!App.sketch, action: () => this.cmd.compute(op.id) },
+        { label: 'Simula', disabled: !!App.sketch, action: () => this.cmd.simulate(op.id) },
         { label: 'G-code…', action: () => this.cmd.exportGcode([op.id]) },
         { label: 'Salva come setup…', action: () => this.cmd.saveAsSetup(op.id) },
       ] },
