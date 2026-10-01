@@ -1,4 +1,5 @@
-// Finestra delle opzioni: colori, dimensioni di frecce e cursori, lingua, griglia, tema chiaro/scuro, vista iniziale.
+// Finestra delle opzioni: colori, dimensioni di frecce e cursori, lingua, griglia, tema chiaro/scuro, avvio
+// (schermata iniziale e vista iniziale).
 // Le modifiche si vedono subito nella vista; Annulla ripristina i valori precedenti. Le opzioni si possono
 // esportare in un file e importare (anche su un altro computer o browser).
 import { settings, DEFAULTS, THEME_COLORS, applySettings, settingsFile, settingsFromFile } from './settings.js';
@@ -33,7 +34,7 @@ export async function openOptions({ vp } = {}) {
   const preview = () => applySettings(work, false);
 
   const tabs = [
-    ['colors', 'Colori'], ['sizes', 'Frecce e cursori'], ['lang', 'Lingua'], ['grid', 'Griglia'], ['view', 'Vista iniziale'], ['look', 'Aspetto'],
+    ['colors', 'Colori'], ['sizes', 'Frecce e cursori'], ['lang', 'Lingua'], ['grid', 'Griglia'], ['view', 'Avvio'], ['look', 'Aspetto'],
   ];
   const tabBar = h('div', { class: 'opt-tabs', role: 'tablist' });
   const pane = h('div', { class: 'opt-pane' });
@@ -125,7 +126,12 @@ export async function openOptions({ vp } = {}) {
         t('Usa la vista standard'));
       const test = h('button', { class: 'btn', type: 'button', disabled: !vp, onclick: () => { if (work.view.saved) vp.applyView(work.view, { keepTarget: true }); else vp.viewFrom(vp.camera.position.clone().set(...DEFAULTS.view.dir)); } },
         t('Prova'));
+      const home = h('input', { type: 'checkbox' });
+      home.checked = work.startScreen !== false;
+      home.addEventListener('change', () => { work.startScreen = home.checked; });
       return h('div', {},
+        row('Schermata iniziale', h('label', { class: 'opt-radio' }, home, t('Mostra all\'avvio'))),
+        h('p', { class: 'p-note', style: { margin: '0 0 12px' } }, t('All\'avvio compare la schermata con il progetto da riprendere, i progetti recenti, il progetto di esempio e la guida. Si riapre da File › Schermata iniziale o con un clic sul logo.')),
         row('Vista predefinita', state),
         h('div', { class: 'p-buttons', style: { padding: '4px 0 6px' } }, save, std, test),
         h('p', { class: 'p-note' }, t('Orientamento e zoom della vista attuale diventano quelli usati all\'avvio di CarveCAM e dal comando Vista isometrica (tasto 0 o pulsante sotto il cubo). All\'avvio si ripristinano anche il punto inquadrato e la proiezione.')));

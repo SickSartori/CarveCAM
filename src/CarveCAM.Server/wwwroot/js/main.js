@@ -25,6 +25,7 @@ import { status, toast, h, modal } from './dialogs.js';
 import { fmt } from './geom.js';
 import { previousSessionCrashed, startSession } from './recovery.js';
 import { initLoaders, splashText, splashDone } from './loader.js';
+import { HomeScreen } from './home.js';
 import { openGuide, initGuide, guideOpen } from './guide.js';
 
 applyTheme();
@@ -51,6 +52,9 @@ cmd.openPalette = () => { menuBar.close(); palette.open(); };
 // guida e schermata iniziale
 initGuide({ run: id => actions.run(id) });
 cmd.guide = page => { menuBar.close(); return openGuide(page); };
+const home = new HomeScreen({ cmd, vp, openGuide: page => openGuide(page) });
+cmd.home = () => { menuBar.close(); return home.show(); };
+document.getElementById('brand').addEventListener('click', () => cmd.home());
 async function refreshRecent() { recent.list = await cmd.recentProjects(); }
 on('recent', refreshRecent);
 
@@ -307,6 +311,11 @@ document.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   const key = (id, fn) => { e.preventDefault(); log.action(`key:${id}`); fn(); };
   if (e.key === 'F1') return key('guide', () => { if (!guideOpen()) cmd.guide(); });
+  // schermata iniziale aperta: valgono solo apertura del progetto e guida (l'area di lavoro è coperta)
+  if (home.isOpen) {
+    if (ctrl && k === 'o') key('open', async () => { if (await cmd.openProject()) home.hide(); });
+    return;
+  }
   if (ctrl && k === 'k') return key('palette', () => cmd.openPalette());
   if (ctrl && e.shiftKey && k === 's') return key('saveAs', () => cmd.saveProjectAs());
   if (ctrl && k === 's') return key('save', () => cmd.saveProject());
@@ -390,6 +399,7 @@ window.addEventListener('beforeunload', e => {
 })();
 
 async function startUp() {
+  let recovered = false;
   const crashed = previousSessionCrashed();
   startSession();
   const saved = loadAutosave();
@@ -409,7 +419,7 @@ async function startUp() {
       buttons: [{ label: t('Non recuperare'), value: false }, { label: t('Recupera'), value: true, primary: true }],
     });
     log.warn(ok ? 'Progetto recuperato dopo chiusura anomala' : 'Recupero dopo chiusura anomala rifiutato', { name: saved.project.name });
-    if (ok) setProject(saved.project, true);
+    if (ok) { setProject(saved.project, true); recovered = true; }
   } else {
     setProject(has ? saved.project : newProject(), !!(has && saved.dirty));
   }
@@ -425,6 +435,9 @@ async function startUp() {
     toolbar.update();
   } else vp.fit();
   await refreshRecent();
+  // schermata iniziale (sotto la schermata di caricamento, che sfuma); non dopo un recupero appena confermato
+  const showHome = settings.startScreen !== false && !recovered;
+  if (showHome) await home.show({ startup: true });
   splashDone();
-  if (has && !crashed && content) toast(t('Ripristinato l\'ultimo progetto aperto in questo browser'), 'info', 3000);
+  if (!showHome && has && !crashed && content) toast(t('Ripristinato l\'ultimo progetto aperto in questo browser'), 'info', 3000);
 }

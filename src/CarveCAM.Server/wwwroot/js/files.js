@@ -37,7 +37,7 @@ async function tx(mode, fn) {
 
 const req2p = r => new Promise((resolve, reject) => { r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
 
-/** Progetti recenti, dal più recente: [{ key, name, fileName, time, handle?, snapshot }]. */
+/** Progetti recenti, dal più recente: [{ key, name, fileName, time, handle?, snapshot, thumb? }]. */
 export async function recentList() {
   try {
     const all = await tx('readonly', st => req2p(st.getAll()));
@@ -48,12 +48,13 @@ export async function recentList() {
   }
 }
 
-/** Registra un progetto aperto o salvato tra i recenti. */
-export async function addRecent({ name, fileName, handle, project }) {
+/** Registra un progetto aperto o salvato tra i recenti (thumb: miniatura della vista, data URL). */
+export async function addRecent({ name, fileName, handle, project, thumb }) {
   try {
     const key = (fileName || name || 'progetto').toLowerCase();
     const entry = { key, name: name || fileName, fileName: fileName || '', time: Date.now(), snapshot: JSON.stringify(project) };
     if (handle) entry.handle = handle;
+    if (thumb) entry.thumb = thumb;
     const all = (await tx('readonly', st => req2p(st.getAll()))) || [];
     // stesso file (riferimento) o stesso nome di file: una sola voce
     const drop = new Set();

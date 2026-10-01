@@ -22,6 +22,7 @@ export class Viewport {
     this.handlers = {};           // move, down, click, dblclick, leave
     this.frameHooks = new Set();  // funzioni chiamate ad ogni frame (dt in secondi)
     this.overlays = new Set();    // disegni sovrapposti dopo la scena (renderer), es. cubo di orientamento
+    this.paused = false;          // true: vista coperta, il ciclo di disegno resta fermo
 
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: false });
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -130,9 +131,51 @@ export class Viewport {
   _loop() {
     requestAnimationFrame(this._loop);
     const dt = Math.min(0.1, this.clock.getDelta());
+    // vista coperta (schermata iniziale): niente disegno, la scheda non consuma GPU né CPU
+    if (this.paused) return;
     for (const f of this.frameHooks) f(dt);
     this.controls.update();
     this._draw();
+  }
+
+  /**
+   * Immagine della vista (JPEG, data URL) di w × h pixel, ritagliata al centro: si disegna e si copia subito,
+   * prima che il browser presenti il fotogramma (la tela non conserva il disegno). frame: inquadra modelli e
+   * artefatti dalla direzione attuale solo per l'immagine (la vista resta com'era).
+   */
+  snapshot(w = 320, h = 200, frame = false) {
+    const cam = this.camera;
+    const saved = frame && { pos: cam.position.clone(), target: this.controls.target.clone(), zoom: this.ortho.zoom, height: this.ortho.top - this.ortho.bottom };
+    try {
+      if (frame) {
+        const box = new THREE.Box3();
+        for (const g of [this.groups.objects, this.groups.artifacts]) g.traverseVisible(o => { if (o.isMesh) box.expandByObject(o); });
+        if (!box.isEmpty()) this.fit(box);
+      }
+      this.controls.update();
+      this._draw();
+      const src = this.renderer.domElement;
+      const sw = src.width, sh = src.height;
+      if (!sw || !sh) return null;
+      const s = Math.min(sw / w, sh / h);
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const g = c.getContext('2d');
+      g.fillStyle = color('background');
+      g.fillRect(0, 0, w, h);
+      g.drawImage(src, (sw - w * s) / 2, (sh - h * s) / 2, w * s, h * s, 0, 0, w, h);
+      return c.toDataURL('image/jpeg', 0.8);
+    } catch { return null; } finally {
+      if (saved) {
+        cam.position.copy(saved.pos);
+        this.controls.target.copy(saved.target);
+        this.ortho.zoom = saved.zoom;
+        this._updateOrthoFrustum(saved.height);
+        cam.lookAt(saved.target);
+        this.controls.update();
+      }
+    }
   }
 
   /** Disegna scena, triade degli assi e sovrapposizioni (cubo di orientamento) con la camera corrente. */

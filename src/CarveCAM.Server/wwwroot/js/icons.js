@@ -56,6 +56,7 @@ export const TB = {
   duplicate: t('<rect x="6.5" y="6.5" width="10" height="10" rx="1"/><path d="M13.5 6.5v-3h-10v10h3"/>'),
   trash: t('<path d="M3.5 5.5h13M8 5.5v-2h4v2M5.5 5.5l.8 11h7.4l.8-11"/>'),
   import: t('<path d="M10 2v7.5M7 6.5l3 3 3-3"/><path d="M3.5 11v4.5L10 18.5l6.5-3V11"/><path d="M3.5 11 10 14l6.5-3"/>'),
+  home: t('<path d="M3 9.5 10 3.5l7 6"/><path d="M5 8v8.5h10V8"/><path d="M8.5 16.5v-4.5h3v4.5"/>'),
   demo: t('<path d="M10 2.5 11.8 7l4.7.4-3.6 3 1.1 4.6L10 12.6 6 15l1.1-4.6-3.6-3L8.2 7z"/>'),
   cylinder: t('<ellipse cx="10" cy="5" rx="6" ry="2.5"/><path d="M4 5v10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V5"/>'),
   cone: t('<ellipse cx="10" cy="15" rx="6.5" ry="2.3"/><ellipse cx="10" cy="4.5" rx="2.8" ry="1.1"/><path d="M3.5 15 7.2 4.5M16.5 15 12.8 4.5"/>'),

@@ -111,6 +111,8 @@ export function busy(text) {
     if (s >= 2) timeEl.textContent = elapsed(s);
   }, 500);
   log.debug(`Attività: ${text}`);
+  // chi copre l'interfaccia (schermata iniziale) si toglie: l'attività e il suo avanzamento devono vedersi
+  window.dispatchEvent(new Event('carvecam:busy'));
   document.getElementById('busy-cancel').onclick = () => { log.info('Attività annullata dall\'utente', { text }); busyCtrl?.abort(); };
   return busyCtrl.signal;
 }

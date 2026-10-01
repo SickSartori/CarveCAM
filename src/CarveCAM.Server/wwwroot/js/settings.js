@@ -31,6 +31,7 @@ export const DEFAULTS = {
     major: 50,          // passo della griglia principale (mm)
     snapStep: 1,        // passo di aggancio predefinito dello sketch (mm)
   },
+  startScreen: true,    // schermata iniziale all'avvio (progetto da riprendere, recenti, esempio, guida)
   // vista memorizzata dalle opzioni: usata all'avvio e come vista isometrica (saved: false = vista standard)
   view: {
     saved: false,

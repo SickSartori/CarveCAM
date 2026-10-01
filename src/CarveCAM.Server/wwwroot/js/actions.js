@@ -40,6 +40,8 @@ export function createActions({ cmd, vp, sketch }) {
       hint: 'Copie del progetto salvate automaticamente sul server mentre lavori' },
     { id: 'file.demo', label: 'Progetto di esempio', icon: 'demo', run: cmd.demoProject,
       hint: 'Targa con logo e scritta in rilievo: tre lavorazioni calcolate subito, pronte da simulare' },
+    { id: 'file.home', label: 'Schermata iniziale', icon: 'home', run: () => cmd.home?.(),
+      hint: 'Nuovo progetto, apertura, progetti recenti, esempio e guida' },
     // ---- modifica
     { id: 'edit.undo', label: 'Annulla', icon: 'undo', kbd: 'Ctrl+Z', run: cmd.undo, enabled: canUndo },
     { id: 'edit.redo', label: 'Ripeti', icon: 'redo', kbd: 'Ctrl+Y', run: cmd.redo, enabled: canRedo },
@@ -177,7 +179,7 @@ export function createActions({ cmd, vp, sketch }) {
 
 /** Menu a tendina: id azione, '-' separatore, { head } intestazione, { recent: true } progetti recenti. */
 export const MENUS = [
-  { label: 'File', items: ['file.new', 'file.open', 'file.save', 'file.saveAs', 'file.rename', '-', { recent: true }, '-', 'file.import', '-', 'file.gcode', 'file.cl', '-', 'file.recovery', 'file.demo'] },
+  { label: 'File', items: ['file.home', '-', 'file.new', 'file.open', 'file.save', 'file.saveAs', 'file.rename', '-', { recent: true }, '-', 'file.import', '-', 'file.gcode', 'file.cl', '-', 'file.recovery', 'file.demo'] },
   { label: 'Modifica', items: ['edit.undo', 'edit.redo', '-', 'edit.duplicate', 'edit.delete', 'edit.lock', '-', 'edit.origin', '-', { head: 'Manipolatore' }, 'gizmo.move', 'gizmo.rotate', 'gizmo.snap', 'gizmo.local'] },
   { label: 'Inserisci', items: [{ head: 'Artefatti' }, 'art.cylinder', 'art.cone', 'art.sphere', 'art.box', '-', { head: 'Punti di origine' }, 'origin.pick', 'origin.coords', '-', 'file.import'] },
   { label: 'Origini', items: [{ head: 'Punti di origine (zero pezzo del G-code)' }, 'origin.pick', 'origin.coords', '-', 'edit.origin'] },
@@ -186,7 +188,7 @@ export const MENUS = [
   { label: 'Lavorazioni', items: ['op.pocket', 'op.finish', '-', 'op.reorder', '-', 'op.compute', 'op.computeAll', '-', 'op.simulate', 'op.simulateAll', '-', 'file.gcode', 'file.cl'] },
   { label: 'Strumenti', items: ['tools.library', 'tools.setups', '-', 'tools.libExport', 'tools.libImport', '-', 'tools.options'] },
   { label: 'Vista', items: ['view.top', 'view.front', 'view.right', 'view.left', 'view.back', 'view.bottom', 'view.iso', '-', 'plane.normalView', 'view.fit', 'view.ortho', '-', 'view.grid', 'view.paths', 'view.rapids', 'view.wire'] },
-  { label: 'Aiuto', items: ['help.guide', 'help.palette', 'help.shortcuts', '-', 'help.log', 'help.blackbox', '-', 'file.demo'] },
+  { label: 'Aiuto', items: ['help.guide', 'help.palette', 'help.shortcuts', '-', 'file.demo', 'file.home', '-', 'help.log', 'help.blackbox'] },
   { label: 'Info', items: ['help.about'] },
 ];
 for (const m of MENUS) {

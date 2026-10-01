@@ -144,7 +144,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
 
   // ================================================================ FILE
   cmd.newProject = async () => {
-    if (!(await confirmDiscard(t('Nuovo progetto')))) return;
+    if (!(await confirmDiscard(t('Nuovo progetto')))) return false;
     sketch.exit(false);
     sim.stop();
     cmd.endPlaneMode();
@@ -153,6 +153,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     App.fileName = '';
     log.info('Nuovo progetto');
     status(t('Nuovo progetto'));
+    return true;
   };
 
   async function openFile(file, handle) {
@@ -177,7 +178,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       App.fileName = file.name;
       await cmd.loadMeshes();
       vp.fit();
-      await addRecent({ name: App.project.name, fileName: file.name, handle, project: App.project });
+      await addRecent({ name: App.project.name, fileName: file.name, handle, project: App.project, thumb: vp.snapshot(320, 200, true) });
       emit('recent');
       log.info('Progetto aperto', { file: file.name, size: file.size });
       status(t('Progetto aperto: {name}', { name: file.name }));
@@ -189,25 +190,27 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     } finally { idle(); }
   }
 
+  /** Apre un progetto scelto dall'utente: true se aperto. */
   cmd.openProject = async () => {
-    if (!(await confirmDiscard(t('Apri progetto')))) return;
+    if (!(await confirmDiscard(t('Apri progetto')))) return false;
     const pick = await pickProjectFile();
-    if (pick) await openFile(pick.file, pick.handle);
+    return pick ? openFile(pick.file, pick.handle) : false;
   };
 
   cmd.recentProjects = () => recentList();
 
+  /** Riapre un progetto recente (dal file o dalla copia memorizzata): true se aperto. */
   cmd.openRecent = async entry => {
-    if (!(await confirmDiscard(t('Apri progetto recente')))) return;
+    if (!(await confirmDiscard(t('Apri progetto recente')))) return false;
     try {
       const f = await fileOfRecent(entry);
-      if (f) { await openFile(f, entry.handle); return; }
+      if (f) return openFile(f, entry.handle);
     } catch (e) { log.warn('File recente non accessibile', e); }
     if (!entry.snapshot) {
       toast(t('Il file "{name}" non è più disponibile', { name: entry.fileName || entry.name }), 'err');
       await removeRecent(entry.key);
       emit('recent');
-      return;
+      return false;
     }
     const when = new Date(entry.time).toLocaleString(LOCALE);
     const ok0 = await confirmBox(t('Progetto recente'),
@@ -215,18 +218,20 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
         ? t('Il file "{file}" non è accessibile. Aprire la copia del progetto memorizzata il {when}?', { file: entry.fileName, when })
         : t('Il browser non consente di riaprire direttamente il file "{file}". Aprire la copia del progetto memorizzata il {when}? Per salvarla usa Salva con nome.', { file: entry.fileName || entry.name, when }),
       t('Apri la copia'));
-    if (!ok0) return;
+    if (!ok0) return false;
     const snap = JSON.parse(entry.snapshot);
-    if (!(await reconcileProjectTools(snap))) return;
+    if (!(await reconcileProjectTools(snap))) return false;
     sketch.exit(false);
     sim.stop();
     setProject(snap);
     App.fileHandle = null;
     App.fileName = entry.fileName || '';
-    await cmd.loadMeshes();
+    busy(t('Apertura progetto…'));
+    try { await cmd.loadMeshes(); } finally { idle(); }
     vp.fit();
     log.info('Progetto recente aperto dalla copia memorizzata', { name: entry.name });
     status(t('Aperta la copia memorizzata di "{name}"', { name: entry.name }));
+    return true;
   };
 
   /**
@@ -255,7 +260,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       App.fileHandle = res.handle;
       App.fileName = res.fileName;
       markSaved();
-      await addRecent({ name: App.project.name, fileName: res.fileName, handle: res.handle, project: App.project });
+      await addRecent({ name: App.project.name, fileName: res.fileName, handle: res.handle, project: App.project, thumb: vp.snapshot(320, 200, true) });
       emit('recent');
       log.info('Progetto salvato', { file: res.fileName, handle: !!res.handle });
       status(t('Progetto salvato: {name}', { name: res.fileName }));
@@ -290,13 +295,15 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     if (ok) await cmd.renameTo(inp.value);
   };
 
-  cmd.importModel = () => {
-    if (modelBlocked()) return;
+  /** Chiede i modelli da importare: la promessa vale true se ne sono stati scelti, false se annullato. */
+  cmd.importModel = () => new Promise(resolve => {
+    if (modelBlocked()) { resolve(false); return; }
     const inp = document.getElementById('file-import');
     inp.value = '';
-    inp.onchange = () => cmd.importFiles([...inp.files]);
+    inp.onchange = () => { resolve(inp.files.length > 0); cmd.importFiles([...inp.files]); };
+    inp.oncancel = () => resolve(false);
     inp.click();
-  };
+  });
 
   cmd.importFiles = async files => {
     if (!files.length || modelBlocked()) return;
