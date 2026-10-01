@@ -17,6 +17,24 @@ Namespace Post
         Public Property ProgramName As String = "CARVECAM"
         ''' <summary>GRBL: attesa in secondi dopo M3 perché il mandrino arrivi in velocità (GRBL non ha retroazione).</summary>
         Public Property SpindleDelay As Double = 2
+        ''' <summary>
+        ''' Zero pezzo del programma: punto di riferimento [x, y, z] nelle coordinate del progetto (Nothing = origine
+        ''' del progetto). Le coordinate in uscita sono relative a questo punto.
+        ''' </summary>
+        Public Property Origin As Double() = Nothing
+        ''' <summary>Nome del punto di riferimento, riportato nei commenti per l'azzeramento.</summary>
+        Public Property OriginName As String = ""
+
+        Public Function OriginPoint() As Vec3
+            If Origin Is Nothing OrElse Origin.Length < 3 Then Return Vec3.Zero
+            Return New Vec3(Origin(0), Origin(1), Origin(2))
+        End Function
+
+        Public ReadOnly Property HasOrigin As Boolean
+            Get
+                Return Origin IsNot Nothing AndAlso Origin.Length >= 3
+            End Get
+        End Property
     End Class
 
     ''' <summary>Post-processor G-code (ISO/Fanuc e GRBL) e CL data (APT) per i percorsi calcolati.</summary>
@@ -35,6 +53,9 @@ Namespace Post
         End Function
 
         Private Function ToolLabel(t As Model.ToolDef, d As Integer) As String
+            If t.IsTaper Then
+                Return $"CONICA {If(t.TipIsBall, "PUNTA SFERICA", If(t.Diameter > 0, "PUNTA PIATTA", "A V"))} D={F(t.Diameter, d)} A={F(t.TaperAngle, 2)} GRADI PER LATO DMAX={F(2 * t.MaxRadius, d)}"
+            End If
             If t.IsBall Then Return $"SFERICA D={F(t.Diameter, d)}"
             If t.IsBull Then Return $"TORICA D={F(t.Diameter, d)} R={F(t.EffectiveCorner, d)}"
             Return $"CILINDRICA D={F(t.Diameter, d)}"
@@ -63,21 +84,41 @@ Namespace Post
             Return $"{Clean(tp.Name)} - {If(tp.Kind = "pocket", "SVUOTATURA A TERRAZZE", "FINITURA")} {StrategyLabel(tp.Strategy)}"
         End Function
 
-        Private Function PointXYZ(fr As PlaneFrame, p As CLPoint, local As Boolean) As Vec3
-            Return If(local, New Vec3(p.U, p.V, p.W), fr.ToWorld(p.U, p.V, p.W))
+        ''' <summary>Punto in uscita: coordinate locali del piano o mondo, più lo spostamento dello zero pezzo.</summary>
+        Private Function PointXYZ(fr As PlaneFrame, p As CLPoint, local As Boolean, shift As Vec3) As Vec3
+            Return If(local, New Vec3(p.U, p.V, p.W), fr.ToWorld(p.U, p.V, p.W)) + shift
+        End Function
+
+        ''' <summary>
+        ''' Spostamento da applicare alle coordinate perché siano relative allo zero pezzo: in coordinate mondo si
+        ''' sottrae il punto; in coordinate locali del piano (GRBL) si aggiunge l'origine del piano vista dallo zero.
+        ''' </summary>
+        Private Function ShiftOf(fr As PlaneFrame, local As Boolean, opt As PostOptions) As Vec3
+            ' senza zero pezzo: coordinate mondo o locali del piano invariate
+            If Not opt.HasOrigin Then Return Vec3.Zero
+            Dim o = opt.OriginPoint()
+            If Not local Then Return -o
+            Dim dlt = fr.Origin - o
+            Return New Vec3(dlt.Dot(fr.U), dlt.Dot(fr.V), dlt.Dot(fr.N))
+        End Function
+
+        Private Function OriginLabel(opt As PostOptions, d As Integer) As String
+            Dim o = opt.OriginPoint()
+            Dim name = If(String.IsNullOrWhiteSpace(opt.OriginName), "ORIGINE", opt.OriginName)
+            Return $"{name} X={F(o.X, d)} Y={F(o.Y, d)} Z={F(o.Z, d)}"
         End Function
 
         ''' <summary>
         ''' Movimenti dal secondo punto in poi (il primo lo posiziona il chiamante): G0/G1 modali, solo le coordinate
         ''' che cambiano, avanzamento scritto quando cambia.
         ''' </summary>
-        Private Sub AppendMoves(sb As StringBuilder, tp As Toolpath, local As Boolean, d As Integer)
-            Dim last = PointXYZ(tp.Frame, tp.Points(0), local)
+        Private Sub AppendMoves(sb As StringBuilder, tp As Toolpath, local As Boolean, shift As Vec3, d As Integer)
+            Dim last = PointXYZ(tp.Frame, tp.Points(0), local, shift)
             Dim lastG = 0
             Dim lf = Double.NaN
             For i = 1 To tp.Points.Count - 1
                 Dim p = tp.Points(i)
-                Dim c = PointXYZ(tp.Frame, p, local)
+                Dim c = PointXYZ(tp.Frame, p, local, shift)
                 Dim g = If(p.Type = MoveType.Rapid, 0, 1)
                 Dim coords As New StringBuilder()
                 If F(c.X, d) <> F(last.X, d) Then coords.Append(" X" & F(c.X, d))
@@ -104,6 +145,7 @@ Namespace Post
             sb.AppendLine($"O{opt.ProgramNumber:0000} ({Clean(opt.ProgramName)})")
             sb.AppendLine($"(GENERATO DA CARVECAM - {DateTime.Now:yyyy-MM-dd HH:mm})")
             sb.AppendLine("(UNITA: MM)")
+            If opt.HasOrigin Then sb.AppendLine($"(ZERO PEZZO: {Clean(OriginLabel(opt, d))})")
             sb.AppendLine("G21 G90 G94 G17 G40 G49 G80")
             Dim lastTool = -1
             Dim opIndex = 0
@@ -122,19 +164,22 @@ Namespace Post
                 End If
                 sb.AppendLine($"S{CInt(Math.Round(tp.Spindle))} M3")
                 If opt.Coolant Then sb.AppendLine("M8")
+                ' G68.2: origine del piano rispetto allo zero pezzo; le coordinate restano locali al piano
+                Dim shift = If(tilted, Vec3.Zero, ShiftOf(fr, False, opt))
                 If tilted Then
                     Dim e = fr.EulerZXZ()
-                    sb.AppendLine($"G68.2 X{F(fr.Origin.X, d)} Y{F(fr.Origin.Y, d)} Z{F(fr.Origin.Z, d)} I{F(e.Alpha, 4)} J{F(e.Beta, 4)} K{F(e.Gamma, 4)}")
+                    Dim po = fr.Origin - opt.OriginPoint()
+                    sb.AppendLine($"G68.2 X{F(po.X, d)} Y{F(po.Y, d)} Z{F(po.Z, d)} I{F(e.Alpha, 4)} J{F(e.Beta, 4)} K{F(e.Gamma, 4)}")
                     sb.AppendLine("G53.1")
                 ElseIf opt.Mode <> "g682" AndAlso Not fr.IsWorldAligned Then
                     sb.AppendLine("(ATTENZIONE: COORDINATE MONDO, ORIENTARE L'UTENSILE SECONDO L'ASSE INDICATO)")
                 End If
 
                 ' primo posizionamento: XY poi Z con correttore lunghezza
-                Dim p0 = PointXYZ(fr, tp.Points(0), tilted)
+                Dim p0 = PointXYZ(fr, tp.Points(0), tilted, shift)
                 sb.AppendLine($"G0 X{F(p0.X, d)} Y{F(p0.Y, d)}")
                 sb.AppendLine($"G43 H{tp.Tool.Number} Z{F(p0.Z, d)}")
-                AppendMoves(sb, tp, tilted, d)
+                AppendMoves(sb, tp, tilted, shift, d)
                 If tilted Then sb.AppendLine("G69")
                 If opt.Coolant Then sb.AppendLine("M9")
                 sb.AppendLine("M5")
@@ -153,10 +198,15 @@ Namespace Post
             Return (a.N - b.N).Length < 0.000001 AndAlso (a.U - b.U).Length < 0.000001 AndAlso (a.Origin - b.Origin).Length < 0.001
         End Function
 
-        Private Sub AppendSetup(sb As StringBuilder, n As Integer, fr As PlaneFrame, d As Integer)
+        Private Sub AppendSetup(sb As StringBuilder, n As Integer, fr As PlaneFrame, d As Integer, opt As PostOptions)
             If fr.IsWorldAligned Then
                 sb.AppendLine(Cm($"PIAZZAMENTO {n}: PEZZO COME NEL PROGETTO, Z VERSO L'ALTO"))
-                sb.AppendLine(Cm("AZZERARE X Y Z SULLO ZERO DEL PROGETTO"))
+                If opt.HasOrigin Then
+                    sb.AppendLine(Cm("AZZERARE X Y Z SUL PUNTO DI RIFERIMENTO"))
+                    sb.AppendLine(Cm(OriginLabel(opt, d)))
+                Else
+                    sb.AppendLine(Cm("AZZERARE X Y Z SULLO ZERO DEL PROGETTO"))
+                End If
                 Return
             End If
             Dim tilt = Math.Acos(Math.Max(-1.0, Math.Min(1.0, fr.N.Z))) * 180.0 / Math.PI
@@ -168,8 +218,13 @@ Namespace Post
             sb.AppendLine(Cm("ORIENTARE IL PEZZO CON LA NORMALE DEL PIANO VERSO +Z MACCHINA"))
             sb.AppendLine(Cm($"NORMALE DEL PIANO I={F(fr.N.X, 4)} J={F(fr.N.Y, 4)} K={F(fr.N.Z, 4)}"))
             sb.AppendLine(Cm($"ASSE X MACCHINA LUNGO I={F(fr.U.X, 4)} J={F(fr.U.Y, 4)} K={F(fr.U.Z, 4)}"))
-            sb.AppendLine(Cm("AZZERARE X Y Z SULL'ORIGINE DEL PIANO, CHE NEL PROGETTO E' IN"))
-            sb.AppendLine(Cm($"X={F(fr.Origin.X, d)} Y={F(fr.Origin.Y, d)} Z={F(fr.Origin.Z, d)}"))
+            If opt.HasOrigin Then
+                sb.AppendLine(Cm("AZZERARE X Y Z SUL PUNTO DI RIFERIMENTO"))
+                sb.AppendLine(Cm(OriginLabel(opt, d)))
+            Else
+                sb.AppendLine(Cm("AZZERARE X Y Z SULL'ORIGINE DEL PIANO, CHE NEL PROGETTO E' IN"))
+                sb.AppendLine(Cm($"X={F(fr.Origin.X, d)} Y={F(fr.Origin.Y, d)} Z={F(fr.Origin.Z, d)}"))
+            End If
         End Sub
 
         ''' <summary>Commento GRBL: parentesi non annidate e riga entro gli 80 caratteri del buffer di GRBL.</summary>
@@ -192,6 +247,7 @@ Namespace Post
             sb.AppendLine(Cm(opt.ProgramName))
             sb.AppendLine(Cm($"GENERATO DA CARVECAM PER GRBL - {DateTime.Now:yyyy-MM-dd HH:mm}"))
             sb.AppendLine(Cm("UNITA: MM - 3 ASSI - CAMBI UTENSILE E PIAZZAMENTI CON PAUSA M0"))
+            If opt.HasOrigin Then sb.AppendLine(Cm($"ZERO PEZZO: {OriginLabel(opt, d)}"))
             sb.AppendLine("G21 G90 G94 G17")
             sb.AppendLine("G54")
             Dim lastTool = -1
@@ -209,7 +265,7 @@ Namespace Post
                     sb.AppendLine("M5")
                     If opt.Coolant Then sb.AppendLine("M9")
                 End If
-                If newSetup Then setupNo += 1 : AppendSetup(sb, setupNo, fr, d)
+                If newSetup Then setupNo += 1 : AppendSetup(sb, setupNo, fr, d, opt)
                 If newTool Then
                     sb.AppendLine(Cm($"{If(i = 0, "UTENSILE", "CAMBIO UTENSILE")}: T{tp.Tool.Number} {ToolLabel(tp.Tool, d)}"))
                     If i > 0 AndAlso Not newSetup Then sb.AppendLine(Cm("MONTARE L'UTENSILE E RIAZZERARE Z SULLO STESSO RIFERIMENTO"))
@@ -221,13 +277,14 @@ Namespace Post
                 sb.AppendLine(Cm($"OP {i + 1}: {OperationLabel(tp)}"))
                 ' prima si sale alla quota di sicurezza (dopo l'azzeramento l'utensile può essere a contatto del pezzo),
                 ' poi si avvia il mandrino e ci si porta sopra il punto d'ingresso
-                Dim p0 = PointXYZ(fr, tp.Points(0), local)
+                Dim shift = ShiftOf(fr, local, opt)
+                Dim p0 = PointXYZ(fr, tp.Points(0), local, shift)
                 sb.AppendLine($"G0 Z{F(p0.Z, d)}")
                 sb.AppendLine($"S{CInt(Math.Round(tp.Spindle))} M3")
                 If opt.SpindleDelay > 0 Then sb.AppendLine($"G4 P{F(opt.SpindleDelay, 1)}")
                 If opt.Coolant Then sb.AppendLine("M8")
                 sb.AppendLine($"G0 X{F(p0.X, d)} Y{F(p0.Y, d)}")
-                AppendMoves(sb, tp, local, d)
+                AppendMoves(sb, tp, local, shift, d)
             Next
             sb.AppendLine()
             sb.AppendLine("M5")
@@ -248,7 +305,13 @@ Namespace Post
                 Dim ijk = $"{F(fr.N.X, 6)},{F(fr.N.Y, 6)},{F(fr.N.Z, 6)}"
                 sb.AppendLine($"$$ OPERAZIONE: {Clean(tp.Name)}")
                 sb.AppendLine($"LOADTL/{tp.Tool.Number}")
-                sb.AppendLine($"CUTTER/{F(tp.Tool.Diameter, d)},{F(tp.Tool.EffectiveCorner, d)}")
+                If tp.Tool.IsTaper Then
+                    ' APT: CUTTER/d,r,e,f,a,b,h (diametro, raggio, angolo di conicità, altezza)
+                    Dim rt = If(tp.Tool.TipIsBall, tp.Tool.Radius, 0)
+                    sb.AppendLine($"CUTTER/{F(tp.Tool.Diameter, d)},{F(rt, d)},0,{F(rt, d)},{F(tp.Tool.TaperAngle, 4)},0,{F(tp.Tool.ConeHeight, d)}")
+                Else
+                    sb.AppendLine($"CUTTER/{F(tp.Tool.Diameter, d)},{F(tp.Tool.EffectiveCorner, d)}")
+                End If
                 sb.AppendLine($"SPINDL/RPM,{CInt(tp.Spindle)},CLW")
                 Dim lastType = CType(255, MoveType)
                 For Each p In tp.Points
