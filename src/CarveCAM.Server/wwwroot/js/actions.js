@@ -38,7 +38,8 @@ export function createActions({ cmd, vp, sketch }) {
     { id: 'file.cl', label: 'Esporta CL data…', icon: 'cldata', run: () => cmd.exportCl(), enabled: hasOps },
     { id: 'file.recovery', label: 'Copie di sicurezza…', icon: 'history', run: cmd.recoveryCopies,
       hint: 'Copie del progetto salvate automaticamente sul server mentre lavori' },
-    { id: 'file.demo', label: 'Progetto di esempio', icon: 'demo', run: cmd.demoProject },
+    { id: 'file.demo', label: 'Progetto di esempio', icon: 'demo', run: cmd.demoProject,
+      hint: 'Targa con logo e scritta in rilievo: tre lavorazioni calcolate subito, pronte da simulare' },
     // ---- modifica
     { id: 'edit.undo', label: 'Annulla', icon: 'undo', kbd: 'Ctrl+Z', run: cmd.undo, enabled: canUndo },
     { id: 'edit.redo', label: 'Ripeti', icon: 'redo', kbd: 'Ctrl+Y', run: cmd.redo, enabled: canRedo },

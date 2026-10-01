@@ -9,7 +9,8 @@ import { api, download } from './api.js';
 import { planeFrame, angleOfU, fmt, toWorld, entitySnapPoints } from './geom.js';
 import { modal, confirmBox, toast, status, busy, busyText, idle, h } from './dialogs.js';
 import { SERVER_FORMATS, CLIENT_FORMATS, extOf, parseInBrowser, buildDisplayGeometry } from './importers.js';
-import { OP_DEFAULTS, TOOL_DEFAULTS, effParam, round4 } from './oplib.js';
+import { sampleMesh, sampleProject, SAMPLE_VERSION, SAMPLE_BOUNDS } from './sample.js';
+import { OP_DEFAULTS, effParam, round4 } from './oplib.js';
 import {
   pickTool, pickSetup, toolFromLibrary, getTools, getSetups, openToolLibrary, openSetupLibrary, saveOperationAsSetup,
   usedTools, reconcileProjectTools, exportLibrary, importLibrary,
@@ -24,6 +25,7 @@ import { log } from './log.js';
 const POST_MODE_KEY = 'carvecam.post.mode';   // ultimo controllo scelto nell'esportazione G-code (per browser)
 const ORIGIN_KEY = 'carvecam.origin.v1';       // ultime scelte di "Sposta origine" (per browser)
 const REPOS_KEY = 'carvecam.reposition.v1';    // ultime scelte di "Riposiziona" (per browser)
+const SAMPLE_KEY = 'carvecam.sample.mesh';     // mesh della targa di esempio già caricata sul server
 const AXES = ['X', 'Y', 'Z'];
 
 const loadPref = (key, def) => { try { return { ...def, ...JSON.parse(localStorage.getItem(key) || '{}') }; } catch { return { ...def }; } };
@@ -1736,45 +1738,58 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     modal({ title: t('Scorciatoie da tastiera'), body: h('table', {}, rows.map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v)))) });
   };
 
-  /** Scena dimostrativa: artefatti, piano di lavoro con contorno, svuotatura e finitura pronte da calcolare. */
+  /** Mesh della targa di esempio sul server: quella caricata in precedenza se c'è ancora, altrimenti la si genera. */
+  async function sampleMeshOnServer() {
+    let m = null;
+    try { m = JSON.parse(localStorage.getItem(SAMPLE_KEY) || 'null'); } catch { /* storage non disponibile */ }
+    if (m?.v === SAMPLE_VERSION && m.id) {
+      try {
+        const pos = await api.getMesh(m.id);
+        if (pos.length === m.triangles * 9) {
+          App.runtime.meshGeo.set(m.id, await buildDisplayGeometry(pos));
+          return m;
+        }
+      } catch { /* mesh non più sul server: la si rigenera */ }
+    }
+    const info = await api.uploadMesh(t('Targa con rilievo'), await sampleMesh());
+    App.runtime.meshGeo.set(info.id, await buildDisplayGeometry(await api.getMesh(info.id)));
+    m = { v: SAMPLE_VERSION, id: info.id, triangles: info.triangles };
+    savePref(SAMPLE_KEY, m);
+    return m;
+  }
+
+  /**
+   * Progetto di esempio: targa con cornice, logo e scritta in rilievo (modello come se fosse importato), piano
+   * superiore, sketch con due contorni, zero pezzo sullo spigolo e tre lavorazioni (sgrossatura, finitura,
+   * ripresa con fresa conica), calcolate subito. True se caricato.
+   */
   cmd.demoProject = async () => {
-    if (!(await confirmDiscard(t('Progetto di esempio')))) return;
+    if (!(await confirmDiscard(t('Progetto di esempio')))) return false;
     sketch.exit(false);
     sim.stop();
     cmd.endPlaneMode();
-    const art = (kind, name, extra) => ({ id: uid('art'), name, kind, size: [20, 20, 20], radius: 10, radius2: 5, height: 20,
-      rotation: [0, 0, 0], color: color('artifact'), visible: true, locked: false, ...extra });
-    const skId = uid('sk');
-    const proj = newProject();
-    proj.name = t('Esempio');
-    proj.artifacts = [
-      art('box', t('Blocco'), { size: [50, 30, 15], position: [0, 0, 7.5] }),
-      art('cylinder', t('Perno'), { radius: 8, height: 22, position: [-38, 0, 11] }),
-      art('sphere', t('Calotta'), { radius: 14, position: [38, 0, 2] }),
-      art('cone', t('Torretta'), { radius: 11, radius2: 4, height: 18, position: [0, 34, 9] }),
-    ];
-    proj.planes = [{
-      id: uid('pl'), name: t('Piano grezzo'), origin: [0, 5, 26], normal: [0, 0, 1], angle: 0, size: 150, visible: true, locked: false,
-      sketches: [{ id: skId, name: t('Contorno'), visible: true, entities: [{ id: uid('e'), kind: 'rect', x1: -62, y1: -30, x2: 62, y2: 45 }] }],
-    }];
-    const obstacles = proj.artifacts.map(a => a.id);
-    const pk = structuredClone(OP_DEFAULTS.pocket);
-    const fn = structuredClone(OP_DEFAULTS.finish);
-    delete pk.base; delete fn.base;
-    proj.operations = [
-      { id: uid('op'), name: t('Svuotatura'), kind: 'pocket', sketchId: skId, entityIds: null, visible: true, ...pk, obstacles: [...obstacles],
-        tool: { number: 1, name: 'Fresa torica Ø10 R1', type: 'bull', diameter: 10, cornerRadius: 1, fluteLength: 25 },
-        rel: { ...pk.rel, stepdown: { on: true, pct: 10, min: 0.05, max: 3 } }, maxDepth: 26, stock: 0.3, entry: 'helix' },
-      { id: uid('op'), name: t('Finitura'), kind: 'finish', sketchId: skId, entityIds: null, visible: true, ...fn, obstacles: [...obstacles],
-        tool: { ...TOOL_DEFAULTS.finish }, rel: { ...fn.rel, stepover: { on: true, pct: 13, min: 0.05, max: 2 } }, maxDepth: 26 },
-    ];
-    proj.counters = { [t('Piano')]: 1, [t('Sketch')]: 1, [t('Svuotatura')]: 1, [t('Finitura')]: 1 };
-    setProject(proj);
+    let mesh;
+    busy(t('Preparazione del progetto di esempio…'));
+    try {
+      mesh = await sampleMeshOnServer();
+    } catch (e) {
+      log.error('Progetto di esempio non disponibile', e);
+      toast(t('Progetto di esempio non disponibile: {msg}', { msg: e.message }), 'err', 6000);
+      return false;
+    } finally { idle(); }
+    const { project, operationId } = sampleProject(mesh);
+    setProject(project);
     App.fileHandle = null;
+    App.fileName = '';
     vp.setView('iso');
-    vp.fit();
-    select({ type: 'operation', id: proj.operations[0].id });
-    toast(t('Progetto di esempio caricato: premere "Ricalcola tutto" per generare i percorsi'), 'info', 6000);
+    vp.fit(new THREE.Box3(new THREE.Vector3(...SAMPLE_BOUNDS.min), new THREE.Vector3(...SAMPLE_BOUNDS.max)));
+    log.info('Progetto di esempio caricato', { mesh: mesh.id });
+    // percorsi calcolati subito: l'esempio è pronto da simulare
+    const ok = await ensureComputed(project.operations, true);
+    select({ type: 'operation', id: operationId });
+    status(t('Progetto di esempio: targa con logo e scritta in rilievo'));
+    if (ok) toast(t('Esempio pronto: premi Simula tutto per vedere le tre lavorazioni, o seleziona una lavorazione per cambiarne i parametri'), 'ok', 7000);
+    return true;
   };
 
   cmd.credits = () => modal({

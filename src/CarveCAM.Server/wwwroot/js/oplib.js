@@ -4,12 +4,6 @@ import { t } from './i18n.js';
 
 export const round4 = v => Math.round(v * 10000) / 10000;
 
-/** Utensile predefinito di una lavorazione nuova senza magazzino. */
-export const TOOL_DEFAULTS = {
-  pocket: { number: 1, name: 'Fresa torica Ø6 R1', type: 'bull', diameter: 6, cornerRadius: 1, fluteLength: 15 },
-  finish: { number: 2, name: 'Fresa sferica Ø6', type: 'ball', diameter: 6, cornerRadius: 3, fluteLength: 15 },
-};
-
 // ------------------------------------------------------------------ geometria dell'utensile (generata dai parametri)
 /**
  * Fresa conica (type 'taper'): diameter è il diametro in punta (0 = punta a V), taperAngle l'angolo di
