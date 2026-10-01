@@ -128,10 +128,11 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
 
   const lockedWarn = () => toast(t('Elemento bloccato: sbloccalo per spostarlo'), 'warn');
 
-  /** Comandi "Modello" non disponibili durante la creazione di un piano o il disegno di uno sketch. */
+  /** Comandi "Modello" non disponibili durante la creazione di un piano, il disegno di uno sketch o con un piano selezionato. */
   function modelBlocked() {
     if (sketch.active) { toast(t('Termina lo sketch prima di modificare il modello'), 'warn'); return true; }
     if (App.planeMode) { toast(t('Concludi o annulla (Esc) la creazione del piano prima di modificare il modello'), 'warn'); return true; }
+    if (App.selected.some(s => s.type === 'plane')) { toast(t('Deseleziona il piano (Esc o clic nel vuoto) prima di modificare il modello'), 'warn'); return true; }
     return false;
   }
   const opsBlocked = () => {

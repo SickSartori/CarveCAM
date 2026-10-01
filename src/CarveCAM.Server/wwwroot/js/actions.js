@@ -15,8 +15,15 @@ export function createActions({ cmd, vp, sketch }) {
   const hasOps = () => App.project.operations.length > 0;
   const movable = () => resolveAll().some(x => MOVABLE.includes(x.type));
   const planeMode = () => App.planeMode && !sketch.active;
-  // comandi "Modello" fermi mentre si crea un piano o si disegna uno sketch; "Lavorazioni" fermi nello sketch
-  const modelOk = () => !App.planeMode && !App.pickMode && !sketch.active;
+  // comandi "Modello" fermi mentre si crea un piano, si disegna uno sketch o è selezionato un piano;
+  // "Lavorazioni" fermi nello sketch
+  const planeSelected = () => App.selected.some(s => s.type === 'plane');
+  const modelOk = () => !App.planeMode && !App.pickMode && !sketch.active && !planeSelected();
+  /** Perché i comandi "Modello" sono spenti (suggerimento della barra strumenti). */
+  const modelWhy = () => (sketch.active ? t('Termina prima lo sketch')
+    : App.planeMode ? t('Concludi o annulla (Esc) prima la creazione del piano')
+      : planeSelected() ? t('Deseleziona prima il piano (Esc o clic nel vuoto)')
+        : App.pickMode ? t('Concludi o annulla (Esc) prima la scelta del punto') : null);
   const opsOk = () => !sketch.active;
   const draw = tl => ({
     run: () => cmd.sketchTool(tl),
@@ -32,7 +39,7 @@ export function createActions({ cmd, vp, sketch }) {
     { id: 'file.save', label: 'Salva progetto', icon: 'save', kbd: 'Ctrl+S', run: () => cmd.saveProject() },
     { id: 'file.saveAs', label: 'Salva con nome…', icon: 'saveAs', kbd: 'Ctrl+Shift+S', run: cmd.saveProjectAs },
     { id: 'file.rename', label: 'Rinomina progetto…', icon: 'rename', run: cmd.renameProject },
-    { id: 'file.import', label: 'Importa modello 3D…', short: 'Importa', icon: 'import', kbd: 'Ctrl+I', tone: 'model', run: cmd.importModel, enabled: modelOk,
+    { id: 'file.import', label: 'Importa modello 3D…', short: 'Importa', icon: 'import', kbd: 'Ctrl+I', tone: 'model', run: cmd.importModel, enabled: modelOk, whyOff: modelWhy,
       hint: 'STL, OBJ, PLY, OFF, glTF/GLB, FBX, 3MF, DAE, 3DS, STEP, IGES…' },
     { id: 'file.gcode', label: 'Esporta G-code…', short: 'G-code', icon: 'gcode', run: () => cmd.exportGcode(), enabled: hasOps },
     { id: 'file.cl', label: 'Esporta CL data…', icon: 'cldata', run: () => cmd.exportCl(), enabled: hasOps },
@@ -49,7 +56,7 @@ export function createActions({ cmd, vp, sketch }) {
     { id: 'edit.delete', label: 'Elimina', icon: 'trash', kbd: 'Canc', run: cmd.deleteSelected, enabled: hasSel },
     { id: 'edit.lock', label: 'Blocca / sblocca selezione', icon: 'lock', kbd: 'Ctrl+L', run: () => cmd.toggleLock(), enabled: movable,
       hint: 'Un elemento bloccato non si può spostare né ruotare' },
-    { id: 'edit.origin', label: 'Sposta origine…', short: 'Origine', icon: 'origin', tone: 'model', run: () => cmd.moveOrigin(), enabled: modelOk,
+    { id: 'edit.origin', label: 'Sposta origine…', short: 'Origine', icon: 'origin', tone: 'model', run: () => cmd.moveOrigin(), enabled: modelOk, whyOff: modelWhy,
       hint: 'Nuova origine dal minimo, medio o massimo dell\'ingombro dei solidi, per ogni asse, più un offset: tutto il progetto viene traslato (anche gli elementi bloccati)' },
     { id: 'gizmo.move', label: 'Manipolatore: sposta', short: 'Sposta', icon: 'move', kbd: 'G', run: () => cmd.setGizmo('translate'), checked: () => App.view.gizmo !== 'rotate',
       hint: 'Clic sul centro del manipolatore per scegliere un nuovo punto di riferimento' },
@@ -57,15 +64,15 @@ export function createActions({ cmd, vp, sketch }) {
     { id: 'gizmo.snap', label: 'Aggancio manipolatore 1 mm / 15°', icon: 'snap', run: cmd.toggleGizmoSnap, checked: () => App.view.gizmoSnap },
     { id: 'gizmo.local', label: 'Manipolatore su assi locali', icon: 'local', run: cmd.toggleGizmoSpace, checked: () => App.view.gizmoLocal },
     // ---- punti di origine (zero pezzo del G-code)
-    { id: 'origin.pick', label: 'Nuova origine da un punto…', short: 'Origine', icon: 'refPoint', tone: 'model', run: cmd.originFromPoint, enabled: modelOk,
+    { id: 'origin.pick', label: 'Nuova origine da un punto…', short: 'Origine', icon: 'refPoint', tone: 'model', run: cmd.originFromPoint, enabled: modelOk, whyOff: modelWhy,
       hint: 'Clic su un punto della scena (si aggancia ai vertici): il punto potrà essere lo zero pezzo del G-code' },
-    { id: 'origin.coords', label: 'Nuova origine da coordinate…', icon: 'refPoint', tone: 'model', run: cmd.originFromCoords, enabled: modelOk,
+    { id: 'origin.coords', label: 'Nuova origine da coordinate…', icon: 'refPoint', tone: 'model', run: cmd.originFromCoords, enabled: modelOk, whyOff: modelWhy,
       hint: 'Punto di origine con coordinate o punti notevoli dell\'ingombro dei solidi' },
     // ---- artefatti
-    { id: 'art.cylinder', label: 'Cilindro', icon: 'cylinder', tone: 'model', run: () => cmd.addArtifact('cylinder'), enabled: modelOk, hint: 'Inserisci un artefatto cilindrico (ostacolo)' },
-    { id: 'art.cone', label: 'Tronco di cono', icon: 'cone', tone: 'model', run: () => cmd.addArtifact('cone'), enabled: modelOk, hint: 'Inserisci un tronco di cono' },
-    { id: 'art.sphere', label: 'Sfera', icon: 'sphere', tone: 'model', run: () => cmd.addArtifact('sphere'), enabled: modelOk, hint: 'Inserisci una sfera' },
-    { id: 'art.box', label: 'Parallelepipedo', icon: 'box', tone: 'model', run: () => cmd.addArtifact('box'), enabled: modelOk, hint: 'Inserisci un parallelepipedo' },
+    { id: 'art.cylinder', label: 'Cilindro', icon: 'cylinder', tone: 'model', run: () => cmd.addArtifact('cylinder'), enabled: modelOk, whyOff: modelWhy, hint: 'Inserisci un artefatto cilindrico (ostacolo)' },
+    { id: 'art.cone', label: 'Tronco di cono', icon: 'cone', tone: 'model', run: () => cmd.addArtifact('cone'), enabled: modelOk, whyOff: modelWhy, hint: 'Inserisci un tronco di cono' },
+    { id: 'art.sphere', label: 'Sfera', icon: 'sphere', tone: 'model', run: () => cmd.addArtifact('sphere'), enabled: modelOk, whyOff: modelWhy, hint: 'Inserisci una sfera' },
+    { id: 'art.box', label: 'Parallelepipedo', icon: 'box', tone: 'model', run: () => cmd.addArtifact('box'), enabled: modelOk, whyOff: modelWhy, hint: 'Inserisci un parallelepipedo' },
     // ---- piani
     { id: 'plane.add', label: 'Aggiungi piano', short: 'Aggiungi piano', icon: 'planeAdd', tone: 'plane', run: cmd.togglePlaneMode,
       checked: () => App.planeMode, enabled: () => !sketch.active,

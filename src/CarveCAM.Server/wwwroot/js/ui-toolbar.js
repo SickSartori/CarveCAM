@@ -126,8 +126,8 @@ export class Toolbar {
     tt.innerHTML = '';
     tt.append(h('div', { class: 'tt-row' }, h('b', {}, a.label), a.kbd ? h('kbd', {}, a.kbd) : null));
     if (a.hint) tt.append(h('div', { class: 'tt-hint' }, a.hint));
-    if (disabled) tt.append(h('div', { class: 'tt-hint tt-off' }, a.id.startsWith('plane.') && a.id !== 'plane.add'
-      ? t('Premi prima "Aggiungi piano"') : a.id.startsWith('tool.') ? t('Disponibile durante la modifica di uno sketch') : t('Non disponibile ora')));
+    if (disabled) tt.append(h('div', { class: 'tt-hint tt-off' }, a.whyOff?.() || (a.id.startsWith('plane.') && a.id !== 'plane.add'
+      ? t('Premi prima "Aggiungi piano"') : a.id.startsWith('tool.') ? t('Disponibile durante la modifica di uno sketch') : t('Non disponibile ora'))));
     tt.hidden = false;
     const rc = b.getBoundingClientRect();
     const w = tt.offsetWidth;
