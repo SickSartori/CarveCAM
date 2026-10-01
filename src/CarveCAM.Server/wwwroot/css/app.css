@@ -624,6 +624,30 @@ kbd {
 .lib-io { justify-content: flex-start; }
 .tool-diff { margin: 3px 0 0; padding-left: 16px; font-size: 11.5px; color: var(--text-dim); }
 .warn-txt { color: var(--warn); }
+/* sequenza delle lavorazioni */
+.op-order { margin: 0; padding: 0; list-style: none; counter-reset: op; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); max-height: 50vh; overflow: auto; }
+.op-order li { counter-increment: op; display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border-soft); }
+.op-order li::before { content: counter(op) "."; width: 22px; color: var(--text-faint); font: 11px var(--mono); text-align: right; }
+.op-order li:last-child { border-bottom: 0; }
+.op-order li.moved { background: var(--accent-soft); }
+.op-order li .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.op-order li .sub { color: var(--text-faint); font-size: 11px; }
+.op-order li .ico { display: grid; place-items: center; width: 14px; }
+.op-order li .ico svg { width: 13px; height: 13px; }
+.op-order.editable li { cursor: grab; user-select: none; }
+.op-order.editable li.sel { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.op-order li.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.op-order .grip { color: var(--text-faint); display: grid; place-items: center; }
+.op-order .grip svg { width: 12px; height: 12px; }
+.op-order .icon-btn { width: 20px; height: 20px; font-size: 9px; }
+.op-order .icon-btn:disabled { opacity: .3; }
+.tree-row[draggable="true"] { cursor: grab; }
+.tree-row .drag-grip { cursor: grab; color: var(--text-faint); display: grid; place-items: center; }
+.tree-row .drag-grip svg { width: 11px; height: 11px; }
+.tree-row:hover .drag-grip { color: var(--text-dim); }
+.tree-row.dragging { opacity: .45; }
+.tree-row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.tree-row.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
 .rel-edit { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; min-width: 0; }
 .rel-edit input.num { width: 58px !important; flex: 0 1 58px; }
 .modal-b .rel-edit select.rel-mode { width: 76px; flex: 0 0 76px; padding: 0 2px; }

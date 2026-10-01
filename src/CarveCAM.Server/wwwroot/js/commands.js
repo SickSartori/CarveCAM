@@ -4,6 +4,7 @@ import {
   App, emit, mutate, select, selectMany, uid, nextName, resolve, resolveAll, getPlane, getSketch, getOperation,
   setProject, newProject, undo as undoState, redo as redoState, setPath, markSaved, MOVABLE, operationSource,
 } from './state.js';
+import { ICONS } from './icons.js';
 import { api, download } from './api.js';
 import { planeFrame, angleOfU, fmt } from './geom.js';
 import { modal, confirmBox, toast, status, busy, busyText, idle, h } from './dialogs.js';
@@ -966,6 +967,87 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     status(t('Lavorazione creata: premi Calcola (F9) per generare il percorso'));
   };
 
+  // ---------------------------------------------------------------- sequenza delle lavorazioni
+  const opLine = op => `T${op.tool?.number ?? ''} · ${op.kind === 'finish' ? t('finitura') : t('svuotatura')}`;
+
+  function applyOrder(order) {
+    const ops = App.project.operations;
+    if (order.length !== ops.length || order.every((o, i) => o === ops[i])) return false;
+    if (sim.active) sim.stop();
+    mutate(p => { p.operations = order.map(o => p.operations.find(x => x.id === o.id)); });
+    log.info('Sequenza delle lavorazioni cambiata', { order: order.map(o => o.name) });
+    status(t('Nuova sequenza delle lavorazioni: la simulazione e il G-code seguono quest\'ordine'));
+    return true;
+  }
+
+  /** Sposta le lavorazioni ids prima di beforeId (null: in fondo), dopo conferma della nuova sequenza. */
+  cmd.moveOperations = async (ids, beforeId) => {
+    if (opsBlocked()) return;
+    const ops = App.project.operations;
+    const moving = ops.filter(o => ids.includes(o.id));
+    if (!moving.length) return;
+    const rest = ops.filter(o => !ids.includes(o.id));
+    let idx = beforeId ? rest.findIndex(o => o.id === beforeId) : rest.length;
+    if (idx < 0) idx = rest.length;
+    const order = [...rest.slice(0, idx), ...moving, ...rest.slice(idx)];
+    if (order.every((o, i) => o === ops[i])) return;
+    const list = h('ol', { class: 'op-order' }, order.map(o => h('li', { class: ids.includes(o.id) ? 'moved' : '' },
+      h('span', { class: 'ico', html: o.kind === 'finish' ? ICONS.finish : ICONS.pocket }), h('span', { class: 'lbl' }, o.name), h('span', { class: 'sub' }, opLine(o)))));
+    const ok = await modal({
+      title: t('Sposta lavorazioni'),
+      body: h('div', {}, h('p', { style: { margin: '0 0 6px' } }, t('Confermare la nuova sequenza delle lavorazioni?')), list,
+        h('p', { class: 'p-note' }, t('L\'ordine è quello di esecuzione: simulazione "fino all\'ultima", Simula tutto ed esportazione G-code lo seguono.'))),
+      buttons: [{ label: t('Annulla'), value: false }, { label: t('Conferma'), value: true, primary: true }],
+    });
+    if (ok) applyOrder(order);
+  };
+
+  /** Finestra per riordinare le lavorazioni con i pulsanti su/giù (o trascinando le righe). */
+  cmd.reorderOperations = async () => {
+    if (opsBlocked()) return;
+    let order = [...App.project.operations];
+    if (order.length < 2) return;
+    let sel = resolve()?.type === 'operation' ? App.selection.id : order[0].id;
+    const list = h('ol', { class: 'op-order editable' });
+    let dragId = null;
+    const move = (id, to) => {
+      const i = order.findIndex(o => o.id === id);
+      if (i < 0 || to < 0 || to >= order.length || to === i) return;
+      const [x] = order.splice(i, 1);
+      order.splice(to, 0, x);
+      draw();
+    };
+    const draw = () => {
+      list.replaceChildren(...order.map((o, i) => {
+        const up = h('button', { class: 'icon-btn', type: 'button', title: t('Sposta su'), disabled: i === 0, onclick: e => { e.stopPropagation(); sel = o.id; move(o.id, i - 1); } }, '▲');
+        const dn = h('button', { class: 'icon-btn', type: 'button', title: t('Sposta giù'), disabled: i === order.length - 1, onclick: e => { e.stopPropagation(); sel = o.id; move(o.id, i + 1); } }, '▼');
+        const li = h('li', { class: o.id === sel ? 'sel' : '', draggable: 'true' },
+          h('span', { class: 'grip', html: ICONS.grip }), h('span', { class: 'ico', html: o.kind === 'finish' ? ICONS.finish : ICONS.pocket }),
+          h('span', { class: 'lbl' }, o.name), h('span', { class: 'sub' }, opLine(o)), up, dn);
+        li.addEventListener('click', () => { sel = o.id; draw(); });
+        li.addEventListener('dragstart', e => { dragId = o.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', o.id); });
+        li.addEventListener('dragover', e => { if (dragId) { e.preventDefault(); li.classList.add('drop-before'); } });
+        li.addEventListener('dragleave', () => li.classList.remove('drop-before'));
+        li.addEventListener('drop', e => { e.preventDefault(); const id = dragId; dragId = null; sel = id; const j = order.findIndex(x => x.id === o.id); const k = order.findIndex(x => x.id === id); move(id, k < j ? j - 1 : j); });
+        li.addEventListener('dragend', () => { dragId = null; draw(); });
+        return li;
+      }));
+    };
+    draw();
+    const keys = e => {
+      const i = order.findIndex(o => o.id === sel);
+      if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); move(sel, i - 1); }
+      if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); move(sel, i + 1); }
+    };
+    const ok = await modal({
+      title: t('Riordina lavorazioni'),
+      body: h('div', { onkeydown: keys }, list,
+        h('p', { class: 'p-note' }, t('Trascina le righe o usa ▲ ▼ (Alt+frecce sulla riga selezionata). L\'ordine è quello di esecuzione di simulazione e G-code.'))),
+      buttons: [{ label: t('Annulla'), value: false }, { label: t('Applica'), value: true, primary: true }],
+    });
+    if (ok) applyOrder(order);
+  };
+
   /** Copia nella lavorazione un utensile del magazzino. */
   cmd.setToolFromLibrary = async (opId, libId) => {
     const lt = (await getTools()).find(x => x.id === libId);
@@ -1374,6 +1456,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       case 'operation':
         return [{ label: t('Calcola'), kbd: 'F9', enabled: noSketch, action: () => cmd.compute(sel.id) }, { label: t('Simula'), enabled: noSketch, action: () => cmd.simulate(sel.id) },
           { label: t('Esporta G-code…'), action: () => cmd.exportGcode([sel.id]) }, { label: t('Salva come setup…'), action: () => cmd.saveAsSetup(sel.id) },
+          { label: t('Riordina lavorazioni…'), enabled: () => noSketch() && App.project.operations.length > 1, action: () => cmd.reorderOperations() },
           { sep: true }, ...common];
     }
     return common;

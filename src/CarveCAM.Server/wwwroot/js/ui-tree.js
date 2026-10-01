@@ -1,5 +1,6 @@
 // Navigatore: oggetti, artefatti, piani (con sketch ed entità), lavorazioni.
 // Clic seleziona, Ctrl+clic aggiunge o toglie dalla selezione; il lucchetto blocca o sblocca l'elemento.
+// Le lavorazioni si trascinano per cambiarne la sequenza (con conferma).
 import { App, select, toggleSelect, isSelected } from './state.js';
 import { h } from './dialogs.js';
 import { ICONS } from './icons.js';
@@ -77,7 +78,7 @@ export class Tree {
       const st = this.cmd.opStatus(op);
       const badge = h('span', { class: `badge ${st}` }, st === 'ok' ? t('ok') : st === 'stale' ? t('da ricalcolare') : t('da calcolare'));
       this._row({ depth: 0, icon: op.kind === 'finish' ? ICONS.finish : ICONS.pocket, label: op.name, sub: `T${op.tool?.number ?? ''}`,
-        badge, sel: { type: 'operation', id: op.id }, visible: op.visible !== false,
+        badge, sel: { type: 'operation', id: op.id }, visible: op.visible !== false, dragOp: p.operations.length > 1 && !App.sketch,
         onEye: () => this.cmd.toggleVisible('operation', op.id), onDbl: () => this.cmd.compute(op.id) });
     }
     this.el.scrollTop = scroll;
@@ -92,14 +93,14 @@ export class Tree {
     this.el.append(h('div', { class: 'tree-sec' }, label, h('span', { class: 'count' }, `(${count})`)));
   }
 
-  _row({ depth, icon, label, sub, badge, sel, visible, onEye, twisty, onTwisty, onDbl, locked, onLock }) {
+  _row({ depth, icon, label, sub, badge, sel, visible, onEye, twisty, onTwisty, onDbl, locked, onLock, dragOp }) {
     const isSel = isSelected(sel.type, sel.id);
     const primary = App.selection && App.selection.type === sel.type && App.selection.id === sel.id;
     const row = h('div', {
       class: `tree-row${isSel ? ' sel' : ''}${primary && App.selected.length > 1 ? ' primary' : ''}${visible === false ? ' hidden-item' : ''}${locked ? ' locked' : ''}`,
       style: { paddingLeft: `${4 + depth * 14}px` },
     });
-    const tw = h('span', { class: 'tw' }, twisty || '');
+    const tw = dragOp ? h('span', { class: 'tw drag-grip', html: ICONS.grip, title: t('Trascina per cambiare la sequenza') }) : h('span', { class: 'tw' }, twisty || '');
     if (onTwisty) tw.addEventListener('click', e => { e.stopPropagation(); onTwisty(); });
     row.append(tw, h('span', { class: 'ico', html: icon || '' }), h('span', { class: 'lbl', title: label }, label));
     if (sub) row.append(h('span', { class: 'sub' }, sub));
@@ -125,12 +126,66 @@ export class Tree {
       this.el.focus();
     });
     if (onDbl) row.addEventListener('dblclick', e => { e.preventDefault(); onDbl(); });
+    if (dragOp) this._dragOp(row, sel.id);
     row.addEventListener('contextmenu', e => {
       e.preventDefault();
       if (!isSelected(sel.type, sel.id)) select(sel);
       contextMenu(e, this.cmd.contextItems(sel));
     });
     this.el.append(row);
+  }
+
+  /** Trascinamento delle lavorazioni: si spostano quella trascinata o tutte quelle selezionate. */
+  _dragOp(row, id) {
+    row.draggable = true;
+    row.dataset.op = id;
+    row.addEventListener('dragstart', e => {
+      const selOps = App.selected.filter(s => s.type === 'operation').map(s => s.id);
+      this.dragIds = selOps.includes(id) ? App.project.operations.filter(o => selOps.includes(o.id)).map(o => o.id) : [id];
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', this.dragIds.join(','));
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragover', e => {
+      if (!this.dragIds) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rc = row.getBoundingClientRect();
+      const after = e.clientY > rc.top + rc.height / 2;
+      this._clearDrop();
+      row.classList.add(after ? 'drop-after' : 'drop-before');
+      this.dropAt = { id, after };
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('drop-before', 'drop-after'));
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      const ids = this.dragIds, at = this.dropAt;
+      this._endDrag();
+      if (!ids || !at) return;
+      // posizione d'arrivo: prima della lavorazione indicata (o della successiva non trascinata)
+      const ops = App.project.operations;
+      let before = at.id;
+      if (at.after) {
+        const i = ops.findIndex(o => o.id === at.id);
+        before = ops.slice(i + 1).find(o => !ids.includes(o.id))?.id || null;
+      } else if (ids.includes(before)) {
+        const i = ops.findIndex(o => o.id === at.id);
+        before = ops.slice(i).find(o => !ids.includes(o.id))?.id || null;
+      }
+      this.cmd.moveOperations(ids, before);
+    });
+    row.addEventListener('dragend', () => this._endDrag());
+  }
+
+  _clearDrop() {
+    for (const r of this.el.querySelectorAll('.drop-before, .drop-after')) r.classList.remove('drop-before', 'drop-after');
+  }
+
+  _endDrag() {
+    this.dragIds = null;
+    this.dropAt = null;
+    this._clearDrop();
+    for (const r of this.el.querySelectorAll('.dragging')) r.classList.remove('dragging');
   }
 
   _key(e) {
