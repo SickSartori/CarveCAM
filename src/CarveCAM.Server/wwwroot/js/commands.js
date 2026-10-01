@@ -1377,7 +1377,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   cmd.exportLibrary = () => exportLibrary();
   cmd.importLibrary = () => importLibrary();
   cmd.setupLibrary = () => openSetupLibrary();
-  cmd.options = () => openOptions();
+  cmd.options = () => openOptions({ vp });
 
   function buildRequest(op) {
     const sk = getSketch(op.sketchId);

@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import {
   App, on, select, toggleSelect, setProject, newProject, loadAutosave, allSketches, isProjectDoc, isProjectFile,
 } from './state.js';
-import { applyTheme } from './settings.js';
+import { applyTheme, settings } from './settings.js';
 import { t, translateDom, LOCALE } from './i18n.js';
 import { Viewport } from './viewport.js';
 import { ViewCube } from './viewcube.js';
@@ -402,7 +402,12 @@ window.addEventListener('beforeunload', e => {
   }
   await checkServer(true);
   await cmd.loadMeshes();
-  vp.fit();
+  // vista iniziale: quella memorizzata nelle opzioni (orientamento, zoom, punto inquadrato), altrimenti adatta
+  if (settings.view?.saved) {
+    vp.applyView(settings.view, { animate: false });
+    document.getElementById('btn-proj').setAttribute('aria-pressed', String(vp.isOrtho));
+    toolbar.update();
+  } else vp.fit();
   await refreshRecent();
   if (has && !crashed && content) toast(t('Ripristinato l\'ultimo progetto aperto in questo browser'), 'info', 3000);
 })();

@@ -31,10 +31,36 @@ export const DEFAULTS = {
     major: 50,          // passo della griglia principale (mm)
     snapStep: 1,        // passo di aggancio predefinito dello sketch (mm)
   },
+  // vista memorizzata dalle opzioni: usata all'avvio e come vista isometrica (saved: false = vista standard)
+  view: {
+    saved: false,
+    dir: [1, -1, 0.85],   // direzione dal bersaglio verso la camera
+    height: 0,            // zoom: altezza inquadrata al bersaglio (mm)
+    target: [0, 0, 0],
+    ortho: false,
+  },
 };
 
+/** File delle opzioni esportato: { app, kind, version, settings }. */
+export const SETTINGS_FILE_KIND = 'carvecam-settings';
+
+/** Opzioni lette da un file esportato (o da un oggetto opzioni semplice), completate con i predefiniti. */
+export function settingsFromFile(json) {
+  const src = json && json.kind === SETTINGS_FILE_KIND ? json.settings : json;
+  if (!src || typeof src !== 'object' || Array.isArray(src)) throw new Error('not a settings file');
+  const known = Object.keys(DEFAULTS).filter(k => k in src);
+  if (!known.length) throw new Error('not a settings file');
+  return merge(DEFAULTS, src);
+}
+
+export function settingsFile() {
+  return { app: 'CarveCAM', kind: SETTINGS_FILE_KIND, version: 1, saved: new Date().toISOString(), settings: structuredClone(settings) };
+}
+
+/** Unisce val ai predefiniti: chiavi sconosciute scartate, valori del tipo sbagliato sostituiti dal predefinito. */
 function merge(def, val) {
-  if (typeof def !== 'object' || def === null || Array.isArray(def)) return val ?? def;
+  if (Array.isArray(def)) return Array.isArray(val) && val.length === def.length && val.every(x => typeof x === typeof def[0]) ? [...val] : [...def];
+  if (typeof def !== 'object' || def === null) return val != null && typeof val === typeof def && (typeof val !== 'number' || Number.isFinite(val)) ? val : def;
   const src = val && typeof val === 'object' ? val : {};
   const r = {};
   for (const k of Object.keys(def)) r[k] = merge(def[k], src[k]);

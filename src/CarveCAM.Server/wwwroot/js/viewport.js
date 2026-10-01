@@ -327,8 +327,34 @@ export class Viewport {
   }
 
   setView(name) {
+    // vista isometrica: quella memorizzata nelle opzioni (orientamento e zoom), se presente
+    if (name === 'iso' && settings.view?.saved) { this.applyView(settings.view, { keepTarget: true }); return; }
     const d = VIEW_DIRS[name];
     if (d) this.viewFrom(new THREE.Vector3(...d));
+  }
+
+  /** Altezza inquadrata (mm) in corrispondenza del bersaglio: misura dello zoom valida per entrambe le proiezioni. */
+  viewHeight() {
+    if (this.isOrtho) return (this.ortho.top - this.ortho.bottom) / (this.ortho.zoom || 1);
+    return 2 * this.camera.position.distanceTo(this.controls.target) * Math.tan(THREE.MathUtils.degToRad(this.persp.fov / 2));
+  }
+
+  /** Vista corrente da memorizzare nelle opzioni: direzione, zoom (altezza inquadrata), bersaglio e proiezione. */
+  captureView() {
+    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    const r = v => v.toArray().map(x => Math.round(x * 1e6) / 1e6);
+    return { saved: true, dir: r(dir), height: Math.round(this.viewHeight() * 1000) / 1000, target: r(this.controls.target), ortho: this.isOrtho };
+  }
+
+  /** Applica una vista memorizzata (keepTarget: ruota e zooma attorno al bersaglio attuale, con animazione). */
+  applyView(v, { keepTarget = false, animate = true } = {}) {
+    if (!v || !Array.isArray(v.dir)) return;
+    if (!keepTarget && typeof v.ortho === 'boolean') this.setProjection(v.ortho);
+    if (!keepTarget && Array.isArray(v.target)) this.controls.target.fromArray(v.target);
+    const h = v.height > 0 ? v.height : null;
+    const dist = h ? h / (2 * Math.tan(THREE.MathUtils.degToRad(this.persp.fov / 2))) : null;
+    if (h && this.isOrtho) { this.ortho.zoom = 1; this._updateOrthoFrustum(h); }
+    this.viewFrom(new THREE.Vector3().fromArray(v.dir), animate && keepTarget, dist);
   }
 
   /**
@@ -336,28 +362,30 @@ export class Viewport {
    * per il movimento ridotto. Si anima solo la direzione: distanza e bersaglio restano quelli correnti, così
    * un "Adatta" durante la rotazione non viene annullato.
    */
-  viewFrom(dir, animate = true) {
+  viewFrom(dir, animate = true, distance = null) {
     const to = new THREE.Vector3().copy(dir).normalize();
     // dall'alto o dal basso: piccolo scarto per evitare la singolarità dei controlli orbitali con Z in alto
     if (Math.abs(to.z) > 0.99999) to.set(0, -0.0001 * Math.sign(to.z), Math.sign(to.z)).normalize();
     this._stopViewAnim();
     const target = this.controls.target;
-    const place = d => {
-      const dist = Math.max(50, this.camera.position.distanceTo(target));
+    const d0 = this.camera.position.distanceTo(target);
+    // distance: nuova distanza (zoom) raggiunta insieme alla rotazione
+    const place = (d, k = 1) => {
+      const dist = distance > 0 ? d0 + (distance - d0) * k : Math.max(50, this.camera.position.distanceTo(target));
       this.camera.up.set(0, 0, 1);
       this.camera.position.copy(target).addScaledVector(d, dist);
       this.camera.lookAt(target);
     };
     const from = this.camera.position.clone().sub(target).normalize();
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (!animate || reduce || from.angleTo(to) < 0.002) { place(to); this.controls.update(); return; }
+    if (!animate || reduce || (from.angleTo(to) < 0.002 && !(distance > 0))) { place(to); this.controls.update(); return; }
     const q = new THREE.Quaternion().setFromUnitVectors(from, to);
     const q0 = new THREE.Quaternion(), qk = new THREE.Quaternion();
     let t = 0;
     const hook = dt => {
       t = Math.min(1, t + dt / 0.32);
       const k = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;   // accelera e rallenta
-      place(t < 1 ? from.clone().applyQuaternion(qk.slerpQuaternions(q0, q, k)) : to);
+      place(t < 1 ? from.clone().applyQuaternion(qk.slerpQuaternions(q0, q, k)) : to, k);
       if (t >= 1) this._stopViewAnim();
     };
     this._viewAnim = hook;

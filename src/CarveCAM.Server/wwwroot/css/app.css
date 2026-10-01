@@ -692,6 +692,10 @@ kbd {
 .tree-row.dragging { opacity: .45; }
 .tree-row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
 .tree-row.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+/* file delle opzioni */
+.opt-file { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border-soft); margin-top: auto; }
+.opt-file .p-note { margin: 0; }
+.opt-view-state { white-space: normal; line-height: 1.5; }
 .rel-edit { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; min-width: 0; }
 .rel-edit input.num { width: 58px !important; flex: 0 1 58px; }
 .modal-b .rel-edit select.rel-mode { width: 76px; flex: 0 0 76px; padding: 0 2px; }

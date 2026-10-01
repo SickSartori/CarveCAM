@@ -1,7 +1,10 @@
-// Finestra delle opzioni: colori, dimensioni di frecce e cursori, lingua, griglia, tema chiaro/scuro.
-// Le modifiche si vedono subito nella vista; Annulla ripristina i valori precedenti.
-import { settings, DEFAULTS, THEME_COLORS, applySettings } from './settings.js';
-import { modal, h, confirmBox } from './dialogs.js';
+// Finestra delle opzioni: colori, dimensioni di frecce e cursori, lingua, griglia, tema chiaro/scuro, vista iniziale.
+// Le modifiche si vedono subito nella vista; Annulla ripristina i valori precedenti. Le opzioni si possono
+// esportare in un file e importare (anche su un altro computer o browser).
+import { settings, DEFAULTS, THEME_COLORS, applySettings, settingsFile, settingsFromFile } from './settings.js';
+import { modal, h, confirmBox, toast } from './dialogs.js';
+import { download } from './api.js';
+import { fmt } from './geom.js';
 import { t, LANGS, LANG } from './i18n.js';
 import { log } from './log.js';
 
@@ -24,13 +27,13 @@ const COLOR_ROWS = [
   ['pivot', 'Pallini del riferimento manipolatore'],
 ];
 
-export async function openOptions() {
+export async function openOptions({ vp } = {}) {
   const original = structuredClone(settings);
-  const work = structuredClone(settings);
+  let work = structuredClone(settings);
   const preview = () => applySettings(work, false);
 
   const tabs = [
-    ['colors', 'Colori'], ['sizes', 'Frecce e cursori'], ['lang', 'Lingua'], ['grid', 'Griglia'], ['look', 'Aspetto'],
+    ['colors', 'Colori'], ['sizes', 'Frecce e cursori'], ['lang', 'Lingua'], ['grid', 'Griglia'], ['view', 'Vista iniziale'], ['look', 'Aspetto'],
   ];
   const tabBar = h('div', { class: 'opt-tabs', role: 'tablist' });
   const pane = h('div', { class: 'opt-pane' });
@@ -106,6 +109,27 @@ export async function openOptions() {
         row('Aggancio sketch predefinito', ...numIn(work.grid, 'snapStep', { min: 0.01, max: 100, step: 0.5, unit: 'mm' })),
         h('p', { class: 'p-note' }, t('La griglia è disegnata sul piano XY del progetto; il passo di aggancio si può cambiare anche nella barra dello sketch.')));
     },
+    view() {
+      const state = h('div', { class: 'p-info opt-view-state' });
+      const draw = () => {
+        const v = work.view;
+        state.textContent = v.saved
+          ? t('Memorizzata: direzione ({d}), zoom {h} mm inquadrati, proiezione {p}', {
+            d: v.dir.map(x => fmt(x, 3)).join('; '), h: fmt(v.height, 1), p: v.ortho ? t('ortogonale') : t('prospettica') })
+          : t('Vista isometrica standard: all\'avvio la vista si adatta al modello');
+      };
+      draw();
+      const save = h('button', { class: 'btn primary', type: 'button', disabled: !vp, onclick: () => { work.view = vp.captureView(); draw(); } },
+        t('Memorizza vista attuale'));
+      const std = h('button', { class: 'btn', type: 'button', onclick: () => { work.view = structuredClone(DEFAULTS.view); draw(); } },
+        t('Usa la vista standard'));
+      const test = h('button', { class: 'btn', type: 'button', disabled: !vp, onclick: () => { if (work.view.saved) vp.applyView(work.view, { keepTarget: true }); else vp.viewFrom(vp.camera.position.clone().set(...DEFAULTS.view.dir)); } },
+        t('Prova'));
+      return h('div', {},
+        row('Vista predefinita', state),
+        h('div', { class: 'p-buttons', style: { padding: '4px 0 6px' } }, save, std, test),
+        h('p', { class: 'p-note' }, t('Orientamento e zoom della vista attuale diventano quelli usati all\'avvio di CarveCAM e dal comando Vista isometrica (tasto 0 o pulsante sotto il cubo). All\'avvio si ripristinano anche il punto inquadrato e la proiezione.')));
+    },
     look() {
       const mk = (val, label) => {
         const r = h('input', { type: 'radio', name: 'opt-theme', value: val });
@@ -130,8 +154,34 @@ export async function openOptions() {
   }
   show(current);
 
+  // file delle impostazioni: esporta quelle mostrate (anche non ancora confermate), importa in anteprima
+  const exportBtn = h('button', { class: 'btn', type: 'button', onclick: () => {
+    const file = settingsFile();
+    file.settings = structuredClone(work);
+    download(JSON.stringify(file, null, 2), 'carvecam-impostazioni.json', 'application/json');
+    log.info('Opzioni esportate');
+  } }, t('Esporta impostazioni…'));
+  const fileInp = h('input', { type: 'file', accept: '.json,application/json', hidden: true });
+  fileInp.addEventListener('change', async () => {
+    const f = fileInp.files[0];
+    fileInp.value = '';
+    if (!f) return;
+    try {
+      work = settingsFromFile(JSON.parse(await f.text()));
+      preview();
+      show(current);
+      toast(t('Impostazioni importate da "{name}": premi OK per conservarle', { name: f.name }), 'ok', 4000);
+      log.info('Opzioni importate', { file: f.name });
+    } catch (e) {
+      log.warn('File delle opzioni non valido', e);
+      toast(t('"{name}" non è un file di impostazioni di CarveCAM', { name: f.name }), 'err');
+    }
+  });
+  const importBtn = h('button', { class: 'btn', type: 'button', onclick: () => fileInp.click() }, t('Importa impostazioni…'));
+  const fileRow = h('div', { class: 'opt-file' }, h('span', { class: 'p-note' }, t('File delle impostazioni:')), exportBtn, importBtn, fileInp);
+
   const res = await modal({
-    title: t('Opzioni'), body: h('div', { class: 'opt' }, tabBar, pane), size: 'wide', enter: false,
+    title: t('Opzioni'), body: h('div', { class: 'opt' }, tabBar, pane, fileRow), size: 'wide', enter: false,
     buttons: [
       { label: t('Ripristina tutto'), value: 'reset', left: true },
       { label: t('Annulla'), value: false },
