@@ -91,7 +91,7 @@ export class Props {
     }
     title.textContent = t({
       object: 'Proprietà oggetto', artifact: 'Proprietà artefatto', plane: 'Proprietà piano', sketch: 'Proprietà sketch',
-      entity: 'Proprietà entità', operation: 'Proprietà lavorazione',
+      entity: 'Proprietà entità', operation: 'Proprietà lavorazione', origin: 'Proprietà origine',
     }[r.type]);
     const fields = this[`_schema_${r.type}`](r);
     for (const f of fields) this._field(f, r);
@@ -102,7 +102,7 @@ export class Props {
     const all = resolveAll();
     const byType = {};
     for (const x of all) byType[x.type] = (byType[x.type] || 0) + 1;
-    const names = { object: 'oggetti', artifact: 'artefatti', plane: 'piani', sketch: 'sketch', entity: 'entità', operation: 'lavorazioni' };
+    const names = { object: 'oggetti', artifact: 'artefatti', plane: 'piani', sketch: 'sketch', entity: 'entità', operation: 'lavorazioni', origin: 'origini' };
     this._sec({ sec: t('Selezione multipla'), tone: 'model', id: 'multi' });
     this._infoRow(t('Elementi'), String(all.length));
     for (const [k, n] of Object.entries(byType)) this._infoRow(t(names[k]), String(n));
@@ -150,8 +150,7 @@ export class Props {
       { key: 'rotation', label: 'Rotazione', type: 'vec3', unit: '°', disabled: locked },
       { key: 'scale', label: 'Scala', type: 'vec3', disabled: locked },
       { type: 'buttons', items: [
-        { label: 'Appoggia su Z=0', disabled: locked, action: () => this.cmd.dropToFloor({ type: 'object', id: o.id }) },
-        { label: 'Centra in XY', disabled: locked, action: () => this.cmd.centerXY({ type: 'object', id: o.id }) },
+        { label: 'Riposiziona…', primary: true, disabled: locked || modelBusy(), title: 'Appoggia su Z=0, centra o allinea minimo e massimo per ogni asse', action: () => this.cmd.reposition({ type: 'object', id: o.id }) },
       ] },
       { sec: 'Visualizzazione', tone: 'model' },
       { key: 'color', label: 'Colore', type: 'color' },
@@ -184,8 +183,7 @@ export class Props {
       { key: 'position', label: 'Posizione', type: 'vec3', unit: 'mm', disabled: locked },
       { key: 'rotation', label: 'Rotazione', type: 'vec3', unit: '°', disabled: locked },
       { type: 'buttons', items: [
-        { label: 'Appoggia su Z=0', disabled: locked, action: () => this.cmd.dropToFloor({ type: 'artifact', id: a.id }) },
-        { label: 'Centra in XY', disabled: locked, action: () => this.cmd.centerXY({ type: 'artifact', id: a.id }) },
+        { label: 'Riposiziona…', primary: true, disabled: locked || modelBusy(), title: 'Appoggia su Z=0, centra o allinea minimo e massimo per ogni asse', action: () => this.cmd.reposition({ type: 'artifact', id: a.id }) },
         { label: 'Duplica', action: () => this.cmd.duplicateSelected() },
       ] },
       { sec: 'Visualizzazione', tone: 'model' },
@@ -203,6 +201,22 @@ export class Props {
     return h('div', { class: 'p-note' }, used.length
       ? t('Ostacolo per: {list}', { list: used.map(o => o.name).join(', ') })
       : t('Non è un ostacolo per nessuna lavorazione (abilitalo nelle proprietà della lavorazione, gruppo Ostacoli).'));
+  }
+
+  _schema_origin(r) {
+    const o = r.item;
+    const locked = !!o.locked;
+    return [
+      { sec: 'Punto di origine', tone: 'model' },
+      { key: 'name', label: 'Nome', type: 'text' },
+      { key: 'position', label: 'Posizione', type: 'vec3', unit: 'mm', disabled: locked },
+      { key: 'visible', label: 'Visibile', type: 'check' },
+      ...this._lockFields('origin', o),
+      { type: 'buttons', items: [
+        { label: 'Esporta G-code con questo zero…', primary: true, action: () => this.cmd.exportGcode(null, o.id) },
+      ] },
+      { note: 'Nell\'esportazione del G-code si sceglie quale punto usare come zero pezzo: le coordinate del programma sono relative a quel punto.' },
+    ];
   }
 
   _schema_plane(r) {
@@ -453,7 +467,7 @@ export class Props {
     }
     if (f.type === 'buttons') {
       el.append(h('div', { class: 'p-buttons' }, f.items.map(b =>
-        h('button', { class: `btn${b.primary ? ' primary' : ''}${b.danger ? ' danger' : ''}`, type: 'button', disabled: !!b.disabled, onclick: b.action }, t(b.label)))));
+        h('button', { class: `btn${b.primary ? ' primary' : ''}${b.danger ? ' danger' : ''}`, type: 'button', disabled: !!b.disabled, title: b.title ? t(b.title) : null, onclick: b.action }, t(b.label)))));
       return;
     }
     if (f.type === 'rel') { this._relField(f, r); return; }

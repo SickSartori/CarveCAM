@@ -35,6 +35,7 @@ function dotTex() {
 /** Matrice mondo di un elemento del progetto (dai dati, non dalla scena). */
 function itemMatrix(type, item) {
   if (type === 'plane') return frameMatrix(planeFrame(item));
+  if (type === 'origin') return new THREE.Matrix4().makeTranslation(new THREE.Vector3().fromArray(item.position));
   const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(item.rotation[0] * D2R, item.rotation[1] * D2R, item.rotation[2] * D2R, 'XYZ'));
   const s = type === 'object' && item.scale ? new THREE.Vector3().fromArray(item.scale) : new THREE.Vector3(1, 1, 1);
   return new THREE.Matrix4().compose(new THREE.Vector3().fromArray(item.position), q, s);
@@ -129,6 +130,7 @@ export class GizmoController {
         for (const x of items) {
           x.obj.updateMatrixWorld(true);
           if (x.type === 'plane') box.expandByPoint(new THREE.Vector3().fromArray(x.item.origin));
+          else if (x.type === 'origin') box.expandByPoint(new THREE.Vector3().fromArray(x.item.position));
           else box.expandByObject(x.obj);
         }
         m = new THREE.Matrix4().makeTranslation(box.getCenter(new THREE.Vector3()));
@@ -198,6 +200,8 @@ export class GizmoController {
         x.item.origin = p.toArray().map(rnd);
         x.item.normal = n.toArray().map(v => Math.round(v * 1e6) / 1e6);
         x.item.angle = rnd(angleOfU(n, u));
+      } else if (x.type === 'origin') {
+        x.item.position = p.toArray().map(rnd);   // un punto: conta solo la posizione
       } else {
         const e = new THREE.Euler().setFromQuaternion(q, 'XYZ');
         x.item.position = p.toArray().map(rnd);

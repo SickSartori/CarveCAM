@@ -208,9 +208,22 @@ function hoverPlanes() {
   const on = !!ev && !sketch.active && !App.pickMode && vp.raycast(ev, sync.planeQuads(), false).length > 0;
   vp.el.classList.toggle('hover-plane', on);
 }
+// modalità di scelta punti con aggancio ai vertici (piano da 3 punti, origini): al massimo un controllo per fotogramma
+let snapEv = null;
+function snapHover() {
+  const ev = snapEv;
+  snapEv = null;
+  const r = ev && cmd.pickHover(ev);
+  if (r) coordsEl.textContent = `X ${fmt(r.point.x, 3)}  Y ${fmt(r.point.y, 3)}  Z ${fmt(r.point.z, 3)}${r.snapped ? `  [${t('vertice')}]` : ''}`;
+}
 vp.handlers.move = ev => {
   if (App.pickMode?.kind === 'pivot') { gizmo.pivotMove(ev); return; }
   if (sketch.active) { sketch.onMove(ev); return; }
+  if (App.pickMode) {
+    if (!snapEv) requestAnimationFrame(snapHover);
+    snapEv = ev;
+    return;
+  }
   if (!hoverEv && ev.buttons === 0) requestAnimationFrame(hoverPlanes);
   if (ev.buttons === 0) hoverEv = ev;
   const f = { o: new THREE.Vector3(), n: new THREE.Vector3(0, 0, 1) };

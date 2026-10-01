@@ -28,6 +28,7 @@ export class SceneSync {
       if (!n.obj.visible) continue;
       if (k.startsWith('object:') || k.startsWith('artifact:')) res.push(n.obj);
       else if (k.startsWith('plane:') && n.quad) res.push(n.quad);
+      else if (k.startsWith('origin:') && n.hit) res.push(n.hit);
     }
     return res;
   }
@@ -57,6 +58,7 @@ export class SceneSync {
     for (const o of p.objects) this._syncObject(o, seen);
     for (const a of p.artifacts) this._syncArtifact(a, seen);
     for (const pl of p.planes) this._syncPlane(pl, seen, ctx);
+    for (const og of p.origins || []) this._syncOrigin(og, seen, ctx);
     for (const op of p.operations) this._syncToolpath(op, seen);
     for (const [k, n] of this.nodes) {
       if (seen.has(k)) continue;
@@ -199,6 +201,44 @@ export class SceneSync {
     n.obj.position.copy(f.o);
     n.obj.quaternion.copy(frameQuaternion(f));
     n.obj.visible = pl.visible !== false;
+  }
+
+  // ---------------------------------------------------------------- punti di origine (zero pezzo)
+  _syncOrigin(og, seen, ctx) {
+    const k = this.key('origin', og.id);
+    seen.add(k);
+    const sel = ctx.sel.has(k);
+    const sig = JSON.stringify([og.name, sel, !!og.locked, this.ver]);
+    let n = this.nodes.get(k);
+    if (!n || n.sig !== sig) {
+      const g = new THREE.Group();
+      g.userData = { type: 'origin', id: og.id };
+      const len = 12 * (settings.sizes.normalArrow || 1);
+      const axes = [[1, 0, 0, 0xff5f5f], [0, 1, 0, 0x5fd35f], [0, 0, 1, 0x4f9dff]];
+      for (const [x, y, z, c] of axes) {
+        const a = new THREE.ArrowHelper(new THREE.Vector3(x, y, z), new THREE.Vector3(), len, c, len * 0.28, len * 0.16);
+        a.traverse(o => { o.raycast = () => {}; if (o.material) { o.material.depthTest = false; o.material.transparent = true; } o.renderOrder = 6; });
+        g.add(a);
+      }
+      const col = og.locked ? color('locked') : sel ? color('entitySel') : color('pivot');
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(len * 0.16, 20, 12),
+        new THREE.MeshBasicMaterial({ color: col, depthTest: false, transparent: true }));
+      ball.renderOrder = 7;
+      ball.userData = { type: 'origin', id: og.id };
+      g.add(ball);
+      // area di selezione più grande del pallino (invisibile)
+      const hit = new THREE.Mesh(new THREE.SphereGeometry(len * 0.45, 12, 8), new THREE.MeshBasicMaterial({ visible: false }));
+      hit.userData = { type: 'origin', id: og.id };
+      g.add(hit);
+      const label = makeTextSprite(og.name, sel ? color('entitySel') : '#e8eef5');
+      label.position.set(len * 0.25, len * 0.25, len * 0.9);
+      label.scale.multiplyScalar(len * 0.07);
+      label.raycast = () => {};
+      g.add(label);
+      n = this._replace(k, this.vp.groups.planes, g, sig, { hit });
+    }
+    n.obj.position.fromArray(og.position);
+    n.obj.visible = og.visible !== false;
   }
 
   // ---------------------------------------------------------------- percorsi utensile

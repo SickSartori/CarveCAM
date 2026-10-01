@@ -20,7 +20,7 @@ export function isProjectFile(name) {
 }
 
 /** Tipi di elemento che si spostano con il manipolatore (e si possono bloccare). */
-export const MOVABLE = ['object', 'artifact', 'plane'];
+export const MOVABLE = ['object', 'artifact', 'plane', 'origin'];
 
 export const App = {
   project: null,
@@ -74,6 +74,7 @@ export function newProject() {
     format: PROJECT_FORMAT, version: 2,
     name: 'Nuovo progetto', units: 'mm',
     objects: [], artifacts: [], planes: [], operations: [],
+    origins: [],            // punti di riferimento usabili come zero pezzo del G-code
     counters: {},
   };
 }
@@ -82,7 +83,7 @@ function normalize(p) {
   const d = newProject();
   const r = Object.assign(d, p || {});
   r.format = PROJECT_FORMAT;
-  for (const k of ['objects', 'artifacts', 'planes', 'operations']) if (!Array.isArray(r[k])) r[k] = [];
+  for (const k of ['objects', 'artifacts', 'planes', 'operations', 'origins']) if (!Array.isArray(r[k])) r[k] = [];
   for (const pl of r.planes) {
     if (!Array.isArray(pl.sketches)) pl.sketches = [];
     for (const s of pl.sketches) if (!Array.isArray(s.entities)) s.entities = [];
@@ -243,6 +244,7 @@ export const getObject = id => App.project.objects.find(o => o.id === id);
 export const getArtifact = id => App.project.artifacts.find(o => o.id === id);
 export const getPlane = id => App.project.planes.find(o => o.id === id);
 export const getOperation = id => App.project.operations.find(o => o.id === id);
+export const getOrigin = id => App.project.origins.find(o => o.id === id);
 
 export function getSketch(id) {
   for (const plane of App.project.planes)
@@ -273,6 +275,7 @@ export function resolve(sel = App.selection) {
     case 'artifact': { const item = getArtifact(sel.id); return item && { type: sel.type, item }; }
     case 'plane': { const item = getPlane(sel.id); return item && { type: sel.type, item }; }
     case 'operation': { const item = getOperation(sel.id); return item && { type: sel.type, item }; }
+    case 'origin': { const item = getOrigin(sel.id); return item && { type: sel.type, item }; }
     case 'sketch': { const r = getSketch(sel.id); return r && { type: sel.type, item: r.sketch, plane: r.plane }; }
     case 'entity': { const r = getEntity(sel.sketchId, sel.id); return r && { type: sel.type, item: r.entity, sketch: r.sketch, plane: r.plane }; }
   }

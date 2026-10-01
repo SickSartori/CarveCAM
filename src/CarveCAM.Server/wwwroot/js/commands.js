@@ -1,12 +1,12 @@
 // Comandi dell'applicazione (menu, navigatore, pannello proprietà, scorciatoie).
 import * as THREE from 'three';
 import {
-  App, emit, mutate, select, selectMany, uid, nextName, resolve, resolveAll, getPlane, getSketch, getOperation,
+  App, emit, mutate, select, selectMany, uid, nextName, resolve, resolveAll, getPlane, getSketch, getOperation, getOrigin,
   setProject, newProject, undo as undoState, redo as redoState, setPath, markSaved, MOVABLE, operationSource,
 } from './state.js';
 import { ICONS } from './icons.js';
 import { api, download } from './api.js';
-import { planeFrame, angleOfU, fmt } from './geom.js';
+import { planeFrame, angleOfU, fmt, toWorld, entitySnapPoints } from './geom.js';
 import { modal, confirmBox, toast, status, busy, busyText, idle, h } from './dialogs.js';
 import { SERVER_FORMATS, CLIENT_FORMATS, extOf, parseInBrowser, buildDisplayGeometry } from './importers.js';
 import { OP_DEFAULTS, TOOL_DEFAULTS, effParam, round4 } from './oplib.js';
@@ -22,6 +22,43 @@ import { t, num, LOCALE } from './i18n.js';
 import { log } from './log.js';
 
 const POST_MODE_KEY = 'carvecam.post.mode';   // ultimo controllo scelto nell'esportazione G-code (per browser)
+const ORIGIN_KEY = 'carvecam.origin.v1';       // ultime scelte di "Sposta origine" (per browser)
+const REPOS_KEY = 'carvecam.reposition.v1';    // ultime scelte di "Riposiziona" (per browser)
+const AXES = ['X', 'Y', 'Z'];
+
+const loadPref = (key, def) => { try { return { ...def, ...JSON.parse(localStorage.getItem(key) || '{}') }; } catch { return { ...def }; } };
+const savePref = (key, v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* storage non disponibile */ } };
+
+/** Ingombro esatto (dai vertici trasformati) delle mesh di un elemento della scena, anche se nascosto. */
+export function preciseBox(obj) {
+  const box = new THREE.Box3();
+  if (!obj) return box;
+  const v = new THREE.Vector3();
+  obj.updateMatrixWorld(true);
+  obj.traverse(o => {
+    const pos = o.isMesh && o.userData?.type ? o.geometry?.attributes.position : null;
+    if (!pos) return;
+    for (let i = 0; i < pos.count; i++) box.expandByPoint(v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld));
+  });
+  return box;
+}
+
+/** Pulsanti a scelta singola: options [[value, label, disabled?]]; onChange(value). */
+function segmented(options, value, onChange) {
+  const el = h('div', { class: 'seg', role: 'radiogroup' });
+  const btns = options.map(([v, label, disabled]) => {
+    const b = h('button', { type: 'button', class: 'seg-btn', role: 'radio', disabled: !!disabled, 'data-v': v }, label);
+    b.addEventListener('click', () => { set(v); onChange(v); });
+    el.append(b);
+    return b;
+  });
+  const set = v => { for (const b of btns) b.setAttribute('aria-checked', String(b.dataset.v === v)); };
+  set(value);
+  el.set = set;
+  return el;
+}
+
+const range3 = (box, i) => `${fmt(box.min.getComponent(i), 2)} … ${fmt(box.max.getComponent(i), 2)}`;
 
 // direzioni delle viste standard (facce, spigoli e vertici del cubo di orientamento)
 const VIEW_SNAP = [];
@@ -467,6 +504,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
           case 'object': p.objects = p.objects.filter(o => o.id !== s.id); gone.add(s.id); break;
           case 'artifact': p.artifacts = p.artifacts.filter(o => o.id !== s.id); gone.add(s.id); break;
           case 'plane': p.planes = p.planes.filter(o => o.id !== s.id); break;
+          case 'origin': p.origins = p.origins.filter(o => o.id !== s.id); break;
           case 'operation':
             p.operations = p.operations.filter(o => o.id !== s.id);
             App.runtime.toolpaths.delete(s.id);
@@ -522,6 +560,15 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
             sel.push({ type: s.type, id: clone.id });
             break;
           }
+          case 'origin': {
+            clone.id = uid('org');
+            clone.name = `${r.item.name} (${t('copia')})`;
+            clone.position = [clone.position[0] + 10, clone.position[1] + 10, clone.position[2]];
+            clone.locked = false;
+            p.origins.push(clone);
+            sel.push({ type: 'origin', id: clone.id });
+            break;
+          }
           case 'plane': {
             clone.id = uid('pl');
             clone.name = `${r.item.name} (${t('copia')})`;
@@ -567,10 +614,8 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     const r = resolve(sel);
     if (!r) return;
     if (r.item.locked) { lockedWarn(); return; }
-    const obj = sync.objectFor(sel.type, sel.id);
-    if (!obj) return;
-    obj.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(obj);
+    const box = preciseBox(sync.objectFor(sel.type, sel.id));
+    if (box.isEmpty()) return;
     mutate(() => { r.item.position[2] = round4(r.item.position[2] - box.min.z); });
   };
 
@@ -578,17 +623,88 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     const r = resolve(sel);
     if (!r) return;
     if (r.item.locked) { lockedWarn(); return; }
-    const obj = sync.objectFor(sel.type, sel.id);
-    if (!obj) return;
-    obj.updateMatrixWorld(true);
-    const c = new THREE.Box3().setFromObject(obj).getCenter(new THREE.Vector3());
+    const box = preciseBox(sync.objectFor(sel.type, sel.id));
+    if (box.isEmpty()) return;
+    const c = box.getCenter(new THREE.Vector3());
     mutate(() => {
       r.item.position[0] = round4(r.item.position[0] - c.x);
       r.item.position[1] = round4(r.item.position[1] - c.y);
     });
   };
 
+  /**
+   * Riposiziona un oggetto o artefatto rispetto all'origine o all'ingombro degli altri solidi: per ogni asse
+   * minimo, centro o massimo (Z anche "appoggia su Z=0"). Si applica con un solo passo di annullamento.
+   */
+  cmd.reposition = async sel => {
+    const r = resolve(sel);
+    if (!r || !['object', 'artifact'].includes(r.type)) return;
+    if (r.item.locked) { lockedWarn(); return; }
+    if (modelBlocked()) return;
+    const box = preciseBox(sync.objectFor(sel.type, sel.id));
+    if (box.isEmpty()) { toast(t('Geometria non disponibile'), 'warn'); return; }
+    const others = new THREE.Box3();
+    for (const g of [vp.groups.objects, vp.groups.artifacts]) {
+      for (const o of g.children) if (!(o.userData.type === sel.type && o.userData.id === sel.id)) others.union(preciseBox(o));
+    }
+    const pref = loadPref(REPOS_KEY, { ref: 'origin', x: '', y: '', z: 'floor' });
+    if (pref.ref === 'others' && others.isEmpty()) pref.ref = 'origin';
+    const st = { ...pref };
+    const preview = h('div', { class: 'p-info repos-preview' });
+    const delta = () => AXES.map((ax, i) => {
+      const m = st[ax.toLowerCase()];
+      if (!m) return 0;
+      if (m === 'floor') return -box.min.z;
+      const rb = st.ref === 'others' ? others : null;
+      const refMin = rb ? rb.min.getComponent(i) : 0, refMax = rb ? rb.max.getComponent(i) : 0;
+      if (m === 'min') return refMin - box.min.getComponent(i);
+      if (m === 'max') return refMax - box.max.getComponent(i);
+      return (refMin + refMax) / 2 - (box.min.getComponent(i) + box.max.getComponent(i)) / 2;
+    });
+    const draw = () => {
+      const d = delta();
+      const nb = box.clone().translate(new THREE.Vector3(...d));
+      preview.replaceChildren(
+        h('div', {}, t('Spostamento'), ': ', AXES.map((ax, i) => `${ax} ${d[i] >= 0 ? '+' : ''}${fmt(d[i], 3)}`).join('   ')),
+        h('div', {}, t('Ingombro risultante'), ': ', AXES.map((ax, i) => `${ax} ${range3(nb, i)}`).join('   ')));
+    };
+    const axisRow = (ax, opts) => {
+      const k = ax.toLowerCase();
+      return h('div', { class: 'form-row' }, h('label', {}, ax),
+        segmented([['', '—'], ...opts], st[k], v => { st[k] = v; draw(); }));
+    };
+    const refSeg = segmented([['origin', t('Origine (0, 0, 0)')], ['others', t('Ingombro degli altri solidi'), others.isEmpty()]], st.ref, v => { st.ref = v; draw(); });
+    const body = h('div', { class: 'repos' },
+      h('p', { style: { margin: '0 0 8px' } }, t('Ingombro attuale di "{name}"', { name: r.item.name }), ': ',
+        h('span', { class: 'mono' }, AXES.map((ax, i) => `${ax} ${range3(box, i)}`).join('   '))),
+      h('div', { class: 'form-row' }, h('label', {}, t('Riferimento')), refSeg),
+      axisRow('X', [['min', t('Min X')], ['mid', t('Centra X')], ['max', t('Max X')]]),
+      axisRow('Y', [['min', t('Min Y')], ['mid', t('Centra Y')], ['max', t('Max Y')]]),
+      axisRow('Z', [['floor', t('Appoggia su Z=0')], ['min', t('Min Z')], ['mid', t('Centra Z')], ['max', t('Max Z')]]),
+      preview,
+      h('p', { class: 'p-note' }, t('Min, Centra e Max allineano il minimo, il centro o il massimo dell\'ingombro dell\'elemento a quelli del riferimento (con l\'origine: alla coordinata 0). "Appoggia su Z=0" porta il punto più basso a Z=0.')));
+    draw();
+    const ok = await modal({
+      title: t('Riposiziona'), body, size: 'wide',
+      buttons: [{ label: t('Annulla'), value: false }, { label: t('Applica'), value: true, primary: true }],
+    });
+    if (!ok) return;
+    savePref(REPOS_KEY, st);
+    const d = delta();
+    if (d.every(v => Math.abs(v) < 1e-9)) { status(t('Nessuno spostamento necessario')); return; }
+    mutate(() => { r.item.position = r.item.position.map((v, i) => round4(v + d[i])); });
+    log.info('Elemento riposizionato', { type: sel.type, ref: st.ref, x: st.x, y: st.y, z: st.z });
+    status(t('"{name}" riposizionato', { name: r.item.name }));
+  };
+
   // ---------------------------------------------------------------- spostamento dell'origine del progetto
+  /** Ingombro di tutti i solidi caricati (oggetti e artefatti, anche nascosti). */
+  function solidsBox() {
+    const box = new THREE.Box3();
+    for (const g of [vp.groups.objects, vp.groups.artifacts]) for (const o of g.children) box.union(preciseBox(o));
+    return box;
+  }
+
   /** Trasla tutto il progetto (anche gli elementi bloccati) perché il punto p diventi la nuova origine. */
   function shiftProject(p) {
     if (p.every(v => Math.abs(v) < 1e-9)) return;
@@ -598,6 +714,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       for (const o of pr.objects) o.position = add(o.position);
       for (const a of pr.artifacts) a.position = add(a.position);
       for (const pl of pr.planes) pl.origin = add(pl.origin);
+      for (const og of pr.origins) og.position = add(og.position);
     });
     const dv = new THREE.Vector3(...d);
     vp.controls.target.add(dv);
@@ -608,27 +725,64 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     status(t('Origine spostata in ({p}): tutto il progetto è stato traslato. Ricalcolare le lavorazioni.', { p: p.map(v => fmt(v, 3)).join(', ') }));
   }
 
-  cmd.moveOrigin = async (preset) => {
+  /**
+   * Sposta origine: per ogni asse la nuova origine è il minimo, il medio o il massimo dell'ingombro di tutti i
+   * solidi caricati (oppure l'origine attuale), più un offset manuale. point: punto scelto nella vista.
+   */
+  cmd.moveOrigin = async point => {
+    if (!point && modelBlocked()) return;
     if (sketch.active) sketch.exit();
-    const box = sceneBox();
+    const box = solidsBox();
     const has = !box.isEmpty();
-    const vals = preset ? [...preset] : [0, 0, 0];
-    const inputs = ['X', 'Y', 'Z'].map((ax, i) => h('input', { value: fmt(vals[i], 4), inputmode: 'decimal', class: 'num', 'aria-label': ax }));
-    const setVals = v => inputs.forEach((inp, i) => { inp.value = fmt(v[i], 4); });
-    const presetBtn = (label, fn) => h('button', { class: 'btn', type: 'button', disabled: !has, onclick: () => setVals(fn()) }, t(label));
-    const c = has ? box.getCenter(new THREE.Vector3()) : new THREE.Vector3();
-    const body = h('div', {},
-      h('p', { style: { margin: '0 0 10px' } }, t('Il punto indicato diventa la nuova origine (0, 0, 0): tutti gli oggetti, gli artefatti e i piani vengono traslati insieme, compresi quelli bloccati.')),
-      h('div', { class: 'form-row' }, h('label', {}, t('Nuova origine (coordinate attuali)')),
-        h('div', { class: 'p-vec' }, inputs.map((inp, i) => h('div', { class: 'ax', 'data-ax': 'XYZ'[i] }, inp)))),
-      h('div', { class: 'form-row' }, h('label', {}, t('Punti dell\'ingombro')), h('div', { class: 'form-field wrap' },
-        presetBtn('Centro della base', () => [c.x, c.y, box.min.z]),
-        presetBtn('Centro', () => [c.x, c.y, c.z]),
-        presetBtn('Angolo minimo', () => [box.min.x, box.min.y, box.min.z]),
-        presetBtn('Centro della sommità', () => [c.x, c.y, box.max.z]))),
-      h('p', { class: 'p-note' }, t('Con "Scegli nella vista" si fa clic su un punto del modello (agganciato al vertice più vicino).')));
+    const st = loadPref(ORIGIN_KEY, { modes: ['mid', 'mid', 'min'], offsets: [0, 0, 0] });
+    st.modes = [...st.modes];
+    st.offsets = [...st.offsets];
+    if (point) { st.modes = ['cur', 'cur', 'cur']; st.offsets = [...point]; }
+    if (!has) st.modes = st.modes.map(() => 'cur');
+    const refOf = i => {
+      const m = st.modes[i];
+      if (m === 'min') return box.min.getComponent(i);
+      if (m === 'max') return box.max.getComponent(i);
+      if (m === 'mid') return (box.min.getComponent(i) + box.max.getComponent(i)) / 2;
+      return 0;
+    };
+    const target = () => AXES.map((_, i) => refOf(i) + (Number(st.offsets[i]) || 0));
+    const outs = AXES.map(() => h('span', { class: 'mono og-val' }));
+    const after = h('div', { class: 'p-info og-after' });
+    const draw = () => {
+      const p = target();
+      outs.forEach((o, i) => { o.textContent = fmt(p[i], 3); });
+      after.textContent = has
+        ? `${t('Ingombro dopo lo spostamento')}: ${AXES.map((ax, i) => `${ax} ${fmt(box.min.getComponent(i) - p[i], 2)} … ${fmt(box.max.getComponent(i) - p[i], 2)}`).join('   ')}`
+        : t('Nessun solido caricato: si possono usare solo l\'origine attuale e gli offset');
+    };
+    const rows = AXES.map((ax, i) => {
+      const off = h('input', { class: 'num', inputmode: 'decimal', value: fmt(st.offsets[i] || 0, 4), 'aria-label': t('Offset {ax}', { ax }) });
+      off.addEventListener('input', () => {
+        const v = Number(String(off.value).replace(',', '.'));
+        off.classList.toggle('bad', !Number.isFinite(v));
+        if (Number.isFinite(v)) { st.offsets[i] = v; draw(); }
+      });
+      const seg = segmented([['cur', t('Attuale')], ['min', t('Min'), !has], ['mid', t('Medio'), !has], ['max', t('Max'), !has]], st.modes[i], v => { st.modes[i] = v; draw(); });
+      return h('tr', {},
+        h('th', { class: `og-ax ax-${ax.toLowerCase()}` }, ax),
+        h('td', {}, seg),
+        h('td', {}, h('div', { class: 'form-field' }, h('span', { class: 'unit' }, '+'), off, h('span', { class: 'unit' }, 'mm'))),
+        h('td', { class: 'num' }, outs[i]));
+    });
+    draw();
+    const body = h('div', { class: 'origin-dlg' },
+      h('p', { style: { margin: '0 0 8px' } }, t('Il punto indicato diventa la nuova origine (0, 0, 0): tutti gli oggetti, gli artefatti e i piani vengono traslati insieme, compresi quelli bloccati.')),
+      h('div', { class: 'p-info', style: { marginBottom: '8px' } }, has
+        ? `${t('Ingombro dei solidi caricati')}: ${AXES.map((ax, i) => `${ax} ${range3(box, i)}`).join('   ')}`
+        : t('Nessun solido caricato')),
+      h('table', { class: 'og-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, t('Asse')), h('th', {}, t('Riferimento nell\'ingombro')), h('th', {}, t('Offset')), h('th', { class: 'num' }, t('Nuova origine')))),
+        h('tbody', {}, rows)),
+      after,
+      h('p', { class: 'p-note' }, t('Per ogni asse: nuova origine = riferimento (minimo, medio o massimo dell\'ingombro di tutti gli oggetti e artefatti, anche nascosti, oppure l\'origine attuale) + offset. Con "Scegli nella vista" si fa clic su un punto del modello (agganciato al vertice più vicino).')));
     const res = await modal({
-      title: t('Sposta origine'), body,
+      title: t('Sposta origine'), body, size: 'wide',
       buttons: [
         { label: t('Scegli nella vista…'), value: 'pick', left: true },
         { label: t('Annulla'), value: false },
@@ -640,9 +794,57 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       return;
     }
     if (!res) return;
-    const p = inputs.map(inp => Number(String(inp.value).replace(',', '.')));
+    const p = target();
     if (p.some(v => !Number.isFinite(v))) { toast(t('Coordinate non valide'), 'err'); return; }
-    shiftProject(p);
+    // le scelte si ricordano; un punto preso nella vista no (vale per quella volta)
+    if (!point) savePref(ORIGIN_KEY, st);
+    shiftProject(p.map(round4));
+  };
+
+  // ================================================================ PUNTI DI ORIGINE (zero pezzo del G-code)
+  /** Crea un punto di origine "Origine N" (rinominabile) nella posizione data. */
+  cmd.createOrigin = (pos, name) => {
+    const id = uid('org');
+    mutate(p => {
+      p.origins.push({ id, name: name || nextName(t('Origine')), position: pos.map(round4), visible: true, locked: false });
+    });
+    select({ type: 'origin', id });
+    log.info('Punto di origine creato', { position: pos });
+    status(t('Punto di origine creato: rinominalo nelle proprietà; si sceglie come zero pezzo nell\'esportazione del G-code'));
+    return id;
+  };
+
+  cmd.originFromPoint = () => {
+    if (modelBlocked()) return;
+    startPick({ kind: 'ref' }, t('Clic su un punto (si aggancia ai vertici di solidi, sketch e piani vicini): diventa un punto di origine · <b>Esc</b> annulla'));
+  };
+
+  cmd.originFromCoords = async () => {
+    if (modelBlocked()) return;
+    const name = h('input', { value: `${t('Origine')} ${((App.project.counters || {})[t('Origine')] || 0) + 1}` });
+    const inputs = AXES.map(ax => h('input', { class: 'num', inputmode: 'decimal', value: '0', 'aria-label': ax }));
+    const box = solidsBox();
+    const preset = (label, fn) => h('button', { class: 'btn', type: 'button', disabled: box.isEmpty(), onclick: () => { const v = fn(); inputs.forEach((x, i) => { x.value = fmt(v[i], 4); }); } }, t(label));
+    const c = box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
+    const ok = await modal({
+      title: t('Nuova origine'),
+      body: h('div', {},
+        h('div', { class: 'form-row' }, h('label', {}, t('Nome')), name),
+        h('div', { class: 'form-row' }, h('label', {}, t('Posizione')), h('div', { class: 'p-vec' }, inputs.map((x, i) => h('div', { class: 'ax', 'data-ax': AXES[i] }, x)))),
+        h('div', { class: 'form-row' }, h('label', {}, t('Punti dell\'ingombro')), h('div', { class: 'form-field wrap' },
+          preset('Centro della sommità', () => [c.x, c.y, box.max.z]),
+          preset('Centro della base', () => [c.x, c.y, box.min.z]),
+          preset('Angolo minimo', () => [box.min.x, box.min.y, box.min.z]),
+          preset('Angolo minimo in alto', () => [box.min.x, box.min.y, box.max.z]))),
+        h('p', { class: 'p-note' }, t('Coordinate nel sistema del progetto. Il punto si può spostare poi con il manipolatore o dalle proprietà.'))),
+      buttons: [{ label: t('Annulla'), value: false }, { label: t('Crea'), value: true, primary: true }],
+    });
+    if (!ok) return;
+    const v = inputs.map(x => Number(String(x.value).replace(',', '.')));
+    if (v.some(x => !Number.isFinite(x))) { toast(t('Coordinate non valide'), 'err'); return; }
+    const nm = name.value.trim();
+    if (nm) mutate(p => { p.counters = p.counters || {}; p.counters[t('Origine')] = (p.counters[t('Origine')] || 0) + 1; });
+    cmd.createOrigin(v, nm || null);
   };
 
   // ================================================================ INSERISCI (artefatti)
@@ -769,6 +971,93 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
 
   cmd.planeFrom3Points = () => {
     startPick({ kind: '3pt', pts: [] }, t('Clic su 3 punti degli oggetti per definire il piano ({i}/3) · <b>Esc</b> annulla', { i: 1 }));
+    status(t('Avvicinandosi a un vertice di solidi o sketch il punto si aggancia (pallino arancione)'));
+  };
+
+  // ---------------------------------------------------------------- aggancio ai vertici (piano da 3 punti, origini)
+  const SNAP_KINDS = ['3pt', 'origin', 'ref'];
+  const SNAP_PX = 12;
+  let snapMarker = null;
+
+  function snapTargets() {
+    const list = [];
+    for (const g of [vp.groups.objects, vp.groups.artifacts]) g.traverseVisible(o => { if (o.isMesh && o.userData.type) list.push(o); });
+    return list;
+  }
+
+  /**
+   * Punto sotto il puntatore, agganciato al vertice più vicino entro SNAP_PX pixel: vertici del triangolo colpito,
+   * punti notevoli degli artefatti, vertici e centri delle entità degli sketch, origini dei piani e punti di origine.
+   * { point, snapped, hit } oppure null se non c'è né una superficie né un vertice vicino.
+   */
+  function pickPoint(ev) {
+    const hit = vp.raycast(ev, snapTargets(), false)[0] || null;
+    const cands = [];
+    if (hit?.face) {
+      const o = hit.object;
+      const pos = o.geometry.attributes.position;
+      for (const k of ['a', 'b', 'c']) cands.push(new THREE.Vector3().fromBufferAttribute(pos, hit.face[k]).applyMatrix4(o.matrixWorld));
+    }
+    for (const a of App.project.artifacts) {
+      const obj = a.visible !== false && sync.objectFor('artifact', a.id);
+      if (!obj) continue;
+      obj.updateMatrixWorld(true);
+      for (const q of artifactKeyPoints(a)) cands.push(new THREE.Vector3(...q).applyMatrix4(obj.matrixWorld));
+    }
+    for (const pl of App.project.planes) {
+      if (pl.visible === false) continue;
+      const f = planeFrame(pl);
+      cands.push(f.o.clone());
+      for (const sk of pl.sketches) {
+        if (sk.visible === false) continue;
+        for (const e of sk.entities) for (const q of entitySnapPoints(e)) cands.push(toWorld(f, q[0], q[1]));
+      }
+    }
+    for (const og of App.project.origins) if (og.visible !== false) cands.push(new THREE.Vector3(...og.position));
+    const m = vp.pointer(ev);
+    const near = [];
+    for (const c of cands) {
+      const sc = vp.toScreen(c);
+      if (!sc) continue;
+      const d = Math.hypot(sc.x - m.x, sc.y - m.y);
+      if (d < SNAP_PX) near.push({ c, d });
+    }
+    near.sort((a, b) => a.d - b.d);
+    // il più vicino tra i vertici visibili: quelli nascosti dietro un solido non si agganciano
+    const targets = snapTargets();
+    const eye = vp.camera.isOrthographicCamera ? null : vp.camera.position.clone();
+    const best = near.slice(0, 8).find(({ c }) => {
+      const from = eye || c.clone().sub(vp.camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(1e5));
+      const dir = c.clone().sub(from);
+      const dist = dir.length();
+      vp.raycaster.set(from, dir.normalize());
+      const first = vp.raycaster.intersectObjects(targets, false)[0];
+      return !first || first.distance >= dist - Math.max(0.05, dist * 1e-4);
+    })?.c;
+    if (best) return { point: best, snapped: true, hit };
+    return hit ? { point: hit.point.clone(), snapped: false, hit } : null;
+  }
+
+  function showSnap(r) {
+    if (!snapMarker) {
+      snapMarker = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), new THREE.MeshBasicMaterial({ depthTest: false, transparent: true }));
+      snapMarker.renderOrder = 40;
+      snapMarker.raycast = () => {};
+      vp.scene.add(snapMarker);
+    }
+    snapMarker.visible = !!r;
+    if (!r) return;
+    snapMarker.position.copy(r.point);
+    snapMarker.scale.setScalar(vp.pixelSize(r.point) * (r.snapped ? 6 : 3.5));
+    snapMarker.material.color.set(r.snapped ? 0xff8a3d : 0xffffff);
+  }
+
+  /** Movimento del mouse in una modalità di scelta punti: evidenzia il vertice agganciabile. */
+  cmd.pickHover = ev => {
+    if (!App.pickMode || !SNAP_KINDS.includes(App.pickMode.kind)) { showSnap(null); return null; }
+    const r = pickPoint(ev);
+    showSnap(r);
+    return r;
   };
 
   function startPick(mode, hintHtml) {
@@ -785,6 +1074,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   cmd.cancelPick = () => {
     if (App.pickMode?.kind === 'pivot') { gizmo.cancelPivotPick(); return; }
     App.pickMode = null;
+    showSnap(null);
     vp.el.classList.remove('picking');
     const hint = document.getElementById('hint');
     if (App.planeMode) hint.innerHTML = PLANE_MODE_HINT();
@@ -800,47 +1090,17 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     }
   }
 
-  /** Vertice più vicino al punto colpito (entro qualche pixel), altrimenti il punto stesso. */
-  function snapToVertex(hit, ev) {
-    const cands = [];
-    const o = hit.object;
-    o.updateMatrixWorld(true);
-    if (hit.face) {
-      const pos = o.geometry.attributes.position;
-      for (const k of ['a', 'b', 'c']) cands.push(new THREE.Vector3().fromBufferAttribute(pos, hit.face[k]).applyMatrix4(o.matrixWorld));
-    }
-    if (o.userData.type === 'artifact') {
-      const a = App.project.artifacts.find(x => x.id === o.userData.id);
-      if (a) for (const p of artifactKeyPoints(a)) cands.push(new THREE.Vector3(...p).applyMatrix4(o.matrixWorld));
-    }
-    const m = vp.pointer(ev);
-    let best = hit.point.clone(), bd = 12;
-    for (const c of cands) {
-      const s = vp.toScreen(c);
-      if (!s) continue;
-      const d = Math.hypot(s.x - m.x, s.y - m.y);
-      if (d < bd) { bd = d; best = c; }
-    }
-    return best;
-  }
-
   /** Gestisce un clic nel 3D quando è attiva una modalità di selezione punti. */
   cmd.handlePick = ev => {
     const pm = App.pickMode;
     if (!pm || ev.button !== 0) return;
+    if (SNAP_KINDS.includes(pm.kind)) { pickSnapped(pm, ev); return; }
     const targets = [];
     vp.groups.objects.traverseVisible(o => { if (o.isMesh) targets.push(o); });
     vp.groups.artifacts.traverseVisible(o => { if (o.isMesh) targets.push(o); });
     const hit = vp.raycast(ev, targets, false)[0];
     if (!hit) { toast(t('Nessuna superficie sotto il cursore'), 'warn', 1800); return; }
     const p = hit.point.clone();
-    const px = vp.pixelSize(p);
-    if (pm.kind === 'origin') {
-      const q = snapToVertex(hit, ev);
-      cmd.cancelPick();
-      cmd.moveOrigin([q.x, q.y, q.z].map(round4));
-      return;
-    }
     if (pm.kind === 'face') {
       const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
       const toCam = vp.camera.position.clone().sub(p);
@@ -849,25 +1109,42 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       cmd.createPlane(p.toArray(), n.toArray(), 80);
       return;
     }
-    if (pm.kind === '3pt') {
-      pm.pts.push(p);
-      const m = new THREE.Mesh(new THREE.SphereGeometry(px * 5, 12, 8), new THREE.MeshBasicMaterial({ color: 0xff8a3d, depthTest: false }));
-      m.position.copy(p);
-      m.renderOrder = 30;
-      vp.groups.helpers.add(m);
-      document.getElementById('hint').innerHTML = t('Clic su 3 punti degli oggetti per definire il piano ({i}/3) · <b>Esc</b> annulla', { i: pm.pts.length + 1 });
-      if (pm.pts.length === 3) {
-        const [a, b, c] = pm.pts;
-        const n = b.clone().sub(a).cross(c.clone().sub(a));
-        if (n.lengthSq() < 1e-10) { toast(t('Punti allineati: riprovare'), 'err'); pm.pts = []; clearHelpers(); return; }
-        n.normalize();
-        if (n.dot(vp.camera.position.clone().sub(a)) < 0) n.negate();
-        const size = Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a)) * 1.5;
-        cmd.cancelPick();
-        cmd.createPlane(a.toArray(), n.toArray(), Math.max(40, Math.ceil(size / 10) * 10));
-      }
-    }
   };
+
+  /** Clic nelle modalità con aggancio ai vertici: piano da 3 punti, nuova origine del progetto, punto di origine. */
+  function pickSnapped(pm, ev) {
+    const r = pickPoint(ev);
+    if (!r) { toast(t('Nessuna superficie o vertice sotto il cursore'), 'warn', 1800); return; }
+    const p = r.point.clone();
+    if (pm.kind === 'origin') {
+      cmd.cancelPick();
+      cmd.moveOrigin([p.x, p.y, p.z].map(round4));
+      return;
+    }
+    if (pm.kind === 'ref') {
+      cmd.cancelPick();
+      cmd.createOrigin([p.x, p.y, p.z]);
+      return;
+    }
+    // piano da 3 punti
+    pm.pts.push(p);
+    const m = new THREE.Mesh(new THREE.SphereGeometry(vp.pixelSize(p) * 5, 12, 8), new THREE.MeshBasicMaterial({ color: 0xff8a3d, depthTest: false }));
+    m.position.copy(p);
+    m.renderOrder = 30;
+    vp.groups.helpers.add(m);
+    document.getElementById('hint').innerHTML = t('Clic su 3 punti degli oggetti per definire il piano ({i}/3) · <b>Esc</b> annulla', { i: pm.pts.length + 1 });
+    status(t('Punto {i}: {p}{s}', { i: pm.pts.length, p: p.toArray().map(v => fmt(v, 3)).join('; '), s: r.snapped ? ` (${t('vertice')})` : '' }));
+    if (pm.pts.length === 3) {
+      const [a, b, c] = pm.pts;
+      const n = b.clone().sub(a).cross(c.clone().sub(a));
+      if (n.lengthSq() < 1e-10) { toast(t('Punti allineati: riprovare'), 'err'); pm.pts = []; clearHelpers(); return; }
+      n.normalize();
+      if (n.dot(vp.camera.position.clone().sub(a)) < 0) n.negate();
+      const size = Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a)) * 1.5;
+      cmd.cancelPick();
+      cmd.createPlane(a.toArray(), n.toArray(), Math.max(40, Math.ceil(size / 10) * 10));
+    }
+  }
 
   cmd.flipNormal = planeId => {
     const pl = getPlane(planeId);
@@ -1250,10 +1527,10 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   };
 
   // ---------------------------------------------------------------- esportazione
-  cmd.exportGcode = async opIds => exportDialog('gcode', opIds);
+  cmd.exportGcode = async (opIds, originId) => exportDialog('gcode', opIds, originId);
   cmd.exportCl = async opIds => exportDialog('cl', opIds);
 
-  async function exportDialog(kind, opIds) {
+  async function exportDialog(kind, opIds, originId) {
     const ops = App.project.operations;
     if (!ops.length) { toast(t('Nessuna lavorazione da esportare'), 'warn'); return; }
     const preset = new Set(opIds && opIds.length ? opIds : ops.filter(o => o.visible !== false).map(o => o.id));
@@ -1267,6 +1544,13 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       h('option', { value: 'g682' }, t('Fanuc/ISO 3+2 assi: piano inclinato G68.2')),
       h('option', { value: 'world' }, t('Fanuc/ISO coordinate mondo XYZ (3 assi)')));
     try { const m = localStorage.getItem(POST_MODE_KEY); if (m && [...mode.options].some(o => o.value === m)) mode.value = m; } catch { /* storage non disponibile */ }
+    // zero pezzo: origine del progetto oppure uno dei punti di origine
+    const origins = App.project.origins || [];
+    const zero = h('select', {},
+      h('option', { value: '' }, t('Origine del progetto (0, 0, 0)')),
+      origins.map(o => h('option', { value: o.id }, `${o.name}  (${o.position.map(v => fmt(v, 2)).join('; ')})`)));
+    const lastZero = originId || App.project.gcodeOrigin;
+    zero.value = lastZero && origins.some(o => o.id === lastZero) ? lastZero : '';
     const prog = h('input', { value: '1000', style: { width: '90px' } });
     const dwell = h('input', { value: '2', style: { width: '60px' } });
     const cool = h('input', { type: 'checkbox' });
@@ -1290,6 +1574,8 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       kind === 'gcode' ? [
         h('div', { class: 'form-row' }, h('label', {}, t('Controllo')), mode),
         hint,
+        h('div', { class: 'form-row' }, h('label', {}, t('Zero pezzo (origine)')), zero),
+        origins.length ? null : h('p', { class: 'p-note', style: { margin: '0 0 6px' } }, t('Per usare un altro zero pezzo crea un punto con il menu Origini.')),
         rowProg, rowDwell,
         h('div', { class: 'form-row' }, h('label', {}, t('Refrigerante (M8/M9)')), h('div', {}, cool)),
       ] : h('p', {}, t('CL data in coordinate mondo con vettore asse utensile (GOTO/x,y,z,i,j,k).')),
@@ -1307,12 +1593,15 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     const ids = selOps.map(o => App.runtime.toolpaths.get(o.id).toolpathId);
     if (kind === 'gcode') try { localStorage.setItem(POST_MODE_KEY, mode.value); } catch { /* storage non disponibile */ }
     const delay = parseFloat(String(dwell.value).replace(',', '.'));
+    const zo = kind === 'gcode' ? getOrigin(zero.value) : null;
+    if (kind === 'gcode') App.project.gcodeOrigin = zo ? zo.id : '';
     const options = {
+      origin: zo ? zo.position : null, originName: zo ? zo.name : '',
       mode: mode.value, programNumber: parseInt(prog.value, 10) || 1000, decimals: 3,
       coolant: cool.checked, programName: App.project.name || 'CARVECAM',
       spindleDelay: Number.isFinite(delay) ? Math.max(0, Math.min(60, delay)) : 2,
     };
-    log.info(`Esportazione ${kind}`, { ops: selOps.map(o => o.name), mode: options.mode });
+    log.info(`Esportazione ${kind}`, { ops: selOps.map(o => o.name), mode: options.mode, origin: options.originName || 'progetto' });
     let text;
     try {
       text = kind === 'gcode' ? await api.gcode(ids, options) : await api.cldata(ids, options);
@@ -1440,9 +1729,14 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       case 'object':
       case 'artifact':
         return [lockItem(), { sep: true },
+          { label: t('Riposiziona…'), enabled: () => !locked && !sketch.active && !App.planeMode, action: () => cmd.reposition(sel) },
           { label: t('Appoggia su Z=0'), enabled: () => !locked, action: () => cmd.dropToFloor(sel) },
           { label: t('Centra in XY'), enabled: () => !locked, action: () => cmd.centerXY(sel) },
           { label: t('Mostra / nascondi'), action: () => cmd.toggleVisible(sel.type, sel.id) }, { sep: true }, ...common];
+      case 'origin':
+        return [lockItem(), { label: t('Rinomina'), kbd: 'F2', action: () => document.querySelector('#props [data-key="name"]')?.focus() },
+          { label: t('Mostra / nascondi'), action: () => cmd.toggleVisible(sel.type, sel.id) },
+          { label: t('Esporta G-code con questo zero…'), action: () => cmd.exportGcode(null, sel.id) }, { sep: true }, ...common];
       case 'plane':
         return [{ label: t('Nuovo sketch'), action: () => cmd.newSketch(sel.id) }, { label: t('Vista normale al piano'), action: () => cmd.viewNormal(sel.id) },
           { label: t('Inverti normale'), enabled: () => !locked, action: () => cmd.flipNormal(sel.id) }, lockItem(), { sep: true }, ...common];

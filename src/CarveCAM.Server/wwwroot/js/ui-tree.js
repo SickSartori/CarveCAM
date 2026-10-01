@@ -48,6 +48,16 @@ export class Tree {
         locked: !!a.locked, onLock: () => this.cmd.toggleLock({ type: 'artifact', id: a.id }) });
     }
 
+    const origins = p.origins || [];
+    if (origins.length) {
+      this._section(t('Origini'), origins.length);
+      for (const og of origins) {
+        this._row({ depth: 0, icon: ICONS.origin, label: og.name, sub: og.id === p.gcodeOrigin ? t('zero G-code') : '',
+          sel: { type: 'origin', id: og.id }, visible: og.visible !== false, onEye: () => this.cmd.toggleVisible('origin', og.id),
+          locked: !!og.locked, onLock: () => this.cmd.toggleLock({ type: 'origin', id: og.id }) });
+      }
+    }
+
     this._section(t('Piani di lavoro'), p.planes.length);
     if (!p.planes.length) this.el.append(h('div', { class: 'tree-empty' }, t('Nessun piano')));
     for (const pl of p.planes) {
