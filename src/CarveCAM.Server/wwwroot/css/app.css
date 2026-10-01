@@ -588,6 +588,38 @@ kbd {
 .lib-form { overflow: auto; min-height: 0; padding-right: 4px; }
 .lib-form .form-row { grid-template-columns: 150px 1fr; margin-bottom: 5px; }
 .lib-form .form-field input:not([type=checkbox]):not(.num), .lib-form .form-field select { flex: 1; }
+/* anteprima della fresa generata dai parametri */
+.tool-form { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 12px; align-items: start; }
+.tool-preview-box { position: sticky; top: 0; text-align: center; }
+.tool-preview-box .p-note { margin: 4px 0 0; }
+.tool-preview { padding: 8px 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.tool-preview svg { width: 100%; height: 250px; display: block; }
+.tool-preview .tp-holder { fill: #5b6570; opacity: .55; }
+.tool-preview .tp-body { fill: #c9d1da; stroke: var(--text-dim); stroke-width: .15; vector-effect: non-scaling-stroke; }
+.tool-preview .tp-cut { fill: var(--tone-op); opacity: .85; stroke: var(--text-dim); vector-effect: non-scaling-stroke; }
+.tool-preview .tp-dim { stroke: var(--warn); stroke-dasharray: 2 2; vector-effect: non-scaling-stroke; }
+.tool-preview text { fill: var(--text-dim); font-family: var(--mono); }
+.tool-preview.has-err { border-color: var(--danger); }
+.tool-preview .tp-faded { opacity: .45; }
+.tool-preview .tp-err { stroke: var(--danger); stroke-width: 1.6; fill: none; vector-effect: non-scaling-stroke; }
+.tool-preview .tp-err-txt { fill: var(--danger); font-weight: 600; }
+.tp-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 5px; font-size: 11px; color: var(--text-dim); }
+.tp-head.err { justify-content: center; color: var(--danger); font-weight: 600; }
+.tool-errs {
+  margin: 6px 0 0; padding: 6px 8px 6px 22px; text-align: left; font-size: 11.5px; line-height: 1.4; color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent); border-radius: 5px;
+}
+.tool-errs li + li { margin-top: 4px; }
+.lib-form .form-row.field-err > label { color: var(--danger); font-weight: 600; }
+.lib-form .form-row.field-err input { border-color: var(--danger) !important; box-shadow: 0 0 0 1px var(--danger); }
+/* anteprima 3D della fresa */
+.tool-3d {
+  position: relative; height: 270px; overflow: hidden; cursor: grab;
+  background: radial-gradient(circle at 50% 35%, var(--panel-3), var(--bg)); border: 1px solid var(--border); border-radius: 6px;
+}
+.tool-3d:active { cursor: grabbing; }
+.tool-3d-canvas { width: 100%; height: 100%; display: block; }
+.tool-3d-label { position: absolute; left: 6px; right: 6px; bottom: 5px; font: 10.5px var(--mono); color: var(--text-dim); text-align: center; pointer-events: none; }
 .rel-edit { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; min-width: 0; }
 .rel-edit input.num { width: 58px !important; flex: 0 1 58px; }
 .modal-b .rel-edit select.rel-mode { width: 76px; flex: 0 0 76px; padding: 0 2px; }

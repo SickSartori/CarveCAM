@@ -3,13 +3,15 @@
 import { api } from './api.js';
 import { modal, h, toast, confirmBox } from './dialogs.js';
 import { t } from './i18n.js';
-import { OP_DEFAULTS, REL_PARAMS, BASE_LABEL, setupParamsOf, effParam, round4 } from './oplib.js';
+import { OP_DEFAULTS, REL_PARAMS, BASE_LABEL, setupParamsOf, effParam, round4, toolSilhouette, toolIssues, taperGeom } from './oplib.js';
+import { toolViewer } from './tool3d.js';
 import { uid } from './state.js';
 import { fmt } from './geom.js';
 import { log } from './log.js';
 
-export const TOOL_TYPES = [['flat', 'Cilindrica (piatta)'], ['bull', 'Torica (raccordata)'], ['ball', 'Sferica']];
-const TYPE_SHORT = { flat: 'Cilindrica', bull: 'Torica', ball: 'Sferica' };
+export const TOOL_TYPES = [['flat', 'Cilindrica (piatta)'], ['bull', 'Torica (raccordata)'], ['ball', 'Sferica'], ['taper', 'Conica']];
+export const TIP_TYPES = [['ball', 'Sferica'], ['flat', 'Piatta (a V con Ø punta 0)']];
+const TYPE_SHORT = { flat: 'Cilindrica', bull: 'Torica', ball: 'Sferica', taper: 'Conica' };
 const KIND_LABEL = { pocket: 'Svuotatura', finish: 'Finitura' };
 const STRATEGIES = [['concentric', 'Concentrica (offset)'], ['zigzag', 'Rettangolare (zigzag)']];
 const ENTRIES = [['plunge', 'Affondo verticale'], ['ramp', 'Rampa lungo il percorso'], ['helix', 'Elica']];
@@ -27,6 +29,8 @@ function defaultTools() {
     tool(4, 'Fresa torica Ø6 R1', 'bull', 6, 1, 15, 1200, 300, 12000),
     tool(5, 'Fresa sferica Ø6', 'ball', 6, 3, 15, 1500, 400, 14000),
     tool(6, 'Fresa sferica Ø3', 'ball', 3, 1.5, 10, 1000, 300, 18000),
+    tool(7, 'Fresa conica sferica Ø1 3°', 'taper', 1, 0, 15, 900, 250, 18000, { taperAngle: 3, tipType: 'ball', shank: 4, length: 25 }),
+    tool(8, 'Fresa a V 60°', 'taper', 0, 0, 8, 800, 200, 16000, { taperAngle: 30, tipType: 'flat', shank: 6, length: 15 }),
   ];
 }
 
@@ -67,16 +71,72 @@ export const getSetups = () => load('setups');
 
 /** Utensile di una lavorazione (copia) da un utensile del magazzino. */
 export function toolFromLibrary(lt) {
+  const taper = lt.type === 'taper';
   return {
     libId: lt.id, number: lt.number, name: lt.name, type: lt.type, diameter: lt.diameter,
-    cornerRadius: lt.type === 'ball' ? lt.diameter / 2 : (lt.cornerRadius || (lt.type === 'bull' ? Math.min(1, lt.diameter / 4) : 0)),
-    fluteLength: lt.fluteLength > 0 ? lt.fluteLength : round4(lt.diameter * 2.5),
+    cornerRadius: lt.type === 'ball' ? lt.diameter / 2 : taper ? 0 : (lt.cornerRadius || (lt.type === 'bull' ? Math.min(1, lt.diameter / 4) : 0)),
+    fluteLength: lt.fluteLength > 0 ? lt.fluteLength : round4(Math.max(lt.diameter * 2.5, taper ? 10 : 0)),
+    // fresa conica: angolo per lato e tipo di punta
+    ...(taper ? { taperAngle: lt.taperAngle > 0 ? lt.taperAngle : 5, tipType: lt.tipType === 'flat' ? 'flat' : 'ball' } : {}),
+    // geometria oltre il tagliente: serve per generare la fresa in simulazione
+    length: lt.length > 0 ? lt.length : 0, neck: lt.neck > 0 ? lt.neck : 0, shank: lt.shank > 0 ? lt.shank : 0,
   };
+}
+
+/**
+ * Disegno 2D della fresa generata dai suoi parametri (SVG in scala): tagliente, collo, gambo e portautensile,
+ * con le quote di altezza del tagliente (Lc) e sbalzo. issues (da toolIssues): le misure incongruenti sono
+ * disegnate in rosso con il loro valore, accanto alla sagoma ricavata dai valori ammissibili.
+ */
+export function toolPreview(tool, issues = []) {
+  const { pts, dims: d, top } = toolSilhouette(tool);
+  const bad = new Set(issues.map(x => x.field));
+  const raw = k => Math.max(0, Number(tool[k]) || 0);
+  const H = Math.max(top, raw('length'), raw('fluteLength')) + d.holderLen * 0.45;
+  const W = Math.max(d.holderR, d.shankR, d.R, raw('neck') / 2, bad.has('cornerRadius') ? raw('cornerRadius') : 0) * 2;
+  const pad = Math.max(W, H) * 0.05;
+  const fs = Math.max(W, H) * 0.05;
+  const lab = fs * 7;
+  const n = v => v.toFixed(3);
+  const y = z => n(H - z);
+  const outline = list => list.map(([r, z]) => `${n(r)},${y(z)}`).join(' ');
+  const side = p => [...p, ...p.slice().reverse().map(([r, z]) => [-r, z])];
+  const k = pts.findIndex(([, z]) => z >= d.Lc - 1e-9);
+  const dim = (z, txt, err = false) => `<line x1="${n(-W / 2)}" y1="${y(z)}" x2="${n(W / 2 + lab * 0.15)}" y2="${y(z)}" class="${err ? 'tp-err' : 'tp-dim'}"/>` +
+    `<text x="${n(W / 2 + lab * 0.2)}" y="${n(H - z + fs * 0.35)}" font-size="${n(fs)}"${err ? ' class="tp-err-txt"' : ''}>${txt}</text>`;
+  let marks = '';
+  if (bad.has('cornerRadius')) {
+    // raccordo con il raggio inserito: esce dalla fresa
+    const r = raw('cornerRadius');
+    marks += `<circle cx="${n(d.R - r)}" cy="${y(r)}" r="${n(r)}" class="tp-err" fill="none"/>` +
+      `<line x1="${n(d.R)}" y1="${y(0)}" x2="${n(d.R)}" y2="${y(Math.max(r, d.Lc))}" class="tp-err"/>` +
+      `<text x="${n(d.R - r)}" y="${n(H - r * 2 - fs * 0.4)}" font-size="${n(fs)}" text-anchor="middle" class="tp-err-txt">R${fmt(r, 2)} &gt; Ø/2</text>`;
+  }
+  if (bad.has('fluteLength')) marks += dim(raw('fluteLength'), `Lc ${fmt(raw('fluteLength'), 2)} ✕`, true) + (d.r > 0 ? dim(d.r, `R ${fmt(d.r, 2)}`, true) : '');
+  if (bad.has('length')) marks += dim(raw('length'), `${t('sbalzo')} ${fmt(raw('length'), 2)} ✕`, true);
+  if (bad.has('neck')) {
+    const nr = raw('neck') / 2, z1 = d.Lc, z2 = Math.max(d.reach, d.Lc + d.D);
+    marks += `<line x1="${n(nr)}" y1="${y(z1)}" x2="${n(nr)}" y2="${y(z2)}" class="tp-err"/><line x1="${n(-nr)}" y1="${y(z1)}" x2="${n(-nr)}" y2="${y(z2)}" class="tp-err"/>` +
+      `<text x="0" y="${n(H - z2 - fs * 0.5)}" font-size="${n(fs)}" text-anchor="middle" class="tp-err-txt">${t('collo')} Ø${fmt(raw('neck'), 2)} ✕</text>`;
+  }
+  const svg = `<svg viewBox="${n(-W / 2 - pad)} ${n(-pad)} ${n(W + 2 * pad + lab)} ${n(H + 2 * pad)}" role="img" aria-label="${t('Anteprima della fresa')}">` +
+    `<rect x="${n(-d.holderR)}" y="0" width="${n(2 * d.holderR)}" height="${n(Math.max(0, H - top))}" class="tp-holder"/>` +
+    `<polygon points="${outline(side(pts))}" class="tp-body${issues.length ? ' tp-faded' : ''}"/>` +
+    `<polygon points="${outline(side(pts.slice(0, k + 1)))}" class="tp-cut${issues.length ? ' tp-faded' : ''}"/>` +
+    (bad.has('fluteLength') ? '' : dim(d.Lc, `Lc ${fmt(d.Lc, 2)}`)) +
+    (!bad.has('length') && d.reach > d.Lc + 1e-6 ? dim(d.reach, `${t('sbalzo')} ${fmt(d.reach, 2)}`) : '') + marks +
+    `<text x="0" y="${n(H + pad * 0.9)}" font-size="${n(fs)}" text-anchor="middle"${bad.has('diameter') ? ' class="tp-err-txt"' : ''}>Ø${fmt(Number(tool.diameter) || 0, 2)}</text></svg>`;
+  return h('div', { class: `tool-preview${issues.length ? ' has-err' : ''}`, html: svg });
 }
 
 export function toolDesc(tl) {
   if (!tl) return '';
   const tp = t(TYPE_SHORT[tl.type] || tl.type);
+  if (tl.type === 'taper') {
+    const g = taperGeom(tl);
+    const tip = g.rt > 0 ? `${t('punta')} ${g.ball ? t('sferica') : t('piatta')} Ø${fmt(g.rt * 2, 2)}` : t('punta a V');
+    return `T${tl.number} · ${tp} ${tip} · ${fmt(g.deg, 2)}° ${t('per lato')} · Lc ${fmt(g.Lc, 1)} · Ø max ${fmt(g.R * 2, 2)}`;
+  }
   const r = tl.type === 'bull' ? ` R${fmt(tl.cornerRadius, 2)}` : '';
   return `T${tl.number} · ${tp} Ø${fmt(tl.diameter, 2)}${r} · Lc ${fmt(tl.fluteLength, 1)}`;
 }
@@ -84,6 +144,12 @@ export function toolDesc(tl) {
 // ------------------------------------------------------------------ campi dei moduli
 function row(label, ...field) {
   return h('div', { class: 'form-row' }, h('label', {}, t(label)), h('div', { class: 'form-field' }, ...field));
+}
+/** Riga legata a un parametro (data-field): evidenziata se il parametro è incongruente. */
+function frow(fieldKey, label, ...field) {
+  const r = row(label, ...field);
+  r.dataset.field = fieldKey;
+  return r;
 }
 function numInput(obj, key, onChange, opts = {}) {
   const inp = h('input', { inputmode: 'decimal', value: obj[key] != null ? fmt(obj[key], 4) : '', class: 'num' });
@@ -202,6 +268,11 @@ async function manager({ title, kind, cols, form, make, filter }) {
     buttons: [{ label: t('Annulla'), value: false }, { label: t('Salva'), value: true, primary: true }],
   });
   if (!ok) return false;
+  if (kind === 'tools') {
+    const wrong = list.filter(x => toolIssues(x).length);
+    if (wrong.length && !(await confirmBox(t('Misure incongruenti'),
+      t('Questi utensili hanno misure incongruenti: {list}. Salvare comunque il magazzino?', { list: wrong.map(x => `T${x.number} ${x.name}`).join(', ') }), t('Salva comunque')))) return false;
+  }
   try {
     await save(kind, list);
     toast(t('Archivio salvato'), 'ok', 1800);
@@ -221,20 +292,61 @@ const TOOL_COLS = [
   { label: 'Lc', get: x => fmt(x.fluteLength, 1), cls: 'num' },
 ];
 
-function toolForm(it, changed) {
-  const box = h('div', {});
+let previewMode = '3d';   // anteprima del magazzino: '3d' (rendering) o '2d' (quote)
+
+function toolForm(it, changed0) {
+  const box = h('div', { class: 'tool-form' });
+  const fields = h('div', {});
+  const preview = h('div', { class: 'tool-preview-box' });
+  // l'anteprima si rigenera a ogni modifica: rendering 3D in scala oppure, con misure incongruenti, disegno 2D dell'errore
+  const drawPreview = () => {
+    const issues = toolIssues(it);
+    for (const el of fields.querySelectorAll('[data-field]')) el.classList.toggle('field-err', issues.some(x => x.field === el.dataset.field));
+    if (issues.length) {
+      preview.replaceChildren(
+        h('div', { class: 'tp-head err' }, t('Misure incongruenti')),
+        toolPreview(it, issues),
+        h('ul', { class: 'tool-errs' }, issues.map(x => h('li', {}, x.msg))));
+      return;
+    }
+    const tab = (m, label) => h('button', { type: 'button', class: 'seg-btn', role: 'radio', 'aria-checked': String(previewMode === m),
+      onclick: () => { previewMode = m; drawPreview(); } }, label);
+    const head = h('div', { class: 'tp-head' }, h('span', {}, t('Anteprima in scala')), h('div', { class: 'seg' }, tab('3d', '3D'), tab('2d', t('Quote'))));
+    if (previewMode === '3d') {
+      const v = toolViewer();
+      preview.replaceChildren(head, v.el, h('div', { class: 'p-note' }, t('Generata dai parametri · trascina per ruotare')));
+      v.set(it);
+    } else {
+      preview.replaceChildren(head, toolPreview(it), h('div', { class: 'p-note' }, t('Generata dai parametri')));
+    }
+  };
+  const changed = () => { changed0(); drawTaper(); drawPreview(); };
+  // fresa conica: diametro massimo ricavato da punta, angolo e altezza del cono
+  const taperMax = h('div', { class: 'p-info' });
+  const drawTaper = () => { if (it.type === 'taper') taperMax.textContent = `Ø ${fmt(taperGeom(it).R * 2, 3)} mm`; };
+  let taper = it.type === 'taper';
   const draw = () => {
-    box.innerHTML = '';
-    box.append(...nn(
+    taper = it.type === 'taper';
+    drawTaper();
+    fields.innerHTML = '';
+    fields.append(...nn(
       h('div', { class: 'p-sec' }, t('Utensile')),
       row('Nome', textInput(it, 'name', changed)),
       row('Numero (T)', numInput(it, 'number', changed, { min: 0, int: true })),
-      row('Tipo fresa', selectInput(it, 'type', TOOL_TYPES, () => { if (it.type === 'ball') it.cornerRadius = it.diameter / 2; changed(); draw(); })),
-      row('Diametro', numInput(it, 'diameter', changed, { min: 0.01 }), unit('mm')),
-      it.type === 'bull' ? row('Raggio raccordo', numInput(it, 'cornerRadius', changed, { min: 0 }), unit('mm')) : null,
-      row('Altezza tagliente (Lc)', numInput(it, 'fluteLength', changed, { min: 0.1 }), unit('mm')),
-      row('Lunghezza utile', numInput(it, 'length', changed, { min: 0 }), unit('mm')),
-      row('Diametro gambo', numInput(it, 'shank', changed, { min: 0 }), unit('mm')),
+      row('Tipo fresa', selectInput(it, 'type', TOOL_TYPES, () => {
+        if (it.type === 'ball') it.cornerRadius = it.diameter / 2;
+        if (it.type === 'taper') { if (!(it.taperAngle > 0)) it.taperAngle = 5; if (!it.tipType) it.tipType = 'ball'; }
+        changed(); draw();
+      })),
+      frow('diameter', taper ? 'Diametro in punta' : 'Diametro', numInput(it, 'diameter', changed, { min: 0 }), unit(taper ? t('mm (0 = a V)') : 'mm')),
+      it.type === 'bull' ? frow('cornerRadius', 'Raggio raccordo', numInput(it, 'cornerRadius', changed, { min: 0 }), unit('mm')) : null,
+      taper ? row('Punta', selectInput(it, 'tipType', TIP_TYPES, () => { changed(); draw(); })) : null,
+      taper ? frow('taperAngle', 'Angolo per lato', numInput(it, 'taperAngle', changed, { min: 0 }), unit('°')) : null,
+      frow('fluteLength', taper ? 'Altezza del cono (Lc)' : 'Altezza tagliente (Lc)', numInput(it, 'fluteLength', changed, { min: 0 }), unit('mm')),
+      taper ? row('Diametro in cima al cono', taperMax) : null,
+      frow('length', 'Sbalzo (lunghezza utile)', numInput(it, 'length', changed, { min: 0 }), unit('mm')),
+      frow('neck', 'Diametro collo', numInput(it, 'neck', changed, { min: 0 }), unit(t('mm (0=come Ø)'))),
+      frow('shank', 'Diametro gambo', numInput(it, 'shank', changed, { min: 0 }), unit('mm')),
       row('Numero taglienti', numInput(it, 'flutes', changed, { min: 1, int: true })),
       row('Materiale', textInput(it, 'material', changed)),
       h('div', { class: 'p-sec' }, t('Tecnologia consigliata')),
@@ -244,6 +356,8 @@ function toolForm(it, changed) {
       row('Note', textInput(it, 'notes', changed))));
   };
   draw();
+  box.append(fields, preview);
+  drawPreview();
   return box;
 }
 
@@ -381,7 +495,7 @@ export async function pickTool(kind, current) {
       continue;
     }
     const pref = current && tools.find(x => x.id === current)
-      || tools.find(x => (kind === 'finish' ? x.type === 'ball' : x.type !== 'ball')) || tools[0];
+      || tools.find(x => (kind === 'finish' ? x.type === 'ball' : x.type !== 'ball' && x.type !== 'taper')) || tools[0];
     const res = await chooser({
       title: t('Nuova {kind} · 1/2 · Utensile', { kind: t(KIND_LABEL[kind]).toLowerCase() }),
       intro: t('Scegli l\'utensile dal magazzino (doppio clic o Avanti).'),

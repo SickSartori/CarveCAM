@@ -10,6 +10,147 @@ export const TOOL_DEFAULTS = {
   finish: { number: 2, name: 'Fresa sferica Ø6', type: 'ball', diameter: 6, cornerRadius: 3, fluteLength: 15 },
 };
 
+// ------------------------------------------------------------------ geometria dell'utensile (generata dai parametri)
+/**
+ * Fresa conica (type 'taper'): diameter è il diametro in punta (0 = punta a V), taperAngle l'angolo di
+ * conicità per lato (gradi, rispetto all'asse), tipType 'flat' (punta piatta o a V) o 'ball' (punta sferica
+ * raccordata al cono), fluteLength l'altezza del cono. Geometria come nel motore di calcolo (ToolDef).
+ */
+export function taperGeom(tool = {}) {
+  const rt = Math.max(0, Number(tool.diameter) || 0) / 2;
+  const deg = Math.max(0.1, Math.min(80, Number(tool.taperAngle) || 5));
+  const tn = Math.tan(deg * Math.PI / 180);
+  const ball = tool.tipType === 'ball' && rt > 0;
+  const Lc = tool.fluteLength > 0 ? tool.fluteLength : Math.max(10, 3 * rt * 2);
+  const a = Math.atan(tn);
+  const q0 = ball ? rt * Math.cos(a) : rt, h0 = ball ? rt * (1 - Math.sin(a)) : 0;
+  const radiusAt = h => {
+    const hh = Math.max(0, Math.min(h, Lc));
+    if (ball && hh <= h0) return Math.sqrt(Math.max(0, rt * rt - (rt - hh) ** 2));
+    return q0 + (hh - h0) * tn;
+  };
+  return { rt, deg, tn, ball, Lc, q0, h0, R: radiusAt(Lc), radiusAt };
+}
+
+/** Diametro di riferimento per i parametri in % del diametro: per la conica quello in punta (o in cima se a V). */
+export function toolRefDiameter(tool = {}) {
+  if (tool.type === 'taper') {
+    const g = taperGeom(tool);
+    return g.rt > 0 ? g.rt * 2 : g.R * 2;
+  }
+  return tool.diameter || 6;
+}
+
+/**
+ * Dimensioni risolte di una fresa (mm), con valori ragionevoli per i dati mancanti:
+ * R raggio, r raggio di raccordo (0 piatta, R sferica), Lc altezza del tagliente, reach sbalzo (dalla punta
+ * all'inizio del gambo), neckR raggio del collo tra tagliente e gambo, shankR raggio del gambo,
+ * shankLen tratto di gambo visibile fuori dal portautensile, holderR / holderLen portautensile.
+ */
+export function toolDims(tool = {}) {
+  // fresa conica: D è il diametro massimo (in cima al cono), r il raggio della punta sferica
+  const tg = tool.type === 'taper' ? taperGeom(tool) : null;
+  const D = tg ? Math.max(0.02, tg.R * 2) : tool.diameter > 0 ? tool.diameter : 6;
+  const R = D / 2;
+  const r = tg ? (tg.ball ? tg.rt : 0) : tool.type === 'ball' ? R : tool.type === 'bull' ? Math.min(R, Math.max(0, tool.cornerRadius ?? 1)) : 0;
+  const Lc = tg ? tg.Lc : Math.max(r, tool.fluteLength > 0 ? tool.fluteLength : Math.max(2 * D, 3));
+  const reach = Math.max(Lc, tool.length > 0 ? tool.length : Lc);
+  const neckR = tool.neck > 0 ? Math.min(tool.neck / 2, Math.max(R, (tool.shank || D) / 2)) : R;
+  const shankR = tool.shank > 0 ? tool.shank / 2 : Math.max(R, 1.5);
+  const shankLen = Math.max(6, shankR * 4);
+  const holderR = Math.max(shankR * 2.6, 6);
+  const holderLen = Math.max(18, holderR * 2.2);
+  return { D, R, r, Lc, reach, neckR, shankR, shankLen, holderR, holderLen, taper: tg };
+}
+
+/**
+ * Misure incongruenti di una fresa: [{ field, msg }], vuoto se la fresa è coerente. field è il parametro da
+ * correggere (diameter, cornerRadius, fluteLength, length, neck); l'anteprima del magazzino lo evidenzia.
+ */
+export function toolIssues(tl = {}) {
+  const out = [];
+  const add = (field, msg, vars) => out.push({ field, msg: t(msg, vars) });
+  const f = v => String(Math.round(v * 1000) / 1000);
+  if (tl.type === 'taper') { taperIssues(tl, add, f); return out; }
+  const D = Number(tl.diameter);
+  if (!(D > 0)) { add('diameter', 'Il diametro deve essere maggiore di 0'); return out; }
+  const R = D / 2;
+  let r = 0;
+  if (tl.type === 'ball') r = R;
+  if (tl.type === 'bull') {
+    r = Number(tl.cornerRadius) || 0;
+    if (!(r > 0)) add('cornerRadius', 'Una fresa torica ha il raggio di raccordo maggiore di 0 (con R = 0 è cilindrica)');
+    else if (r > R + 1e-9) add('cornerRadius', 'Raggio di raccordo R{r} maggiore di metà diametro (Ø/2 = {h}): il raccordo non sta nella fresa', { r: f(r), h: f(R) });
+  }
+  const Lc = Number(tl.fluteLength) || 0;
+  const rr = Math.min(r, R);
+  if (!(Lc > 0)) add('fluteLength', 'L\'altezza del tagliente (Lc) deve essere maggiore di 0');
+  else if (rr > 0 && Lc < rr - 1e-9) add('fluteLength', 'Altezza del tagliente Lc {lc} minore del raggio della punta ({r}): la parte raccordata non ci sta', { lc: f(Lc), r: f(rr) });
+  const L = Number(tl.length) || 0;
+  if (L > 0 && Lc > 0 && L < Lc - 1e-9) add('length', 'Sbalzo {l} più corto dell\'altezza del tagliente (Lc {lc}): lo sbalzo comprende il tagliente', { l: f(L), lc: f(Lc) });
+  const neck = Number(tl.neck) || 0, shank = Number(tl.shank) || 0;
+  if (neck > D + 1e-9) add('neck', 'Diametro del collo Ø{n} maggiore del diametro di taglio Ø{d}: il collo deve essere più stretto', { n: f(neck), d: f(D) });
+  else if (neck > 0 && shank > 0 && neck > shank + 1e-9) add('neck', 'Diametro del collo Ø{n} maggiore del gambo Ø{s}', { n: f(neck), s: f(shank) });
+  if (neck > 0 && Lc > 0 && !(L > Lc + 1e-9)) add('length', 'Collo indicato ma sbalzo non maggiore di Lc: il collo non ha lunghezza (sbalzo = Lc + lunghezza del collo)');
+  return out;
+}
+
+function taperIssues(tl, add, f) {
+  const d = Number(tl.diameter);
+  if (!(d >= 0)) add('diameter', 'Il diametro in punta non può essere negativo (0 = punta a V)');
+  const a = Number(tl.taperAngle);
+  if (!(a > 0) || a > 80) add('taperAngle', 'L\'angolo di conicità per lato deve essere tra 0 e 80 gradi');
+  if (tl.tipType === 'ball' && !(d > 0)) add('diameter', 'Una punta sferica ha il diametro in punta maggiore di 0');
+  const Lc = Number(tl.fluteLength) || 0;
+  if (!(Lc > 0)) { add('fluteLength', 'L\'altezza del cono (Lc) deve essere maggiore di 0'); return; }
+  const g = taperGeom(tl);
+  if (g.ball && Lc < g.h0 - 1e-9) add('fluteLength', 'Altezza del cono Lc {lc} minore della parte sferica della punta ({h}): il cono non inizia', { lc: f(Lc), h: f(g.h0) });
+  const L = Number(tl.length) || 0;
+  if (L > 0 && L < Lc - 1e-9) add('length', 'Sbalzo {l} più corto dell\'altezza del cono (Lc {lc}): lo sbalzo comprende il tagliente', { l: f(L), lc: f(Lc) });
+  const neck = Number(tl.neck) || 0, shank = Number(tl.shank) || 0;
+  if (neck > g.R * 2 + 1e-9) add('neck', 'Diametro del collo Ø{n} maggiore del diametro in cima al cono (Ø{d})', { n: f(neck), d: f(g.R * 2) });
+  else if (neck > 0 && shank > 0 && neck > shank + 1e-9) add('neck', 'Diametro del collo Ø{n} maggiore del gambo Ø{s}', { n: f(neck), s: f(shank) });
+  if (neck > 0 && !(L > Lc + 1e-9)) add('length', 'Collo indicato ma sbalzo non maggiore di Lc: il collo non ha lunghezza (sbalzo = Lc + lunghezza del collo)');
+}
+
+/**
+ * Sagoma della fresa (metà destra, dalla punta verso l'alto): punti [raggio, quota] fino al portautensile.
+ * Usata dall'anteprima del magazzino; la simulazione costruisce la stessa forma in 3D.
+ */
+export function toolSilhouette(tool) {
+  const d = toolDims(tool);
+  const pts = [[0, 0]];
+  if (d.taper) {
+    // punta (sferica, piatta o a V) e cono fino all'altezza del tagliente
+    const g = d.taper;
+    if (g.ball) {
+      const phiMax = Math.PI / 2 - Math.atan(g.tn);
+      for (let i = 1; i <= 16; i++) {
+        const phi = phiMax * i / 16;
+        if (g.rt * (1 - Math.cos(phi)) > g.Lc) break;
+        pts.push([g.rt * Math.sin(phi), g.rt * (1 - Math.cos(phi))]);
+      }
+    } else if (g.rt > 1e-6) {
+      pts.push([g.rt, 0]);
+    }
+    pts.push([g.R, g.Lc]);
+  } else if (d.r > 0) {
+    const rf = d.R - d.r;
+    if (rf > 1e-6) pts.push([rf, 0]);
+    for (let i = 1; i <= 16; i++) {
+      const a = -Math.PI / 2 + (i / 16) * (Math.PI / 2);
+      pts.push([rf + d.r * Math.cos(a), d.r + d.r * Math.sin(a)]);
+    }
+  } else {
+    pts.push([d.R, 0]);
+  }
+  if (!d.taper) pts.push([d.R, d.Lc]);
+  if (d.reach > d.Lc + 1e-6) pts.push([d.neckR, d.Lc + Math.min(Math.abs(d.R - d.neckR), (d.reach - d.Lc) / 3)], [d.neckR, d.reach]);
+  const cone = Math.abs(d.shankR - d.neckR) * 1.2;
+  pts.push([d.shankR, d.reach + cone], [d.shankR, d.reach + cone + d.shankLen]);
+  return { pts, dims: d, cone, top: d.reach + cone + d.shankLen };
+}
+
 /**
  * Parametri relativi: base 'D' = diametro utensile, 'Lc' = altezza del tagliente.
  * In un'operazione op.rel[chiave] = { on, pct, min, max } (min/max in mm, 0 = nessun limite).
@@ -62,7 +203,7 @@ export function setupParamsOf(op) {
 
 /** Valore di riferimento (mm) della base di un parametro relativo. */
 export function baseValue(tool, base) {
-  const d = tool?.diameter || 6;
+  const d = toolRefDiameter(tool || {});
   return base === 'Lc' ? (tool?.fluteLength > 0 ? tool.fluteLength : d * 2.5) : d;
 }
 
@@ -97,9 +238,14 @@ const HELP = {
   toolInside: ['Utensile dentro contorno', 'Attivo: tutto l\'utensile resta dentro il contorno (il centro è ristretto del raggio). Disattivo: il centro dell\'utensile può percorrere il contorno.'],
   contourPass: ['Passata di contorno', 'Con la strategia zigzag aggiunge, a ogni terrazza, una passata lungo il bordo della zona lavorata per pulire le creste lasciate dalle passate.'],
   'tool.type': ['Tipo fresa', 'Cilindrica: fondo piatto. Torica: fondo piatto con spigolo raccordato (raggio r). Sferica: punta semisferica, adatta alla finitura di superfici curve.'],
-  'tool.diameter': ['Diametro', 'Diametro della fresa in mm. È la base dei parametri espressi in % del diametro (Ø).'],
+  'tool.diameter': ['Diametro', 'Diametro della fresa in mm. È la base dei parametri espressi in % del diametro (Ø). Per la fresa conica è il diametro in punta (0 = punta a V): la base dei parametri in % è il diametro in punta, o quello in cima al cono se la punta è a V.'],
+  'tool.taperAngle': ['Angolo per lato', 'Fresa conica: angolo di conicità di ciascun lato rispetto all\'asse, in gradi (una fresa a V da 90° ha 45° per lato). Il diametro cresce salendo dalla punta: Ø(h) = Ø punta + 2·h·tan(angolo).'],
+  'tool.tipType': ['Punta', 'Fresa conica: punta piatta (a V se il diametro in punta è 0) oppure sferica, raccordata tangente al cono. Le coniche a punta sferica sono adatte alla finitura di dettagli in rilievo; quelle a V all\'incisione.'],
   'tool.cornerRadius': ['Raggio raccordo', 'Raggio dello spigolo della fresa torica (non oltre metà del diametro).'],
   'tool.fluteLength': ['Altezza tagliente', 'Lunghezza utile dei taglienti (Lc) in mm. È la base dei parametri espressi in % dell\'altezza del tagliente, come il passo verticale.'],
+  'tool.length': ['Sbalzo', 'Lunghezza utile della fresa, dalla punta all\'inizio del gambo (comprende tagliente e collo). Indica fin dove l\'utensile può scendere: deve superare la profondità della lavorazione. 0 = uguale all\'altezza del tagliente. In simulazione la fresa viene generata con queste misure.'],
+  'tool.neck': ['Diametro collo', 'Diametro del collo ribassato tra tagliente e gambo, tipico delle frese di precisione a collo lungo. 0 = uguale al diametro della fresa.'],
+  'tool.shank': ['Diametro gambo', 'Diametro del gambo preso dalla pinza. Serve a generare la forma della fresa in simulazione; il calcolo dei percorsi verifica le collisioni della parte tagliente, non del gambo né del portautensile.'],
   'tool.number': ['Numero (T)', 'Posizione dell\'utensile nel magazzino della macchina: usato per il cambio utensile (T# M6) o nei messaggi di pausa GRBL.'],
   toolId: ['Utensile dal magazzino', 'Copia nella lavorazione i dati di un utensile del magazzino. Le modifiche successive alla lavorazione non cambiano il magazzino.'],
   stepover: ['Passo laterale', 'Distanza tra due passate affiancate. Si può esprimere in mm oppure in % del diametro utensile (Ø), con limiti minimo e massimo in mm. Valori tipici: 40–60 % in sgrossatura, 5–15 % in finitura con fresa sferica.'],

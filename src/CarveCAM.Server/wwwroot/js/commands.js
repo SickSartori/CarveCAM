@@ -368,10 +368,14 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
         const d = ARTIFACT_DEFAULTS[value];
         for (const k of ['size', 'radius', 'radius2', 'height']) if (r.item[k] == null && d[k] != null) r.item[k] = structuredClone(d[k]);
       }
-      if (r.type === 'operation' && key === 'tool.diameter' && !r.item.rel?.stepover?.on && r.item.stepover > value) r.item.stepover = round4(value * 0.5);
+      if (r.type === 'operation' && key === 'tool.diameter' && value > 0 && !r.item.rel?.stepover?.on && r.item.stepover > value) r.item.stepover = round4(value * 0.5);
       if (r.type === 'operation' && (key === 'tool.diameter' || key === 'tool.type') && r.item.tool) {
         const tl = r.item.tool;
         if (tl.type === 'ball') tl.cornerRadius = round4(tl.diameter / 2);
+        if (tl.type === 'taper') {
+          if (!(tl.taperAngle > 0)) tl.taperAngle = 5;
+          if (!tl.tipType) tl.tipType = tl.diameter > 0 ? 'ball' : 'flat';
+        }
         if (!(tl.cornerRadius > 0)) tl.cornerRadius = round4(Math.min(1, tl.diameter / 4));
         if (tl.cornerRadius > tl.diameter / 2) tl.cornerRadius = round4(tl.diameter / 4);
       }
@@ -978,7 +982,11 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     return {
       operation: {
         id: o.id, name: o.name, kind: o.kind, strategy: o.strategy,
-        tool: { number: o.tool.number, type: o.tool.type, diameter: o.tool.diameter, cornerRadius: o.tool.cornerRadius },
+        tool: {
+          number: o.tool.number, type: o.tool.type, diameter: o.tool.diameter, cornerRadius: o.tool.cornerRadius,
+          // fresa conica: altezza del cono, angolo per lato e punta
+          ...(o.tool.type === 'taper' ? { fluteLength: o.tool.fluteLength, taperAngle: o.tool.taperAngle ?? 5, tipType: o.tool.tipType || 'ball' } : {}),
+        },
         stepover: effParam(o, 'stepover'), stepdown: effParam(o, 'stepdown'), maxDepth: o.maxDepth, stock: o.stock, safeHeight: o.safeHeight,
         clearance: o.clearance, angle: o.angle, climb: o.climb !== false, toolInside: o.toolInside !== false,
         contourPass: o.contourPass !== false, resolution: o.resolution, tolerance: o.tolerance,
@@ -1326,6 +1334,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
 
 export function toolLabel(tl) {
   if (tl.type === 'ball') return t('sferica Ø{d}', { d: tl.diameter });
+  if (tl.type === 'taper') return t('conica Ø{d} {a}° per lato', { d: tl.diameter, a: tl.taperAngle ?? 5 });
   if (tl.type === 'bull') return t('torica Ø{d} R{r}', { d: tl.diameter, r: tl.cornerRadius ?? 1 });
   return t('cilindrica Ø{d}', { d: tl.diameter });
 }

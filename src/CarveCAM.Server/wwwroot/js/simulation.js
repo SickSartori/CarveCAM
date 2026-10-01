@@ -7,6 +7,7 @@ import { planeFrame, frameQuaternion, fmt } from './geom.js';
 import { toast, h } from './dialogs.js';
 import { t } from './i18n.js';
 import { log } from './log.js';
+import { buildToolMesh } from './tool3d.js';
 
 const RAPID_RATE = 5000; // mm/min
 const R2D = 180 / Math.PI;
@@ -216,36 +217,7 @@ function mmss(min) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** Utensile orientato lungo +Z locale, punta nell'origine (profilo di rivoluzione: piatto, torico o sferico). */
+/** Utensile della simulazione: generato dai suoi parametri (vedi tool3d.js). */
 function makeTool(tool) {
-  const R = (tool.diameter || 6) / 2;
-  const Lc = tool.fluteLength > 0 ? tool.fluteLength : Math.max(4 * R, 20);
-  const L = Math.max(Lc, 4 * R);
-  const r = tool.type === 'ball' ? R : tool.type === 'bull' ? Math.min(R, Math.max(0, tool.cornerRadius ?? 1)) : 0;
-  const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: 0xd4dbe3, metalness: 0.7, roughness: 0.25 });
-  const flutes = new THREE.MeshStandardMaterial({ color: 0x9fb4c8, metalness: 0.6, roughness: 0.3, side: THREE.DoubleSide });
-  // profilo (raggio, quota) dall'asse sul fondo fino alla sommità dei taglienti
-  const prof = [new THREE.Vector2(0, 0)];
-  if (r > 0) {
-    const rf = R - r;
-    if (rf > 1e-6) prof.push(new THREE.Vector2(rf, 0));
-    for (let i = 1; i <= 16; i++) {
-      const a = -Math.PI / 2 + (i / 16) * (Math.PI / 2);
-      prof.push(new THREE.Vector2(rf + r * Math.cos(a), r + r * Math.sin(a)));
-    }
-  } else {
-    prof.push(new THREE.Vector2(R, 0));
-  }
-  prof.push(new THREE.Vector2(R, Lc), new THREE.Vector2(0, Lc));
-  const cutter = new THREE.Mesh(new THREE.LatheGeometry(prof, 40).rotateX(Math.PI / 2), flutes);
-  g.add(cutter);
-  const shank = new THREE.Mesh(new THREE.CylinderGeometry(R, R, L, 32).rotateX(Math.PI / 2), mat);
-  shank.position.z = Lc + L / 2;
-  const holder = new THREE.Mesh(new THREE.CylinderGeometry(R * 2.4, R * 2.4, L * 0.8, 32).rotateX(Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x5b6570, metalness: 0.5, roughness: 0.4, transparent: true, opacity: 0.85 }));
-  holder.position.z = Lc + L + L * 0.4;
-  g.add(shank, holder);
-  g.traverse(o => { o.raycast = () => {}; });
-  return g;
+  return buildToolMesh(tool);
 }
