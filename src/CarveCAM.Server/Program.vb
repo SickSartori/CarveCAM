@@ -14,7 +14,30 @@ Public Module Program
     Private Const SlowRequestMs As Long = 5000
 
     Public Sub Main(args As String())
-        Dim builder = WebApplication.CreateBuilder(args)
+        ' pacchetto distribuito: wwwroot e App_Data stanno accanto all'eseguibile, qualunque sia la cartella di avvio
+        ' (con dotnet run l'interfaccia è servita dal progetto e la radice resta quella predefinita)
+        Dim exeDir = AppContext.BaseDirectory
+        Dim packaged = File.Exists(Path.Combine(exeDir, "wwwroot", "index.html"))
+        Dim openBrowser = packaged AndAlso Not args.Contains("--no-browser")
+        Dim version = AppVersion()
+
+        Dim builder = WebApplication.CreateBuilder(New WebApplicationOptions With {
+            .Args = args, .ContentRootPath = If(packaged, exeDir, Nothing)})
+        Dim appUrl = BrowserUrl(builder.Configuration("Urls"))
+
+        If packaged Then
+            Try
+                System.Console.OutputEncoding = Text.Encoding.UTF8
+                System.Console.Title = $"CarveCAM {version} - chiudere questa finestra per uscire"
+            Catch ex As Exception
+                ' nessuna console (avvio come servizio o con output reindirizzato)
+            End Try
+            ' secondo doppio clic sull'eseguibile: CarveCAM è già in esecuzione, basta riaprire il browser
+            If IsCarveCamRunning(appUrl) Then
+                If openBrowser Then StartBrowser(appUrl)
+                Return
+            End If
+        End If
 
         ' log su file (App_Data/logs): server e interfaccia scrivono nello stesso file
         Dim logDir = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "logs")
@@ -75,13 +98,16 @@ Public Module Program
         app.UseStaticFiles(New StaticFileOptions With {
             .OnPrepareResponse = Sub(ctx) ctx.Context.Response.Headers.CacheControl = "no-cache"})
         app.MapControllers()
+        app.MapGet("/api/version", CType(Function() New With {.version = version}, Func(Of Object)))
 
         Dim lifetime = app.Services.GetRequiredService(Of IHostApplicationLifetime)()
         lifetime.ApplicationStarted.Register(
             Sub()
-                life.LogInformation("CarveCAM.Server avviato: {Urls} · .NET {Runtime} · {OS} · cartella {Root} · log in {LogDir}",
-                                    String.Join(", ", app.Urls), Environment.Version, Runtime.InteropServices.RuntimeInformation.OSDescription,
+                life.LogInformation("CarveCAM {Version} avviato: {Urls} · .NET {Runtime} · {OS} · cartella {Root} · log in {LogDir}",
+                                    version, String.Join(", ", app.Urls), Environment.Version, Runtime.InteropServices.RuntimeInformation.OSDescription,
                                     builder.Environment.ContentRootPath, logDir)
+                If packaged Then System.Console.WriteLine($"{Environment.NewLine}CarveCAM è aperto nel browser: {appUrl}{Environment.NewLine}Per uscire chiudere questa finestra.{Environment.NewLine}")
+                If openBrowser Then StartBrowser(appUrl)
             End Sub)
         lifetime.ApplicationStopping.Register(Sub() life.LogInformation("CarveCAM.Server in arresto"))
         AddHandler AppDomain.CurrentDomain.UnhandledException,
@@ -89,7 +115,54 @@ Public Module Program
         AddHandler TaskScheduler.UnobservedTaskException,
             Sub(s, e) life.LogError(e.Exception, "Eccezione non osservata in un task")
 
-        app.Run()
+        Try
+            app.Run()
+        Catch ex As IOException When packaged
+            ' tipicamente la porta è occupata da un altro programma: senza questa pausa la finestra si chiuderebbe subito
+            life.LogCritical(ex, "Avvio non riuscito su {Url}", appUrl)
+            System.Console.WriteLine($"{Environment.NewLine}Impossibile avviare CarveCAM su {appUrl}: {ex.Message}")
+            System.Console.WriteLine("La porta può essere cambiata in appsettings.json (voce ""Urls""). Premere un tasto per chiudere.")
+            Try
+                System.Console.ReadKey(True)
+            Catch
+            End Try
+        End Try
+    End Sub
+
+    ''' <summary>Versione del programma (da Directory.Build.props) con l'eventuale commit abbreviato.</summary>
+    Private Function AppVersion() As String
+        Dim info = GetType(Program).Assembly.GetCustomAttributes(GetType(Reflection.AssemblyInformationalVersionAttribute), False).
+            OfType(Of Reflection.AssemblyInformationalVersionAttribute)().FirstOrDefault()?.InformationalVersion
+        If String.IsNullOrEmpty(info) Then Return "?"
+        Dim plus = info.IndexOf("+"c)
+        Return If(plus >= 0 AndAlso info.Length > plus + 8, info.Substring(0, plus + 8), info)
+    End Function
+
+    ''' <summary>Indirizzo da aprire nel browser: il primo di "Urls", con localhost al posto degli indirizzi jolly.</summary>
+    Private Function BrowserUrl(urls As String) As String
+        Dim first = If(urls, "").Split(";"c, StringSplitOptions.RemoveEmptyEntries Or StringSplitOptions.TrimEntries).FirstOrDefault()
+        If String.IsNullOrEmpty(first) Then Return "http://localhost:5000"
+        Return first.Replace("://*", "://localhost").Replace("://+", "://localhost").Replace("://0.0.0.0", "://localhost").Replace("://[::]", "://localhost")
+    End Function
+
+    ''' <summary>True se all'indirizzo risponde già un CarveCAM (e non un altro programma sulla stessa porta).</summary>
+    Private Function IsCarveCamRunning(url As String) As Boolean
+        Try
+            Using http As New Net.Http.HttpClient With {.Timeout = TimeSpan.FromSeconds(2)}
+                Dim res = http.GetAsync(url.TrimEnd("/"c) & "/api/version").GetAwaiter().GetResult()
+                Return res.IsSuccessStatusCode AndAlso res.Content.ReadAsStringAsync().GetAwaiter().GetResult().Contains("""version""")
+            End Using
+        Catch
+            Return False
+        End Try
+    End Function
+
+    Private Sub StartBrowser(url As String)
+        Try
+            Process.Start(New ProcessStartInfo(url) With {.UseShellExecute = True})
+        Catch ex As Exception
+            System.Console.WriteLine($"Aprire manualmente il browser su {url} ({ex.Message})")
+        End Try
     End Sub
 
 End Module

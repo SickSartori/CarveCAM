@@ -1,0 +1,35 @@
+CarveCAM - versione di prova
+============================
+
+AVVIO
+  Doppio clic su CarveCAM.exe: si apre una finestra nera (il server) e subito dopo
+  il browser con CarveCAM. Non serve installare nulla.
+  Se il browser non si apre da solo, andare su http://localhost:5080
+
+USCITA
+  Chiudere la finestra nera. Chiudere solo la scheda del browser non basta.
+  Un nuovo doppio clic su CarveCAM.exe mentre è già aperto riapre soltanto il browser.
+
+REQUISITI
+  - Windows 10 o 11 a 64 bit
+  - Un browser recente (Chrome, Edge o Firefox)
+  - Connessione a internet (la grafica 3D e l'importazione STEP/IGES si caricano dalla rete)
+
+AVVISO DI WINDOWS
+  Al primo avvio Windows può mostrare "Windows ha protetto il PC": fare clic su
+  "Ulteriori informazioni" e poi su "Esegui comunque". Il programma non è ancora firmato.
+
+DATI
+  Magazzino utensili, setup, copie di sicurezza e log si trovano nella cartella App_Data
+  accanto a CarveCAM.exe. Per conservarli passando a una nuova versione, copiare
+  App_Data nella cartella della nuova versione.
+  Non scompattare in "C:\Programmi": lì il programma non può scrivere i suoi dati.
+  Va bene il Desktop, Documenti o qualsiasi cartella personale.
+
+SEGNALARE UN PROBLEMA
+  Indicare la versione (Aiuto > Informazioni su CarveCAM) e allegare il file di log del
+  giorno, che si trova in App_Data\logs (carvecam-AAAAMMGG.log).
+
+PORTA
+  CarveCAM usa la porta 5080. Se è occupata da un altro programma, cambiarla in
+  appsettings.json, voce "Urls" (per esempio "http://localhost:5081").
