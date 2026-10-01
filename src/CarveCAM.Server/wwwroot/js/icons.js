@@ -45,6 +45,7 @@ export const TB = {
   toolLib: t('<path d="M3 17.5h14"/><path d="M5 17.5V8M10 17.5V5M15 17.5V9.5"/><path d="M4 8h2M9 5h2M14 9.5h2"/><path d="M5 4.5v1M10 2.5v1M15 6v1.5" stroke-dasharray="1 1"/>'),
   credits: t('<circle cx="7.5" cy="7" r="2.6"/><path d="M2.8 16a4.7 4.7 0 0 1 9.4 0"/><circle cx="13.8" cy="7.8" r="2.1"/><path d="M12.6 12.3a4 4 0 0 1 5.1 3.7"/>'),
   refPoint: t('<circle cx="10" cy="10" r="2.2" fill="currentColor"/><path d="M10 10h7M10 10V3M10 10l-5 5"/><path d="M15.5 8.5 17 10l-1.5 1.5M8.5 4.5 10 3l1.5 1.5"/>'),
+  blackbox: t('<rect x="3" y="5" width="14" height="11" rx="1.5" fill="currentColor" fill-opacity=".25"/><path d="M3 9h14M8 12.5h4"/><path d="M7 5V3.5h6V5"/>'),
   reorder: t('<path d="M3 5h8M3 10h8M3 15h8"/><path d="M15 3.5v13M12.8 5.7 15 3.5l2.2 2.2M12.8 14.3 15 16.5l2.2-2.2"/>'),
   reposition: t('<rect x="5.5" y="5.5" width="9" height="9" rx="1"/><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3"/>'),
   setups: t('<path d="M4 5h12M4 10h12M4 15h12"/><circle cx="7" cy="5" r="1.6" fill="currentColor"/><circle cx="13" cy="10" r="1.6" fill="currentColor"/><circle cx="9" cy="15" r="1.6" fill="currentColor"/>'),

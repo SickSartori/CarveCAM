@@ -16,7 +16,7 @@ import {
 } from './library.js';
 import { pickProjectFile, writeProjectFile, addRecent, recentList, fileOfRecent, removeRecent } from './files.js';
 import { openOptions } from './options.js';
-import { color } from './settings.js';
+import { color, settings } from './settings.js';
 import { artifactKeyPoints } from './scene-sync.js';
 import { t, num, LOCALE } from './i18n.js';
 import { log } from './log.js';
@@ -1642,6 +1642,81 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   cmd.toggleWireframe = toggleView('wireframe');
   cmd.toggleGizmoSnap = () => { App.view.gizmoSnap = !App.view.gizmoSnap; emit('gizmo'); };
   cmd.toggleGizmoSpace = () => { App.view.gizmoLocal = !App.view.gizmoLocal; emit('gizmo'); };
+
+  // ================================================================ BLACKBOX DI DIAGNOSTICA
+  /**
+   * Esporta in un archivio protetto da password tutto ciò che serve a riprodurre un problema: progetto
+   * corrente (anche non salvato) con le mesh, richieste di calcolo, stato dell'interfaccia, opzioni, magazzino,
+   * ultimi messaggi e file di log del server.
+   */
+  cmd.exportBlackbox = async () => {
+    const desc = h('textarea', { rows: 5, placeholder: t('Cosa stavi facendo, cosa ti aspettavi e cosa è successo invece…'), style: { width: '100%' } });
+    const meshes = h('input', { type: 'checkbox' });
+    meshes.checked = true;
+    const days = h('select', {}, [1, 2, 3, 7, 14].map(n => h('option', { value: n }, n === 1 ? t('solo oggi') : t('ultimi {n} giorni', { n }))));
+    days.value = '2';
+    const ok = await modal({
+      title: t('Esporta blackbox'), size: 'wide', enter: false,
+      body: h('div', {},
+        h('p', { style: { marginTop: 0 } }, t('Crea un archivio .zip protetto da password con i dati per riprodurre il problema: progetto corrente con le mesh, parametri di calcolo delle lavorazioni, stato dell\'interfaccia, opzioni, magazzino utensili e file di log.')),
+        h('div', { class: 'form-row' }, h('label', {}, t('Descrizione del problema')), desc),
+        h('div', { class: 'form-row' }, h('label', {}, t('Includi le mesh dei modelli')), h('div', {}, meshes)),
+        h('div', { class: 'form-row' }, h('label', {}, t('File di log')), days),
+        h('p', { class: 'p-note', style: { margin: 0 } }, t('La password dell\'archivio è nota all\'assistenza: invia il file così com\'è.'))),
+      onOpen: () => setTimeout(() => desc.focus(), 60),
+      buttons: [{ label: t('Annulla'), value: false }, { label: t('Esporta'), value: true, primary: true }],
+    });
+    if (!ok) return;
+    log.info('Blackbox: esportazione', { description: desc.value.slice(0, 200) });
+    log.flush();
+    busy(t('Preparazione blackbox…'));
+    try {
+      const requests = App.project.operations.map(op => {
+        try { return { opId: op.id, name: op.name, request: buildRequest(op) }; } catch (e) { return { opId: op.id, name: op.name, error: e.message }; }
+      });
+      const toolpaths = App.project.operations.map(op => {
+        const d = App.runtime.toolpaths.get(op.id);
+        return { opId: op.id, name: op.name, status: cmd.opStatus(op), toolpathId: d?.toolpathId, stats: d?.stats, warnings: d?.warnings, points: d?.types?.length ?? 0 };
+      });
+      let library = null;
+      try { library = { tools: await getTools(), setups: await getSetups() }; } catch { /* magazzino non disponibile */ }
+      let gl = null;
+      try {
+        const ctx = vp.renderer.getContext();
+        const ext = ctx.getExtension('WEBGL_debug_renderer_info');
+        gl = {
+          vendor: ext ? ctx.getParameter(ext.UNMASKED_VENDOR_WEBGL) : ctx.getParameter(ctx.VENDOR),
+          renderer: ext ? ctx.getParameter(ext.UNMASKED_RENDERER_WEBGL) : ctx.getParameter(ctx.RENDERER),
+          version: ctx.getParameter(ctx.VERSION),
+        };
+      } catch { /* informazioni WebGL non disponibili */ }
+      const client = {
+        time: new Date().toISOString(), session: log.session, url: location.href, userAgent: navigator.userAgent,
+        language: navigator.language, locale: LOCALE, screen: `${screen.width}x${screen.height}@${devicePixelRatio}`,
+        window: `${innerWidth}x${innerHeight}`, viewport: `${vp.el.clientWidth}x${vp.el.clientHeight}`, webgl: gl,
+        memory: performance.memory ? { usedMB: Math.round(performance.memory.usedJSHeapSize / 1048576), limitMB: Math.round(performance.memory.jsHeapSizeLimit / 1048576) } : null,
+        state: {
+          fileName: App.fileName, dirty: App.dirty, selection: App.selection, selected: App.selected, sketch: App.sketch,
+          sketchTool: sketch.active ? sketch.tool : null, planeMode: App.planeMode, pickMode: App.pickMode?.kind || null,
+          view: App.view, camera: vp.captureView(),
+          simulation: sim.active ? { opId: sim.opId, scope: sim.scope, t: sim.t, total: sim.total } : null,
+          meshesLoaded: [...App.runtime.meshGeo.keys()],
+        },
+        recentActions: log.recent,
+      };
+      const blob = await api.blackbox({
+        description: desc.value, includeMeshes: meshes.checked, logDays: Number(days.value),
+        project: App.project, requests, toolpaths, library, client, settings: structuredClone(settings), history: log.history,
+      });
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+      download(blob, `carvecam-blackbox-${stamp}.zip`, 'application/zip');
+      log.info('Blackbox esportata', { size: blob.size });
+      toast(t('Blackbox esportata ({size} MB): inviala all\'assistenza', { size: fmt(blob.size / 1048576, 1) }), 'ok', 6000);
+    } catch (e) {
+      log.error('Esportazione blackbox non riuscita', e);
+      toast(t('Esportazione blackbox non riuscita: {msg}', { msg: e.message }), 'err', 6000);
+    } finally { idle(); }
+  };
 
   // ================================================================ AIUTO
   cmd.shortcuts = () => {

@@ -9,6 +9,8 @@ const SESSION = Math.random().toString(36).slice(2, 8);
 
 const queue = [];
 const recent = [];                // ultime azioni (contesto per errori e blocchi)
+const history = [];               // ultimi messaggi di questa sessione (per la blackbox)
+const MAX_HISTORY = 400;
 let timer = null;
 let sending = false;
 
@@ -24,6 +26,8 @@ function safe(data) {
 function push(level, msg, data) {
   const e = { t: new Date().toISOString(), l: level, s: SESSION, m: String(msg), d: safe(data) };
   queue.push(e);
+  history.push(e);
+  if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
   if (queue.length > MAX_QUEUE) queue.splice(0, queue.length - MAX_QUEUE);
   if (level === 'error') flush();
   else if (!timer) timer = setTimeout(flush, FLUSH_MS);
@@ -61,7 +65,9 @@ export const log = {
     push('info', `Azione: ${id}`, d);
   },
   flush,
+  session: SESSION,
   get recent() { return recent.slice(); },
+  get history() { return history.slice(); },
 };
 
 // ------------------------------------------------------------------ errori non gestiti

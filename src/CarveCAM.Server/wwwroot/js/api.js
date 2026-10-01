@@ -143,6 +143,14 @@ export const api = {
   },
 
   // ---------------------------------------------------------------- file di log
+  /** Blackbox di diagnostica: zip protetto da password generato dal server. */
+  async blackbox(payload) {
+    const res = await req('/api/blackbox', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    return (await check(res)).blob();
+  },
+
   async logInfo() {
     return (await check(await req('/api/log'))).json();
   },
