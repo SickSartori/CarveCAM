@@ -33,18 +33,18 @@ export class SceneSync {
   }
 
   /**
-   * Un clic che colpisce il riquadro di un piano lo seleziona solo se il piano è attivo (riempito),
-   * altrimenti solo vicino al bordo tratteggiato: così lo spazio vuoto dentro i piani resta "vuoto".
+   * Un clic che colpisce il riquadro di un piano lo seleziona in qualunque punto, anche se il piano non è
+   * attivo (solo bordo tratteggiato); oggetti e artefatti davanti al piano hanno comunque la precedenza.
    */
   planeHitAccepted(hit) {
-    const id = hit.object.userData.id;
-    const n = this.nodes.get(this.key('plane', id));
-    if (!n) return false;
-    if (n.active) return true;
-    const local = n.obj.worldToLocal(hit.point.clone());
-    const h = n.half;
-    const tol = this.vp.pixelSize(hit.point) * 7;
-    return Math.min(h - Math.abs(local.x), h - Math.abs(local.y)) <= tol;
+    return this.nodes.has(this.key('plane', hit.object.userData.id));
+  }
+
+  /** Piani sotto il puntatore (per il cursore di selezione): solo riquadri, senza i modelli. */
+  planeQuads() {
+    const out = [];
+    for (const [k, n] of this.nodes) if (k.startsWith('plane:') && n.quad && n.obj.visible) out.push(n.quad);
+    return out;
   }
 
   sync() {

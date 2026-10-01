@@ -200,14 +200,24 @@ const coordsEl = document.getElementById('st-coords');
 vp.handlers.down = () => gizmo.onPointerDown();
 // maniglie delle entità dello sketch: il trascinamento modifica la geometria invece di ruotare la vista
 vp.handlers.grab = ev => (sketch.active && !App.pickMode ? sketch.grab(ev) : null);
+// cursore "selezionabile" sopra i riquadri dei piani (al massimo un controllo per fotogramma)
+let hoverEv = null;
+function hoverPlanes() {
+  const ev = hoverEv;
+  hoverEv = null;
+  const on = !!ev && !sketch.active && !App.pickMode && vp.raycast(ev, sync.planeQuads(), false).length > 0;
+  vp.el.classList.toggle('hover-plane', on);
+}
 vp.handlers.move = ev => {
   if (App.pickMode?.kind === 'pivot') { gizmo.pivotMove(ev); return; }
   if (sketch.active) { sketch.onMove(ev); return; }
+  if (!hoverEv && ev.buttons === 0) requestAnimationFrame(hoverPlanes);
+  if (ev.buttons === 0) hoverEv = ev;
   const f = { o: new THREE.Vector3(), n: new THREE.Vector3(0, 0, 1) };
   const p = vp.rayPlane(ev, f);
   coordsEl.textContent = p ? `X ${fmt(p.x, 2)}  Y ${fmt(p.y, 2)}  (Z=0)` : '';
 };
-vp.handlers.leave = () => { if (sketch.active) sketch.onLeave(); };
+vp.handlers.leave = () => { vp.el.classList.remove('hover-plane'); if (sketch.active) sketch.onLeave(); };
 vp.handlers.click = ev => {
   if (gizmo.consumeClick()) return;
   if (App.pickMode?.kind === 'pivot') { gizmo.pivotClick(ev); return; }

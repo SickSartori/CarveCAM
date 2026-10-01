@@ -432,6 +432,8 @@ kbd {
 #viewport canvas { display: block; width: 100%; height: 100%; outline: none; }
 #viewport.picking canvas { cursor: crosshair; }
 #viewport.sketching canvas { cursor: none; }
+#viewport.hover-plane canvas { cursor: pointer; }
+#viewport.sketching.grip-hover canvas { cursor: move; }
 .overlay { position: absolute; z-index: 5; }
 /* cubo di orientamento (disegnato dal renderer sotto .vc-hit) e comandi di vista */
 .view-tools { top: 6px; right: 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
