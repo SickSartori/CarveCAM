@@ -1351,6 +1351,9 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     });
   };
 
+  /** Evidenzia nella vista un elemento della scena (null: nessuno). */
+  cmd.hoverItem = ref => sync.setHover(ref);
+
   cmd.useWholeSketch = opId => mutate(() => { const op = getOperation(opId); if (op) op.entityIds = null; });
 
   /** Parametro relativo: on/off (convertendo il valore) e campi pct/min/max. */

@@ -106,6 +106,7 @@ export class Props {
 
   render() {
     const r = resolve();
+    this.cmd.hoverItem?.(null);   // l'elenco che evidenziava un elemento viene ricostruito
     this.sig = this._sigOf(r);
     this.bindings = [];
     this.blocks = [];
@@ -411,9 +412,13 @@ export class Props {
       const c = h('input', { type: 'checkbox' });
       c.checked = set.has(it.id);
       c.addEventListener('change', () => this.cmd.setObstacle(op.id, it.id, c.checked));
-      box.append(h('label', { class: `p-obst-row${c.checked ? '' : ' off'}` }, c,
+      // passando con il mouse sul nome, l'ostacolo si evidenzia nella vista
+      const row = h('label', { class: `p-obst-row${c.checked ? '' : ' off'}`, title: t('Evidenziato nella vista') }, c,
         h('span', { class: 'ico', html: '' }), h('span', { class: 'lbl' }, it.name),
-        h('span', { class: 'sub' }, type === 'object' ? t('oggetto') : t(KIND_LABEL[it.kind] || 'artefatto'))));
+        h('span', { class: 'sub' }, type === 'object' ? t('oggetto') : t(KIND_LABEL[it.kind] || 'artefatto')));
+      row.addEventListener('mouseenter', () => this.cmd.hoverItem({ type, id: it.id }));
+      row.addEventListener('mouseleave', () => this.cmd.hoverItem(null));
+      box.append(row);
     }
     const n = items.filter(x => set.has(x.it.id)).length;
     box.append(h('div', { class: 'p-obst-foot' },

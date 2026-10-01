@@ -284,12 +284,46 @@ export class SceneSync {
   // ---------------------------------------------------------------- selezione
   applySelection(sel = new Set(App.selected.map(s => this.key(s.type, s.id)))) {
     const emissive = new THREE.Color(color('selection'));
+    const hot = new THREE.Color(color('entitySel')).multiplyScalar(0.75);
     for (const [k, n] of this.nodes) {
       if (!(k.startsWith('object:') || k.startsWith('artifact:'))) continue;
       const mat = n.obj.material;
-      if (mat && mat.emissive) mat.emissive.copy(sel.has(k) ? emissive : new THREE.Color(0));
+      if (mat && mat.emissive) mat.emissive.copy(k === this.hover ? hot : sel.has(k) ? emissive : new THREE.Color(0));
     }
   }
+
+  /** Evidenzia temporaneamente un oggetto o artefatto (es. passando sul suo nome nell'elenco degli ostacoli). */
+  setHover(ref) {
+    const k = ref ? this.key(ref.type, ref.id) : null;
+    if (k === this.hover) return;
+    this.hover = k;
+    this.applySelection();
+  }
+}
+
+/** Etichetta di testo sempre rivolta alla camera (larghezza proporzionale al testo, altezza 1). */
+function makeTextSprite(text, col) {
+  const px = 48;
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+  ctx.font = `600 ${px}px "IBM Plex Sans", Segoe UI, Arial, sans-serif`;
+  const w = Math.ceil(ctx.measureText(text).width) + 16;
+  cv.width = w;
+  cv.height = px + 16;
+  ctx.font = `600 ${px}px "IBM Plex Sans", Segoe UI, Arial, sans-serif`;
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = 'rgba(10,14,20,.85)';
+  ctx.strokeText(text, 8, cv.height / 2);
+  ctx.fillStyle = col;
+  ctx.fillText(text, 8, cv.height / 2);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  sp.center.set(0, 0.5);
+  sp.scale.set(cv.width / cv.height, 1, 1);
+  sp.renderOrder = 8;
+  return sp;
 }
 
 // ------------------------------------------------------------------ costruttori geometrie
