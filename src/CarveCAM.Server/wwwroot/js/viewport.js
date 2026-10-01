@@ -114,6 +114,9 @@ export class Viewport {
     this.persp.aspect = w / h;
     this.persp.updateProjectionMatrix();
     this._updateOrthoFrustum();
+    // ridimensionare la tela la svuota: si ridisegna subito, altrimenti (es. trascinando i separatori dei
+    // pannelli) il fotogramma resta vuoto fino al giro successivo e la vista lampeggia
+    this._draw();
   }
 
   _updateOrthoFrustum(height) {
@@ -129,6 +132,11 @@ export class Viewport {
     const dt = Math.min(0.1, this.clock.getDelta());
     for (const f of this.frameHooks) f(dt);
     this.controls.update();
+    this._draw();
+  }
+
+  /** Disegna scena, triade degli assi e sovrapposizioni (cubo di orientamento) con la camera corrente. */
+  _draw() {
     this.headLight.position.copy(this.camera.position);
     this.headLight.target.position.copy(this.controls.target);
 

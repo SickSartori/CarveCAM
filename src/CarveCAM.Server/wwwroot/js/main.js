@@ -313,7 +313,14 @@ function dragSplit(handle, onMove) {
     e.preventDefault();
     handle.setPointerCapture(e.pointerId);
     handle.classList.add('drag');
-    const move = ev => onMove(ev);
+    // al massimo un ridimensionamento per fotogramma, anche con mouse ad alta frequenza
+    let last = null, queued = false;
+    const move = ev => {
+      last = ev;
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; onMove(last); });
+    };
     const up = () => {
       handle.classList.remove('drag');
       handle.removeEventListener('pointermove', move);
@@ -323,13 +330,15 @@ function dragSplit(handle, onMove) {
     handle.addEventListener('pointerup', up);
   });
 }
+// le larghezze si impostano sull'area principale: cambiarle sulla radice ricalcolerebbe gli stili di tutta la pagina
+const mainEl = document.getElementById('main');
 dragSplit(document.getElementById('sidebar-resizer'), ev => {
   const w = Math.max(200, Math.min(window.innerWidth * 0.45, ev.clientX));
-  document.documentElement.style.setProperty('--sidebar-w', `${w}px`);
+  mainEl.style.setProperty('--sidebar-w', `${Math.round(w)}px`);
 });
 dragSplit(document.getElementById('props-resizer'), ev => {
   const w = Math.max(240, Math.min(window.innerWidth * 0.45, window.innerWidth - ev.clientX));
-  document.documentElement.style.setProperty('--props-w', `${w}px`);
+  mainEl.style.setProperty('--props-w', `${Math.round(w)}px`);
 });
 
 // chiusura con modifiche non salvate: il browser chiede conferma

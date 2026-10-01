@@ -20,6 +20,24 @@ export class Toolbar {
     this.leds = [];
     this.tip = document.getElementById('tooltip');
     this.render();
+    // la barra si compatta quando la finestra si restringe (e torna estesa quando si allarga)
+    new ResizeObserver(() => this.fit()).observe(el);
+    document.fonts?.ready.then(() => this.fit());
+  }
+
+  /**
+   * Adatta la barra alla larghezza disponibile: livelli di compattazione crescenti (fit-1 spazi ridotti,
+   * fit-2 senza testi sui pulsanti, fit-3 senza testo sul pulsante principale, fit-4 senza il gruppo Vista,
+   * i cui comandi restano nei menu) finché tutti i gruppi entrano.
+   */
+  fit() {
+    const el = this.el;
+    const levels = ['fit-1', 'fit-2', 'fit-3', 'fit-4'];
+    el.classList.remove(...levels);
+    for (const c of levels) {
+      if (el.scrollWidth <= el.clientWidth + 1) break;
+      el.classList.add(c);
+    }
   }
 
   render() {
@@ -58,6 +76,7 @@ export class Toolbar {
       this.el.append(h('div', { class: `tb-group${g.stage ? ' stage' : ''}${g.end ? ' view-group' : ''}`, role: 'group', 'aria-label': g.caption }, row, cap));
     }
     this.update();
+    this.fit();
   }
 
   /** Elenco a discesa: la prima voce è il titolo, scegliendo un'opzione si esegue l'azione. */

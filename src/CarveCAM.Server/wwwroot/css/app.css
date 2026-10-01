@@ -254,13 +254,19 @@ kbd {
 .pal-row.disabled .pal-ico { opacity: .4; }
 .pal-empty { padding: 18px 12px; color: var(--text-faint); }
 
-@media (max-width: 1640px) {
-  .tb-btn.labeled:not(.primary) .tb-lbl { display: none; }
-  .tb-btn.labeled:not(.primary) { padding: 0 6px; background: none; }
-  .tb-select { max-width: 112px; }
-}
+/* barra strumenti adattiva: se i gruppi non entrano nella larghezza, ui-toolbar.js applica le classi fit-1…fit-4 */
+#toolbar.fit-1 .tb-group { padding: 0 5px; }
+#toolbar.fit-1 .tb-sep { margin: 0 2px; }
+#toolbar.fit-1 .tb-btn { min-width: 29px; padding: 0 4px; }
+#toolbar.fit-1 .tb-btn.labeled { padding: 0 8px 0 6px; }
+#toolbar.fit-1 .tb-select { max-width: 112px; }
+#toolbar.fit-2 .tb-btn.labeled:not(.primary) .tb-lbl { display: none; }
+#toolbar.fit-2 .tb-btn.labeled:not(.primary) { padding: 0 4px; background: none; }
+#toolbar.fit-2 .tb-select { max-width: 86px; }
+#toolbar.fit-3 .tb-btn.primary .tb-lbl { display: none; }
+#toolbar.fit-3 .tb-btn.primary { padding: 0 6px; }
+#toolbar.fit-4 .tb-group.view-group { display: none; }
 @media (max-width: 1380px) {
-  .tb-group.view-group { display: none; }
   .cmd-search { width: auto; }
   .cmd-search .cs-lbl { display: none; }
 }
