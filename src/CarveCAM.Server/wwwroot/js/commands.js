@@ -9,7 +9,10 @@ import { planeFrame, angleOfU, fmt } from './geom.js';
 import { modal, confirmBox, toast, status, busy, busyText, idle, h } from './dialogs.js';
 import { SERVER_FORMATS, CLIENT_FORMATS, extOf, parseInBrowser, buildDisplayGeometry } from './importers.js';
 import { OP_DEFAULTS, TOOL_DEFAULTS, effParam, round4 } from './oplib.js';
-import { pickTool, pickSetup, toolFromLibrary, getTools, openToolLibrary, openSetupLibrary, saveOperationAsSetup } from './library.js';
+import {
+  pickTool, pickSetup, toolFromLibrary, getTools, getSetups, openToolLibrary, openSetupLibrary, saveOperationAsSetup,
+  usedTools, reconcileProjectTools, exportLibrary, importLibrary,
+} from './library.js';
 import { pickProjectFile, writeProjectFile, addRecent, recentList, fileOfRecent, removeRecent } from './files.js';
 import { openOptions } from './options.js';
 import { color } from './settings.js';
@@ -100,9 +103,19 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   };
 
   async function openFile(file, handle) {
+    let proj;
     busy(t('Apertura progetto…'));
     try {
-      const proj = await api.loadProject(file);
+      proj = await api.loadProject(file);
+    } catch (e) {
+      log.error('Apertura del progetto non riuscita', e);
+      toast(t('Apertura non riuscita: {msg}', { msg: e.message }), 'err');
+      return false;
+    } finally { idle(); }
+    // utensili usati dal progetto confrontati con il magazzino: avviso, ed eventuale aggiornamento
+    if (!(await reconcileProjectTools(proj))) { log.info('Apertura annullata (utensili diversi dal magazzino)', { file: file.name }); return false; }
+    busy(t('Apertura progetto…'));
+    try {
       sketch.exit(false);
       sim.stop();
       cmd.endPlaneMode();
@@ -144,15 +157,17 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       return;
     }
     const when = new Date(entry.time).toLocaleString(LOCALE);
-    const ok = await confirmBox(t('Progetto recente'),
+    const ok0 = await confirmBox(t('Progetto recente'),
       entry.handle
         ? t('Il file "{file}" non è accessibile. Aprire la copia del progetto memorizzata il {when}?', { file: entry.fileName, when })
         : t('Il browser non consente di riaprire direttamente il file "{file}". Aprire la copia del progetto memorizzata il {when}? Per salvarla usa Salva con nome.', { file: entry.fileName || entry.name, when }),
       t('Apri la copia'));
-    if (!ok) return;
+    if (!ok0) return;
+    const snap = JSON.parse(entry.snapshot);
+    if (!(await reconcileProjectTools(snap))) return;
     sketch.exit(false);
     sim.stop();
-    setProject(JSON.parse(entry.snapshot));
+    setProject(snap);
     App.fileHandle = null;
     App.fileName = entry.fileName || '';
     await cmd.loadMeshes();
@@ -167,7 +182,11 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     try {
       const res = await writeProjectFile(async () => {
         busy(t('Salvataggio progetto…'));
-        try { return await api.saveProject(App.project); } finally { idle(); }
+        try {
+          // il progetto porta con sé le schede degli utensili usati (confrontate col magazzino all'apertura)
+          App.project.tools = await usedTools(App.project);
+          return await api.saveProject(App.project);
+        } finally { idle(); }
       }, name, App.fileHandle, saveAs);
       if (!res) return false;
       App.fileHandle = res.handle;
@@ -965,6 +984,8 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
 
   cmd.saveAsSetup = opId => { const op = getOperation(opId); if (op) saveOperationAsSetup(op); };
   cmd.toolLibrary = () => openToolLibrary();
+  cmd.exportLibrary = () => exportLibrary();
+  cmd.importLibrary = () => importLibrary();
   cmd.setupLibrary = () => openSetupLibrary();
   cmd.options = () => openOptions();
 

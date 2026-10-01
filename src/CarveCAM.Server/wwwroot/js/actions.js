@@ -99,6 +99,10 @@ export function createActions({ cmd, vp, sketch }) {
       hint: 'Archivio delle frese: diametro, raggio, altezza del tagliente, avanzamenti consigliati' },
     { id: 'tools.setups', label: 'Setup di lavorazione…', icon: 'setups', tone: 'op', run: cmd.setupLibrary,
       hint: 'Parametri di lavorazione preferiti, anche in % del diametro o dell\'altezza del tagliente' },
+    { id: 'tools.libExport', label: 'Esporta utensili e setup…', icon: 'saveAs', run: cmd.exportLibrary,
+      hint: 'Salva magazzino utensili e setup di lavorazione in un file, per un altro computer o come copia' },
+    { id: 'tools.libImport', label: 'Importa utensili e setup…', icon: 'open', run: cmd.importLibrary,
+      hint: 'Aggiunge o sostituisce utensili e setup da un file esportato' },
     { id: 'tools.options', label: 'Opzioni…', icon: 'options', run: cmd.options, hint: 'Colori, frecce e cursori, lingua, griglia, tema chiaro o scuro' },
     // ---- vista
     { id: 'view.top', label: 'Vista dall\'alto', icon: 'viewTop', kbd: '7', run: () => cmd.setView('top') },
@@ -164,7 +168,7 @@ export const MENUS = [
   { label: 'Piani', items: ['plane.add', '-', { head: 'Piani standard' }, ...['xy+', 'xy-', 'xz-', 'xz+', 'yz+', 'yz-'].map(p => `plane.${p}`), '-', 'plane.face', 'plane.3pt', 'plane.view', '-', 'plane.flip'] },
   { label: 'Sketch', items: ['sketch.new', 'sketch.edit', 'sketch.finish', '-', { head: 'Strumenti di disegno' }, 'tool.select', 'tool.polyline', 'tool.rect', 'tool.circle', 'tool.polygon', '-', 'tool.profile'] },
   { label: 'Lavorazioni', items: ['op.pocket', 'op.finish', '-', 'op.compute', 'op.computeAll', '-', 'op.simulate', 'op.simulateAll', '-', 'file.gcode', 'file.cl'] },
-  { label: 'Strumenti', items: ['tools.library', 'tools.setups', '-', 'tools.options'] },
+  { label: 'Strumenti', items: ['tools.library', 'tools.setups', '-', 'tools.libExport', 'tools.libImport', '-', 'tools.options'] },
   { label: 'Vista', items: ['view.top', 'view.front', 'view.right', 'view.left', 'view.back', 'view.bottom', 'view.iso', '-', 'plane.normalView', 'view.fit', 'view.ortho', '-', 'view.grid', 'view.paths', 'view.rapids', 'view.wire'] },
   { label: 'Aiuto', items: ['help.palette', 'help.shortcuts', '-', 'help.log', '-', 'file.demo', 'help.about'] },
 ];

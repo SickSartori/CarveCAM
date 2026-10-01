@@ -1,6 +1,7 @@
 // Archivi sul server: magazzino utensili e setup di lavorazione (parametri preferiti dell'utente).
-// Finestre di gestione e di scelta usate quando si aggiunge una lavorazione.
-import { api } from './api.js';
+// Finestre di gestione e di scelta usate quando si aggiunge una lavorazione; esportazione e importazione
+// degli archivi; utensili salvati nel progetto e confronto con il magazzino all'apertura.
+import { api, download } from './api.js';
 import { modal, h, toast, confirmBox } from './dialogs.js';
 import { t } from './i18n.js';
 import { OP_DEFAULTS, REL_PARAMS, BASE_LABEL, setupParamsOf, effParam, round4, toolSilhouette, toolIssues, taperGeom } from './oplib.js';
@@ -253,13 +254,31 @@ async function manager({ title, kind, cols, form, make, filter }) {
     sel = list[Math.min(i, list.length - 1)]?.id || null;
     redrawList(); redrawForm();
   };
+  // esportazione dell'elenco mostrato (anche modifiche non ancora salvate) e importazione da file
+  const exp = () => {
+    downloadLibrary({ [kind]: list }, kind === 'tools' ? 'carvecam-utensili.json' : 'carvecam-setup.json');
+  };
+  const imp = async () => {
+    const data = await readLibraryFile();
+    const items = data?.[kind];
+    if (!items) { if (data) toast(t('Il file non contiene {what}', { what: kind === 'tools' ? t('utensili') : t('setup di lavorazione') }), 'warn'); return; }
+    const mode = await askImportMode(items.length, kind);
+    if (!mode) return;
+    const res = mergeItems(list, items, kind, mode === 'replace');
+    sel = list[0]?.id || null;
+    redrawList(); redrawForm();
+    toast(t('{a} aggiunti, {u} aggiornati: premi Salva per conservarli', { a: res.added, u: res.updated }), 'ok', 4000);
+  };
   const body = h('div', { class: 'lib' },
     h('div', { class: 'lib-left' },
       h('div', { class: 'lib-tools' }, search,
         h('button', { class: 'btn', type: 'button', onclick: add }, t('Nuovo')),
         h('button', { class: 'btn', type: 'button', onclick: dup }, t('Duplica')),
         h('button', { class: 'btn danger', type: 'button', onclick: del }, t('Elimina'))),
-      h('div', { class: 'lib-list' }, h('table', {}, h('thead', {}, h('tr', {}, cols.map(c => h('th', { class: c.cls || '' }, t(c.label))))), tbody))),
+      h('div', { class: 'lib-list' }, h('table', {}, h('thead', {}, h('tr', {}, cols.map(c => h('th', { class: c.cls || '' }, t(c.label))))), tbody)),
+      h('div', { class: 'lib-tools lib-io' },
+        h('button', { class: 'btn', type: 'button', onclick: exp, title: t('Salva l\'elenco in un file (.json)') }, t('Esporta…')),
+        h('button', { class: 'btn', type: 'button', onclick: imp, title: t('Aggiunge o sostituisce elementi da un file esportato') }, t('Importa…')))),
     formBox);
   redrawList();
   redrawForm();
@@ -544,4 +563,236 @@ export async function pickSetup(kind, tl) {
     if (res.value !== 'ok' || !res.item) return null;
     return { setup: res.item.id === '__default' ? null : res.item };
   }
+}
+
+// ------------------------------------------------------------------ esportazione e importazione degli archivi
+const LIB_FILE_KIND = 'carvecam-library';
+const TOOL_TYPE_IDS = TOOL_TYPES.map(x => x[0]);
+
+function downloadLibrary(data, fileName) {
+  const file = { app: 'CarveCAM', kind: LIB_FILE_KIND, version: 1, saved: new Date().toISOString(), ...structuredClone(data) };
+  download(JSON.stringify(file, null, 2), fileName, 'application/json');
+  log.info('Archivi esportati', { tools: data.tools?.length ?? 0, setups: data.setups?.length ?? 0 });
+}
+
+const validTool = x => x && typeof x === 'object' && TOOL_TYPE_IDS.includes(x.type) && Number(x.diameter) > 0;
+const validSetup = x => x && typeof x === 'object' && (x.kind === 'pocket' || x.kind === 'finish') && x.params && typeof x.params === 'object';
+
+/** Legge un file di archivi scelto dall'utente: { tools?, setups? } (solo elementi validi) o null. */
+function readLibraryFile() {
+  return new Promise(resolve => {
+    const inp = h('input', { type: 'file', accept: '.json,application/json' });
+    inp.addEventListener('change', async () => {
+      const f = inp.files[0];
+      if (!f) { resolve(null); return; }
+      try {
+        const j = JSON.parse(await f.text());
+        // file di CarveCAM, oppure un elenco semplice di utensili o di setup
+        const src = Array.isArray(j) ? (j.some(validTool) ? { tools: j } : { setups: j }) : j;
+        const out = {};
+        if (Array.isArray(src.tools)) out.tools = src.tools.filter(validTool);
+        if (Array.isArray(src.setups)) out.setups = src.setups.filter(validSetup);
+        if (!out.tools?.length && !out.setups?.length) throw new Error('vuoto');
+        log.info('File di archivi letto', { file: f.name, tools: out.tools?.length ?? 0, setups: out.setups?.length ?? 0 });
+        resolve(out);
+      } catch (e) {
+        log.warn('File di archivi non valido', e);
+        toast(t('"{name}" non contiene utensili o setup di CarveCAM', { name: f.name }), 'err');
+        resolve(null);
+      }
+    });
+    inp.click();
+  });
+}
+
+async function askImportMode(n, what) {
+  return modal({
+    title: t('Importa'),
+    body: h('div', {}, h('p', { style: { marginTop: 0 } }, t('Il file contiene {n} {what}.', { n, what: what === 'tools' ? t('utensili') : what === 'setups' ? t('setup di lavorazione') : t('elementi') })),
+      h('p', { class: 'p-note', style: { margin: 0 } }, t('Aggiungi: gli elementi già presenti (stesso identificativo, o stesso numero e nome per gli utensili) vengono aggiornati, gli altri aggiunti. Sostituisci: l\'archivio attuale viene sostituito da quello del file.'))),
+    buttons: [{ label: t('Annulla'), value: false }, { label: t('Sostituisci'), value: 'replace' }, { label: t('Aggiungi'), value: 'merge', primary: true }],
+  });
+}
+
+/** Unisce items nell'elenco list (modificato): { added, updated }. */
+function mergeItems(list, items, kind, replaceAll) {
+  if (replaceAll) list.splice(0, list.length);
+  let added = 0, updated = 0;
+  for (const src of items) {
+    const it = structuredClone(src);
+    const i = list.findIndex(x => (it.id && x.id === it.id)
+      || (kind === 'tools' ? x.number === it.number && x.name === it.name : x.name === it.name && x.kind === it.kind));
+    if (i >= 0) { list[i] = { ...list[i], ...it, id: list[i].id }; updated++; } else {
+      if (!it.id || list.some(x => x.id === it.id)) it.id = uid(kind === 'tools' ? 'tl' : 'st');
+      list.push(it);
+      added++;
+    }
+  }
+  return { added, updated };
+}
+
+/** Esporta magazzino utensili e setup in un unico file. */
+export async function exportLibrary() {
+  downloadLibrary({ tools: await getTools(), setups: await getSetups() }, 'carvecam-magazzino-e-setup.json');
+}
+
+/** Importa utensili e/o setup da un file (esportato da CarveCAM) e salva gli archivi. */
+export async function importLibrary() {
+  const data = await readLibraryFile();
+  if (!data) return;
+  const n = (data.tools?.length || 0) + (data.setups?.length || 0);
+  const mode = await askImportMode(n, data.tools && data.setups ? 'all' : data.tools ? 'tools' : 'setups');
+  if (!mode) return;
+  const msg = [];
+  try {
+    for (const kind of ['tools', 'setups']) {
+      if (!data[kind]?.length) continue;
+      const list = structuredClone(await load(kind));
+      const r = mergeItems(list, data[kind], kind, mode === 'replace');
+      await save(kind, list);
+      msg.push(t('{what}: {a} aggiunti, {u} aggiornati', { what: kind === 'tools' ? t('Utensili') : t('Setup'), a: r.added, u: r.updated }));
+    }
+    toast(msg.join(' · '), 'ok', 5000);
+  } catch (e) { toast(t('Salvataggio dell\'archivio non riuscito: {msg}', { msg: e.message }), 'err', 6000); }
+}
+
+// ------------------------------------------------------------------ utensili del progetto
+const GEOM_KEYS = ['type', 'diameter', 'cornerRadius', 'fluteLength', 'length', 'neck', 'shank', 'taperAngle', 'tipType'];
+const DIFF_LABEL = {
+  number: 'Numero (T)', name: 'Nome', type: 'Tipo fresa', diameter: 'Diametro', cornerRadius: 'Raggio raccordo', fluteLength: 'Altezza tagliente (Lc)',
+  length: 'Sbalzo', neck: 'Diametro collo', shank: 'Diametro gambo', feed: 'Avanzamento', plunge: 'Affondo', spindle: 'Mandrino',
+  taperAngle: 'Angolo per lato', tipType: 'Punta',
+};
+
+/** Geometria confrontabile di una fresa (raggio coerente con il tipo, 0 per i valori non indicati). */
+function geomOf(tl) {
+  const D = Number(tl.diameter) || 0;
+  return {
+    type: tl.type, diameter: D,
+    cornerRadius: tl.type === 'ball' ? D / 2 : tl.type === 'bull' ? Number(tl.cornerRadius) || 0 : 0,
+    fluteLength: Number(tl.fluteLength) || 0, length: Number(tl.length) || 0, neck: Number(tl.neck) || 0, shank: Number(tl.shank) || 0,
+    // solo per la fresa conica (per le altre i campi mancano e risultano uguali nel confronto)
+    ...(tl.type === 'taper' ? { taperAngle: Number(tl.taperAngle) || 0, tipType: tl.tipType === 'flat' ? 'flat' : 'ball' } : {}),
+  };
+}
+const sameNum = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) < 1e-6;
+const TEXT_KEYS = ['type', 'tipType'];
+const sameGeom = (a, b) => { const x = geomOf(a), y = geomOf(b); return GEOM_KEYS.every(k => (TEXT_KEYS.includes(k) ? x[k] === y[k] : sameNum(x[k], y[k]))); };
+
+/** Utensili usati dalle lavorazioni di un progetto: record del magazzino (con l'elenco delle lavorazioni). */
+function projectToolRecords(proj) {
+  const stored = Array.isArray(proj.tools) ? proj.tools : [];
+  const map = new Map();
+  for (const op of proj.operations || []) {
+    const tl = op.tool;
+    if (!tl) continue;
+    const key = tl.libId || `${tl.number}|${tl.name}|${JSON.stringify(geomOf(tl))}`;
+    let rec = map.get(key);
+    if (!rec) {
+      const st = stored.find(x => (tl.libId && x.id === tl.libId) || (x.number === tl.number && sameGeom(x, tl)));
+      rec = { ...(st ? structuredClone(st) : {}), ...geomOf(tl), number: tl.number, name: tl.name || st?.name || toolDesc(tl), id: tl.libId || st?.id || null, fromFile: !!st, opIds: [] };
+      for (const k of ['feed', 'plunge', 'spindle']) if (!(rec[k] > 0) && op[k] > 0) rec[k] = op[k];
+      map.set(key, rec);
+    }
+    rec.opIds.push(op.id);
+  }
+  return [...map.values()];
+}
+
+/** Utensili da salvare nel progetto: dati del magazzino con la geometria usata dalle lavorazioni. */
+export async function usedTools(project) {
+  let lib = [];
+  try { lib = await getTools(); } catch { /* magazzino non disponibile: solo i dati delle lavorazioni */ }
+  return projectToolRecords({ ...project, tools: [] }).map(({ opIds, fromFile, ...r }) => {
+    const le = r.id && lib.find(x => x.id === r.id);
+    return le ? { ...structuredClone(le), ...geomOf(r), number: r.number, name: r.name } : r;
+  });
+}
+
+function toolDiffs(le, rec) {
+  const out = [];
+  const a = geomOf(le), b = geomOf(rec);
+  for (const k of GEOM_KEYS) {
+    if (k === 'cornerRadius' && a.type !== 'bull' && b.type !== 'bull') continue;
+    if (TEXT_KEYS.includes(k) ? a[k] !== b[k] : !sameNum(a[k], b[k])) out.push({ k, from: a[k], to: b[k] });
+  }
+  if (le.number !== rec.number) out.push({ k: 'number', from: le.number, to: rec.number });
+  if ((le.name || '') !== (rec.name || '')) out.push({ k: 'name', from: le.name, to: rec.name });
+  // la tecnologia si confronta solo se il progetto contiene la scheda completa dell'utensile
+  if (rec.fromFile) for (const k of ['feed', 'plunge', 'spindle']) if (rec[k] > 0 && !sameNum(le[k], rec[k])) out.push({ k, from: le[k], to: rec[k] });
+  return out;
+}
+
+const diffVal = (k, v) => (k === 'type' ? t(TYPE_SHORT[v] || v || '–') : k === 'tipType' ? t(v === 'flat' ? 'piatta' : v ? 'sferica' : '–') : typeof v === 'number' ? fmt(v, 3) : (v ?? '–'));
+
+/**
+ * All'apertura di un progetto: confronta gli utensili usati con il magazzino. Se mancano o hanno parametri
+ * diversi avvisa; l'utente può aprire aggiornando il magazzino (aggiunge o modifica gli utensili scelti),
+ * aprire senza toccarlo o annullare. Ritorna false se l'apertura va annullata.
+ */
+export async function reconcileProjectTools(proj) {
+  const recs = projectToolRecords(proj);
+  if (!recs.length) return true;
+  let lib;
+  try { lib = structuredClone(await getTools()); } catch { return true; }
+  const relink = (rec, id) => {
+    for (const op of proj.operations || []) if (rec.opIds.includes(op.id) && op.tool) op.tool.libId = id;
+  };
+  const rows = [];
+  for (const rec of recs) {
+    const le = (rec.id && lib.find(x => x.id === rec.id)) || lib.find(x => x.number === rec.number && sameGeom(x, rec)) || lib.find(x => x.number === rec.number);
+    const diffs = le ? toolDiffs(le, rec) : null;
+    if (le && !diffs.length) { relink(rec, le.id); continue; }
+    rows.push({ rec, le, diffs, on: true });
+  }
+  if (!rows.length) return true;
+  log.warn('Utensili del progetto diversi dal magazzino', { missing: rows.filter(r => !r.le).length, different: rows.filter(r => r.le).length });
+  const opsOf = rec => (proj.operations || []).filter(o => rec.opIds.includes(o.id)).map(o => o.name).join(', ');
+  const tbody = h('tbody', {}, rows.map(r => {
+    const c = h('input', { type: 'checkbox' });
+    c.checked = true;
+    c.addEventListener('change', () => { r.on = c.checked; });
+    const state = r.le
+      ? h('div', {}, h('b', {}, t('Diverso da T{n} del magazzino', { n: r.le.number })),
+        h('ul', { class: 'tool-diff' }, r.diffs.map(d => h('li', {}, `${t(DIFF_LABEL[d.k] || d.k)}: ${diffVal(d.k, d.from)} → ${diffVal(d.k, d.to)}`))))
+      : h('b', { class: 'warn-txt' }, t('Non presente nel magazzino'));
+    return h('tr', {}, h('td', {}, c), h('td', { class: 'num' }, `T${r.rec.number}`),
+      h('td', {}, r.rec.name, h('div', { class: 'p-note' }, toolDesc(r.rec))), h('td', {}, state), h('td', { class: 'p-note' }, opsOf(r.rec)));
+  }));
+  const res = await modal({
+    title: t('Utensili del progetto'), size: 'wide',
+    body: h('div', {},
+      h('p', { style: { marginTop: 0 } }, t('Il progetto usa utensili che nel magazzino mancano o hanno parametri diversi (magazzino → progetto).')),
+      h('div', { class: 'lib-list chooser' }, h('table', {},
+        h('thead', {}, h('tr', {}, ['', 'T', t('Utensile del progetto'), t('Magazzino'), t('Lavorazioni')].map(x => h('th', {}, x)))), tbody)),
+      h('p', { class: 'p-note' }, t('"Apri e aggiorna il magazzino" aggiunge gli utensili mancanti e modifica quelli diversi (solo le righe spuntate). Le lavorazioni del progetto usano comunque le misure salvate nel progetto.'))),
+    buttons: [
+      { label: t('Annulla'), value: false },
+      { label: t('Apri senza aggiornare'), value: 'open' },
+      { label: t('Apri e aggiorna il magazzino'), value: 'update', primary: true },
+    ],
+  });
+  if (!res) return false;
+  if (res !== 'update') return true;
+  let added = 0, changed = 0;
+  for (const r of rows) {
+    if (!r.on) continue;
+    const { opIds, fromFile, id, ...data } = r.rec;
+    if (r.le) {
+      Object.assign(r.le, data);
+      relink(r.rec, r.le.id);
+      changed++;
+    } else {
+      const nid = id && !lib.some(x => x.id === id) ? id : uid('tl');
+      lib.push({ flutes: 2, material: '', notes: '', ...data, id: nid });
+      relink(r.rec, nid);
+      added++;
+    }
+  }
+  try {
+    await save('tools', lib);
+    log.info('Magazzino aggiornato dal progetto', { added, changed });
+    toast(t('Magazzino aggiornato: {a} utensili aggiunti, {c} modificati', { a: added, c: changed }), 'ok', 4000);
+  } catch (e) { toast(t('Salvataggio dell\'archivio non riuscito: {msg}', { msg: e.message }), 'err', 6000); }
+  return true;
 }
