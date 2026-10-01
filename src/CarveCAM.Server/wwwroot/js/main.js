@@ -24,9 +24,12 @@ import { api } from './api.js';
 import { status, toast, h, modal } from './dialogs.js';
 import { fmt } from './geom.js';
 import { previousSessionCrashed, startSession } from './recovery.js';
+import { initLoaders, splashText, splashDone } from './loader.js';
 
 applyTheme();
 translateDom();
+initLoaders();
+splashText(t('Preparazione dell\'interfaccia…'));
 
 const vp = new Viewport(document.getElementById('viewport'));
 const viewCube = new ViewCube(vp, document.getElementById('view-cube'));
@@ -378,13 +381,18 @@ window.addEventListener('beforeunload', e => {
 
 // ------------------------------------------------------------------ avvio
 (async function start() {
+  try { await startUp(); } catch (e) { log.error('Avvio non riuscito', e); } finally { splashDone(); }
+})();
+
+async function startUp() {
   const crashed = previousSessionCrashed();
   startSession();
   const saved = loadAutosave();
   const has = saved && isProjectDoc(saved.project);
   const content = has && (saved.project.objects?.length || saved.project.artifacts?.length || saved.project.planes?.length);
   if (has && crashed && saved.dirty && content) {
-    // chiusura anomala con modifiche non salvate: si chiede se recuperarle
+    // chiusura anomala con modifiche non salvate: si chiede se recuperarle (sopra l'interfaccia, non sotto l'avvio)
+    splashDone();
     setProject(newProject());
     const when = saved.ts ? new Date(saved.ts).toLocaleString(LOCALE) : '';
     const ok = await modal({
@@ -400,8 +408,11 @@ window.addEventListener('beforeunload', e => {
   } else {
     setProject(has ? saved.project : newProject(), !!(has && saved.dirty));
   }
+  splashText(t('Connessione al server…'));
   await checkServer(true);
+  splashText(t('Caricamento dei modelli…'));
   await cmd.loadMeshes();
+  splashText(t('Preparazione della vista…'));
   // vista iniziale: quella memorizzata nelle opzioni (orientamento, zoom, punto inquadrato), altrimenti adatta
   if (settings.view?.saved) {
     vp.applyView(settings.view, { animate: false });
@@ -409,5 +420,6 @@ window.addEventListener('beforeunload', e => {
     toolbar.update();
   } else vp.fit();
   await refreshRecent();
+  splashDone();
   if (has && !crashed && content) toast(t('Ripristinato l\'ultimo progetto aperto in questo browser'), 'info', 3000);
-})();
+}

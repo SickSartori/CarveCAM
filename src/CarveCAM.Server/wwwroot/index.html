@@ -9,6 +9,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="css/app.css">
+  <script>
+    // tema e lingua letti subito dalle opzioni: la schermata di avvio compare già con i colori giusti
+    try {
+      var cc = JSON.parse(localStorage.getItem('carvecam.settings.v1') || '{}');
+      if (cc.theme === 'light') document.documentElement.dataset.theme = 'light';
+      window.__ccLang = cc.lang === 'en' ? 'en' : 'it';
+    } catch (e) { window.__ccLang = 'it'; }
+  </script>
   <script type="importmap">
   {
     "imports": {
@@ -19,6 +27,37 @@
   </script>
 </head>
 <body>
+  <!-- schermata di avvio: la fresa (punto ambra) scava la passata interna e poi la "C" del logo -->
+  <div id="splash" class="splash" role="status" aria-live="polite">
+    <svg class="cc-loader" viewBox="0 0 32 32" aria-hidden="true">
+      <defs>
+        <linearGradient id="ccl-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#4f6bff"/>
+          <stop offset="1" stop-color="#12b5d6"/>
+        </linearGradient>
+      </defs>
+      <rect class="ccl-tile" width="32" height="32" rx="8" fill="url(#ccl-bg)"/>
+      <rect x=".5" y=".5" width="31" height="31" rx="7.5" fill="none" stroke="#fff" stroke-opacity=".18"/>
+      <path class="ccl-guide" d="M22.36 9.64A9 9 0 1 0 22.36 22.36M19.39 12.61A4.8 4.8 0 1 0 19.39 19.39"/>
+      <path class="ccl-inner" pathLength="100" d="M19.39 12.61A4.8 4.8 0 1 0 19.39 19.39"/>
+      <path class="ccl-outer" pathLength="100" d="M22.36 9.64A9 9 0 1 0 22.36 22.36"/>
+      <g class="ccl-tool ccl-tool-in"><circle cx="20.8" cy="16" r="2.3"/></g>
+      <g class="ccl-tool ccl-tool-out"><circle cx="25" cy="16" r="3.1"/></g>
+    </svg>
+    <div class="splash-name">CarveCAM</div>
+    <div id="splash-text" class="splash-text">Avvio…</div>
+  </div>
+  <script>
+    if (window.__ccLang === 'en') document.getElementById('splash-text').textContent = 'Starting…';
+    // moduli non caricati dopo 15 s (Three.js arriva da Internet): lo si dice invece di restare sull'animazione
+    setTimeout(function () {
+      if (window.carvecam) return;
+      var e = document.getElementById('splash-text');
+      if (e) e.textContent = window.__ccLang === 'en'
+        ? 'Loading is taking long: check the Internet connection (Three.js) and that the CarveCAM server is running.'
+        : 'Il caricamento richiede più del previsto: controlla la connessione a Internet (Three.js) e che il server CarveCAM sia avviato.';
+    }, 15000);
+  </script>
   <header id="topbar">
     <div id="titlebar">
       <div class="brand" aria-label="CarveCAM">
@@ -130,10 +169,13 @@
       </div>
 
       <div id="busy" class="busy" hidden>
-        <div class="busy-box">
-          <div class="spinner"></div>
-          <div id="busy-text">Calcolo in corso…</div>
-          <button id="busy-cancel">Annulla</button>
+        <div class="busy-box" role="status" aria-live="polite">
+          <div class="busy-logo"></div>
+          <div class="busy-info">
+            <div id="busy-text">Calcolo in corso…</div>
+            <div id="busy-time" class="busy-time"></div>
+          </div>
+          <button id="busy-cancel" class="btn">Annulla</button>
         </div>
       </div>
     </div>

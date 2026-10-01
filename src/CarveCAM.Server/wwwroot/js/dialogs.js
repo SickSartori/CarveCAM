@@ -89,12 +89,27 @@ export async function confirmBox(title, text, okLabel = t('OK'), cancelLabel = t
 // ------------------------------------------------------------------ attività lunga con annullamento
 let busyCtrl = null;
 let busyT0 = 0;
+let busyTimer = null;
+
+/** Tempo trascorso: "12 s", "1:05". */
+function elapsed(s) {
+  return s < 60 ? `${Math.floor(s)} s` : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+}
+
+/** Attività in corso: logo animato, testo e tempo trascorso (dopo 2 s); ritorna il segnale per annullarla. */
 export function busy(text) {
   const el = document.getElementById('busy');
   document.getElementById('busy-text').textContent = text;
+  const timeEl = document.getElementById('busy-time');
+  timeEl.textContent = '';
   el.hidden = false;
   busyCtrl = new AbortController();
   busyT0 = performance.now();
+  clearInterval(busyTimer);
+  busyTimer = setInterval(() => {
+    const s = (performance.now() - busyT0) / 1000;
+    if (s >= 2) timeEl.textContent = elapsed(s);
+  }, 500);
   log.debug(`Attività: ${text}`);
   document.getElementById('busy-cancel').onclick = () => { log.info('Attività annullata dall\'utente', { text }); busyCtrl?.abort(); };
   return busyCtrl.signal;
@@ -104,6 +119,8 @@ export function busyText(text) {
 }
 export function idle() {
   document.getElementById('busy').hidden = true;
+  clearInterval(busyTimer);
+  busyTimer = null;
   if (busyCtrl) log.debug(`Attività conclusa in ${Math.round(performance.now() - busyT0)} ms`);
   busyCtrl = null;
 }
