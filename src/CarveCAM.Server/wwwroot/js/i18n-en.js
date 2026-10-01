@@ -757,6 +757,7 @@ export const EN = {
   "Velocità di rotazione del mandrino in giri/min.": "Spindle speed in rpm.",
   "Verifica collisioni": "Collision check",
   "Verifica del server in corso": "Checking the server",
+  "Versione": "Version",
   "Vertici (x y)": "Vertices (x y)",
   "Visibile": "Visible",
   "Vista": "View",
@@ -781,4 +782,422 @@ export const EN = {
   "YZ · normale +X (da destra)": "YZ · normal +X (from right)",
   "YZ · normale −X (da sinistra)": "YZ · normal −X (from left)",
   "Zigzag": "Zigzag",
+  // geometria dell'utensile generata dai parametri
+  "Anteprima della fresa": "Cutter preview",
+  "Diametro collo": "Neck diameter",
+  "Generata dai parametri": "Generated from the parameters",
+  "mm (0=come Ø)": "mm (0=same as Ø)",
+  "mm (0=Lc)": "mm (0=Lc)",
+  "Sbalzo": "Reach",
+  "sbalzo": "reach",
+  "Sbalzo (lunghezza utile)": "Reach (usable length)",
+  "Lunghezza utile della fresa, dalla punta all'inizio del gambo (comprende tagliente e collo). Indica fin dove l'utensile può scendere: deve superare la profondità della lavorazione. 0 = uguale all'altezza del tagliente. In simulazione la fresa viene generata con queste misure.":
+    "Usable length of the cutter, from the tip to the start of the shank (flutes and neck included). It tells how deep the tool can go: it must exceed the machining depth. 0 = same as the flute length. In the simulation the cutter is generated with these sizes.",
+  "Diametro del collo ribassato tra tagliente e gambo, tipico delle frese di precisione a collo lungo. 0 = uguale al diametro della fresa.":
+    "Diameter of the relieved neck between flutes and shank, typical of long-neck precision cutters. 0 = same as the cutter diameter.",
+  "Diametro del gambo preso dalla pinza. Serve a generare la forma della fresa in simulazione; il calcolo dei percorsi verifica le collisioni della parte tagliente, non del gambo né del portautensile.":
+    "Diameter of the shank held by the collet. It is used to generate the cutter shape in the simulation; the toolpath computation checks collisions of the cutting part, not of the shank or the holder.",
+  // utensili conici, origini, riposiziona, sequenza delle lavorazioni, blackbox, opzioni (vista e file)
+  "Nuova origine dal minimo, medio o massimo dell'ingombro dei solidi, per ogni asse, più un offset: tutto il progetto viene traslato (anche gli elementi bloccati)":
+    "New origin from the minimum, middle or maximum of the solids' bounding box, per axis, plus an offset: the whole project is moved (locked items too)",
+  "Nuova origine da un punto…":
+    "New origin from a point…",
+  "Clic su un punto della scena (si aggancia ai vertici): il punto potrà essere lo zero pezzo del G-code":
+    "Click a point in the scene (snaps to vertices): it can then be used as the G-code work zero",
+  "Nuova origine da coordinate…":
+    "New origin from coordinates…",
+  "Punto di origine con coordinate o punti notevoli dell'ingombro dei solidi":
+    "Origin point from coordinates or from key points of the solids' bounding box",
+  "Riordina lavorazioni…":
+    "Reorder operations…",
+  "Cambia la sequenza delle lavorazioni (anche trascinandole nel navigatore)":
+    "Change the order of the operations (you can also drag them in the navigator)",
+  "Esporta utensili e setup…":
+    "Export tools and setups…",
+  "Salva magazzino utensili e setup di lavorazione in un file, per un altro computer o come copia":
+    "Save the tool library and machining setups to a file, for another computer or as a backup",
+  "Importa utensili e setup…":
+    "Import tools and setups…",
+  "Aggiunge o sostituisce utensili e setup da un file esportato":
+    "Adds or replaces tools and setups from an exported file",
+  "Esporta blackbox…":
+    "Export blackbox…",
+  "Archivio protetto da password con tutti i dati per riprodurre un problema da segnalare":
+    "Password-protected archive with all the data needed to reproduce a problem to report",
+  "Informazioni su CarveCAM…":
+    "About CarveCAM…",
+  "Crediti di sviluppo…":
+    "Development credits…",
+  "William Veronesi e Gabriel S. Sartori":
+    "William Veronesi and Gabriel S. Sartori",
+  "Punti di origine":
+    "Origin points",
+  "Origini":
+    "Origins",
+  "Punti di origine (zero pezzo del G-code)":
+    "Origin points (G-code work zero)",
+  "Info":
+    "Info",
+  "Termina lo sketch prima di modificare il modello":
+    "Finish the sketch before changing the model",
+  "Concludi o annulla (Esc) la creazione del piano prima di modificare il modello":
+    "Complete or cancel (Esc) the plane creation before changing the model",
+  "Termina lo sketch prima di creare o modificare le lavorazioni":
+    "Finish the sketch before creating or changing operations",
+  "Il progetto si chiama ora \"{name}\". Salvarlo adesso nel file \"{file}\"?":
+    "The project is now called \"{name}\". Save it now to the file \"{file}\"?",
+  "Geometria non disponibile":
+    "Geometry not available",
+  "Spostamento":
+    "Offset",
+  "Ingombro risultante":
+    "Resulting bounding box",
+  "Origine (0, 0, 0)":
+    "Origin (0, 0, 0)",
+  "Ingombro degli altri solidi":
+    "Bounding box of the other solids",
+  "Ingombro attuale di \"{name}\"":
+    "Current bounding box of \"{name}\"",
+  "Riferimento":
+    "Reference",
+  "Min X":
+    "Min X",
+  "Centra X":
+    "Center X",
+  "Max X":
+    "Max X",
+  "Min Y":
+    "Min Y",
+  "Centra Y":
+    "Center Y",
+  "Max Y":
+    "Max Y",
+  "Min Z":
+    "Min Z",
+  "Centra Z":
+    "Center Z",
+  "Max Z":
+    "Max Z",
+  "Min, Centra e Max allineano il minimo, il centro o il massimo dell'ingombro dell'elemento a quelli del riferimento (con l'origine: alla coordinata 0). \"Appoggia su Z=0\" porta il punto più basso a Z=0.":
+    "Min, Center and Max align the minimum, center or maximum of the item's bounding box with those of the reference (with the origin: with coordinate 0). \"Drop to Z=0\" moves the lowest point to Z=0.",
+  "Riposiziona":
+    "Reposition",
+  "Riposiziona…":
+    "Reposition…",
+  "Applica":
+    "Apply",
+  "Nessuno spostamento necessario":
+    "No movement needed",
+  "\"{name}\" riposizionato":
+    "\"{name}\" repositioned",
+  "Ingombro dopo lo spostamento":
+    "Bounding box after the move",
+  "Nessun solido caricato: si possono usare solo l'origine attuale e gli offset":
+    "No solids loaded: only the current origin and the offsets can be used",
+  "Offset {ax}":
+    "Offset {ax}",
+  "Attuale":
+    "Current",
+  "Min":
+    "Min",
+  "Medio":
+    "Middle",
+  "Max":
+    "Max",
+  "Ingombro dei solidi caricati":
+    "Bounding box of the loaded solids",
+  "Nessun solido caricato":
+    "No solids loaded",
+  "Asse":
+    "Axis",
+  "Riferimento nell'ingombro":
+    "Reference in the bounding box",
+  "Nuova origine":
+    "New origin",
+  "Per ogni asse: nuova origine = riferimento (minimo, medio o massimo dell'ingombro di tutti gli oggetti e artefatti, anche nascosti, oppure l'origine attuale) + offset. Con \"Scegli nella vista\" si fa clic su un punto del modello (agganciato al vertice più vicino).":
+    "For each axis: new origin = reference (minimum, middle or maximum of the bounding box of all objects and artifacts, hidden ones too, or the current origin) + offset. With \"Pick in the view\" you click a point of the model (snapped to the nearest vertex).",
+  "Punto di origine creato: rinominalo nelle proprietà; si sceglie come zero pezzo nell'esportazione del G-code":
+    "Origin point created: rename it in the properties; choose it as the work zero when exporting the G-code",
+  "Clic su un punto (si aggancia ai vertici di solidi, sketch e piani vicini): diventa un punto di origine · <b>Esc</b> annulla":
+    "Click a point (snaps to nearby vertices of solids, sketches and planes): it becomes an origin point · <b>Esc</b> cancels",
+  "Coordinate nel sistema del progetto. Il punto si può spostare poi con il manipolatore o dalle proprietà.":
+    "Coordinates in the project system. The point can then be moved with the manipulator or from the properties.",
+  "Crea":
+    "Create",
+  "Angolo minimo in alto":
+    "Top minimum corner",
+  "Avvicinandosi a un vertice di solidi o sketch il punto si aggancia (pallino arancione)":
+    "Near a vertex of a solid or sketch the point snaps to it (orange dot)",
+  "Nessuna superficie o vertice sotto il cursore":
+    "No surface or vertex under the cursor",
+  "Punto {i}: {p}{s}":
+    "Point {i}: {p}{s}",
+  "vertice":
+    "vertex",
+  "Nuova sequenza delle lavorazioni: la simulazione e il G-code seguono quest'ordine":
+    "New operation order: the simulation and the G-code follow this order",
+  "Sposta lavorazioni":
+    "Move operations",
+  "Confermare la nuova sequenza delle lavorazioni?":
+    "Confirm the new order of the operations?",
+  "L'ordine è quello di esecuzione: simulazione \"fino all'ultima\", Simula tutto ed esportazione G-code lo seguono.":
+    "This is the execution order: \"to the last\" simulation, Simulate all and the G-code export follow it.",
+  "Conferma":
+    "Confirm",
+  "Sposta su":
+    "Move up",
+  "Sposta giù":
+    "Move down",
+  "Riordina lavorazioni":
+    "Reorder operations",
+  "Trascina le righe o usa ▲ ▼ (Alt+frecce sulla riga selezionata). L'ordine è quello di esecuzione di simulazione e G-code.":
+    "Drag the rows or use ▲ ▼ (Alt+arrows on the selected row). This is the execution order of simulation and G-code.",
+  "Origine del progetto (0, 0, 0)":
+    "Project origin (0, 0, 0)",
+  "Zero pezzo (origine)":
+    "Work zero (origin)",
+  "Per usare un altro zero pezzo crea un punto con il menu Origini.":
+    "To use another work zero, create a point with the Origins menu.",
+  "Esporta G-code con questo zero…":
+    "Export G-code with this zero…",
+  "Rinomina":
+    "Rename",
+  "Proprietà origine":
+    "Origin properties",
+  "origini":
+    "origins",
+  "Punto di origine":
+    "Origin point",
+  "zero G-code":
+    "G-code zero",
+  "Nell'esportazione del G-code si sceglie quale punto usare come zero pezzo: le coordinate del programma sono relative a quel punto.":
+    "When exporting the G-code you choose which point to use as the work zero: the program coordinates are relative to that point.",
+  "Cosa stavi facendo, cosa ti aspettavi e cosa è successo invece…":
+    "What you were doing, what you expected and what happened instead…",
+  "solo oggi":
+    "today only",
+  "ultimi {n} giorni":
+    "last {n} days",
+  "Esporta blackbox":
+    "Export blackbox",
+  "Crea un archivio .zip protetto da password con i dati per riprodurre il problema: progetto corrente con le mesh, parametri di calcolo delle lavorazioni, stato dell'interfaccia, opzioni, magazzino utensili e file di log.":
+    "Creates a password-protected .zip archive with the data needed to reproduce the problem: current project with meshes, computation parameters of the operations, interface state, options, tool library and log files.",
+  "Descrizione del problema":
+    "Problem description",
+  "Includi le mesh dei modelli":
+    "Include the model meshes",
+  "La password dell'archivio è nota all'assistenza: invia il file così com'è.":
+    "Support knows the archive password: send the file as it is.",
+  "Esporta":
+    "Export",
+  "Preparazione blackbox…":
+    "Preparing blackbox…",
+  "Blackbox esportata ({size} MB): inviala all'assistenza":
+    "Blackbox exported ({size} MB): send it to support",
+  "Esportazione blackbox non riuscita: {msg}":
+    "Blackbox export failed: {msg}",
+  "Crediti di sviluppo":
+    "Development credits",
+  "CAM web per mini CNC":
+    "Web CAM for mini CNC",
+  "Sviluppo":
+    "Development",
+  "Componenti di terze parti":
+    "Third-party components",
+  "Sviluppato da William Veronesi e Gabriel S. Sartori":
+    "Developed by William Veronesi and Gabriel S. Sartori",
+  "conica Ø{d} {a}° per lato":
+    "tapered Ø{d} {a}° per side",
+  "punta a V":
+    "V tip",
+  "per lato":
+    "per side",
+  "punta":
+    "tip",
+  "sferica":
+    "ball",
+  "piatta":
+    "flat",
+  "collo":
+    "neck",
+  "Il file non contiene {what}":
+    "The file contains no {what}",
+  "utensili":
+    "tools",
+  "setup di lavorazione":
+    "machining setups",
+  "elementi":
+    "items",
+  "{a} aggiunti, {u} aggiornati: premi Salva per conservarli":
+    "{a} added, {u} updated: press Save to keep them",
+  "Salva l'elenco in un file (.json)":
+    "Save the list to a file (.json)",
+  "Esporta…":
+    "Export…",
+  "Aggiunge o sostituisce elementi da un file esportato":
+    "Adds or replaces items from an exported file",
+  "Importa…":
+    "Import…",
+  "Misure incongruenti":
+    "Inconsistent dimensions",
+  "Questi utensili hanno misure incongruenti: {list}. Salvare comunque il magazzino?":
+    "These tools have inconsistent dimensions: {list}. Save the library anyway?",
+  "Salva comunque":
+    "Save anyway",
+  "Anteprima in scala":
+    "Scale preview",
+  "Quote":
+    "Dimensions",
+  "Generata dai parametri · trascina per ruotare":
+    "Generated from the parameters · drag to rotate",
+  "Trascina per ruotare":
+    "Drag to rotate",
+  "\"{name}\" non contiene utensili o setup di CarveCAM":
+    "\"{name}\" contains no CarveCAM tools or setups",
+  "Il file contiene {n} {what}.":
+    "The file contains {n} {what}.",
+  "Aggiungi: gli elementi già presenti (stesso identificativo, o stesso numero e nome per gli utensili) vengono aggiornati, gli altri aggiunti. Sostituisci: l'archivio attuale viene sostituito da quello del file.":
+    "Add: items already present (same identifier, or same number and name for tools) are updated, the others are added. Replace: the current library is replaced by the one in the file.",
+  "Sostituisci":
+    "Replace",
+  "Aggiungi":
+    "Add",
+  "{what}: {a} aggiunti, {u} aggiornati":
+    "{what}: {a} added, {u} updated",
+  "Diverso da T{n} del magazzino":
+    "Different from T{n} in the library",
+  "Non presente nel magazzino":
+    "Not in the library",
+  "Utensili del progetto":
+    "Project tools",
+  "Il progetto usa utensili che nel magazzino mancano o hanno parametri diversi (magazzino → progetto).":
+    "The project uses tools that are missing from the library or have different parameters (library → project).",
+  "Utensile del progetto":
+    "Project tool",
+  "Magazzino":
+    "Library",
+  "\"Apri e aggiorna il magazzino\" aggiunge gli utensili mancanti e modifica quelli diversi (solo le righe spuntate). Le lavorazioni del progetto usano comunque le misure salvate nel progetto.":
+    "\"Open and update the library\" adds the missing tools and changes the different ones (checked rows only). The project operations use the dimensions saved in the project anyway.",
+  "Apri senza aggiornare":
+    "Open without updating",
+  "Apri e aggiorna il magazzino":
+    "Open and update the library",
+  "Magazzino aggiornato: {a} utensili aggiunti, {c} modificati":
+    "Library updated: {a} tools added, {c} changed",
+  "Punta":
+    "Tip",
+  "Angolo per lato":
+    "Angle per side",
+  "Diametro in cima al cono":
+    "Diameter at the top of the cone",
+  "Diametro in punta":
+    "Tip diameter",
+  "Altezza del cono (Lc)":
+    "Cone height (Lc)",
+  "mm (0 = a V)":
+    "mm (0 = V)",
+  "Conica":
+    "Tapered",
+  "Piatta (a V con Ø punta 0)":
+    "Flat (V with tip Ø 0)",
+  "Il diametro deve essere maggiore di 0":
+    "The diameter must be greater than 0",
+  "Una fresa torica ha il raggio di raccordo maggiore di 0 (con R = 0 è cilindrica)":
+    "A bull-nose cutter has a corner radius greater than 0 (with R = 0 it is a flat end mill)",
+  "Raggio di raccordo R{r} maggiore di metà diametro (Ø/2 = {h}): il raccordo non sta nella fresa":
+    "Corner radius R{r} larger than half the diameter (Ø/2 = {h}): the corner does not fit in the cutter",
+  "L'altezza del tagliente (Lc) deve essere maggiore di 0":
+    "The flute length (Lc) must be greater than 0",
+  "Altezza del tagliente Lc {lc} minore del raggio della punta ({r}): la parte raccordata non ci sta":
+    "Flute length Lc {lc} smaller than the tip radius ({r}): the rounded part does not fit",
+  "Sbalzo {l} più corto dell'altezza del tagliente (Lc {lc}): lo sbalzo comprende il tagliente":
+    "Reach {l} shorter than the flute length (Lc {lc}): the reach includes the flutes",
+  "Diametro del collo Ø{n} maggiore del diametro di taglio Ø{d}: il collo deve essere più stretto":
+    "Neck diameter Ø{n} larger than the cutting diameter Ø{d}: the neck must be narrower",
+  "Diametro del collo Ø{n} maggiore del gambo Ø{s}":
+    "Neck diameter Ø{n} larger than the shank Ø{s}",
+  "Collo indicato ma sbalzo non maggiore di Lc: il collo non ha lunghezza (sbalzo = Lc + lunghezza del collo)":
+    "Neck given but reach not greater than Lc: the neck has no length (reach = Lc + neck length)",
+  "Il diametro in punta non può essere negativo (0 = punta a V)":
+    "The tip diameter cannot be negative (0 = V tip)",
+  "L'angolo di conicità per lato deve essere tra 0 e 80 gradi":
+    "The taper angle per side must be between 0 and 80 degrees",
+  "Una punta sferica ha il diametro in punta maggiore di 0":
+    "A ball tip has a tip diameter greater than 0",
+  "L'altezza del cono (Lc) deve essere maggiore di 0":
+    "The cone height (Lc) must be greater than 0",
+  "Altezza del cono Lc {lc} minore della parte sferica della punta ({h}): il cono non inizia":
+    "Cone height Lc {lc} smaller than the ball part of the tip ({h}): the cone does not start",
+  "Sbalzo {l} più corto dell'altezza del cono (Lc {lc}): lo sbalzo comprende il tagliente":
+    "Reach {l} shorter than the cone height (Lc {lc}): the reach includes the flutes",
+  "Diametro del collo Ø{n} maggiore del diametro in cima al cono (Ø{d})":
+    "Neck diameter Ø{n} larger than the diameter at the top of the cone (Ø{d})",
+  "Diametro della fresa in mm. È la base dei parametri espressi in % del diametro (Ø). Per la fresa conica è il diametro in punta (0 = punta a V): la base dei parametri in % è il diametro in punta, o quello in cima al cono se la punta è a V.":
+    "Cutter diameter in mm. It is the base of the parameters expressed in % of the diameter (Ø). For a tapered cutter it is the tip diameter (0 = V tip): the base of the % parameters is the tip diameter, or the one at the top of the cone for a V tip.",
+  "Fresa conica: angolo di conicità di ciascun lato rispetto all'asse, in gradi (una fresa a V da 90° ha 45° per lato). Il diametro cresce salendo dalla punta: Ø(h) = Ø punta + 2·h·tan(angolo).":
+    "Tapered cutter: taper angle of each side relative to the axis, in degrees (a 90° V-bit has 45° per side). The diameter grows from the tip upward: Ø(h) = tip Ø + 2·h·tan(angle).",
+  "Fresa conica: punta piatta (a V se il diametro in punta è 0) oppure sferica, raccordata tangente al cono. Le coniche a punta sferica sono adatte alla finitura di dettagli in rilievo; quelle a V all'incisione.":
+    "Tapered cutter: flat tip (V if the tip diameter is 0) or ball tip, tangent to the cone. Tapered ball-nose cutters suit the finishing of relief details; V-bits suit engraving.",
+  "Memorizzata: direzione ({d}), zoom {h} mm inquadrati, proiezione {p}":
+    "Saved: direction ({d}), zoom {h} mm in view, {p} projection",
+  "ortogonale":
+    "orthographic",
+  "prospettica":
+    "perspective",
+  "Vista isometrica standard: all'avvio la vista si adatta al modello":
+    "Standard isometric view: at startup the view fits the model",
+  "Memorizza vista attuale":
+    "Save current view",
+  "Usa la vista standard":
+    "Use the standard view",
+  "Prova":
+    "Try",
+  "Orientamento e zoom della vista attuale diventano quelli usati all'avvio di CarveCAM e dal comando Vista isometrica (tasto 0 o pulsante sotto il cubo). All'avvio si ripristinano anche il punto inquadrato e la proiezione.":
+    "The orientation and zoom of the current view become the ones used when CarveCAM starts and by the Isometric view command (key 0 or the button under the cube). At startup the target point and the projection are restored too.",
+  "Esporta impostazioni…":
+    "Export settings…",
+  "Impostazioni importate da \"{name}\": premi OK per conservarle":
+    "Settings imported from \"{name}\": press OK to keep them",
+  "\"{name}\" non è un file di impostazioni di CarveCAM":
+    "\"{name}\" is not a CarveCAM settings file",
+  "Importa impostazioni…":
+    "Import settings…",
+  "File delle impostazioni:":
+    "Settings file:",
+  "Vista predefinita":
+    "Default view",
+  "Vista iniziale":
+    "Startup view",
+  "Entità modificata: Ctrl+Z per annullare":
+    "Entity changed: Ctrl+Z to undo",
+  "Clic su un'entità per selezionarla (<b>Ctrl</b>+clic per aggiungerla) · trascina i suoi punti per modificarla · <b>Canc</b> elimina · <b>Esc</b> termina sketch":
+    "Click an entity to select it (<b>Ctrl</b>+click to add it) · drag its points to edit it · <b>Del</b> deletes · <b>Esc</b> finishes the sketch",
+  "Aumenta":
+    "Increase",
+  "Diminuisci":
+    "Decrease",
+  "Evidenziato nella vista":
+    "Highlighted in the view",
+  "Appoggia su Z=0, centra o allinea minimo e massimo per ogni asse":
+    "Drop to Z=0, center or align minimum and maximum on each axis",
+  "Trascina per cambiare la sequenza":
+    "Drag to change the order",
+  "Simula:":
+    "Simulate:",
+  "Solo la selezionata":
+    "Selected only",
+  "Dalla selezionata all'ultima":
+    "From selected to last",
+  "Lavorazioni da simulare":
+    "Operations to simulate",
+  "Simula solo la lavorazione selezionata":
+    "Simulate only the selected operation",
+  "Simula la lavorazione selezionata e tutte le successive fino all'ultima":
+    "Simulate the selected operation and all the following ones up to the last",
+  "Altezza del cono": "Cone height",
+  "Avvio…": "Starting…",
+  "Preparazione dell'interfaccia…": "Preparing the interface…",
+  "Connessione al server…": "Connecting to the server…",
+  "Caricamento dei modelli…": "Loading the models…",
+  "Preparazione della vista…": "Preparing the view…",
 };

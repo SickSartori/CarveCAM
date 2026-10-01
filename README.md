@@ -59,27 +59,53 @@ samples/blocco-L.stp                        STEP di prova (blocco a L con gradin
 
 ## Interfaccia
 
-- **Barra del titolo:** menu a tendina con icone (File, Modifica, Inserisci, Piani, Sketch, Lavorazioni,
-  Strumenti, Vista, Aiuto; navigabili con le frecce), nome del progetto modificabile (Invio o uscita dal campo
-  chiedono se salvare) con indicatore delle modifiche non salvate, ricerca comandi (**Ctrl+K**), stato del server.
-  Il menu File contiene il riquadro degli **ultimi 5 progetti** aperti o salvati.
+- **Barra del titolo:** menu a tendina con icone (File, Modifica, Inserisci, Origini, Piani, Sketch, Lavorazioni,
+  Strumenti, Vista, Aiuto, Info; navigabili con le frecce), nome del progetto modificabile (Invio o uscita dal
+  campo chiedono se salvare) con indicatore delle modifiche non salvate, ricerca comandi (**Ctrl+K**), stato del
+  server. Il menu File contiene il riquadro degli **ultimi 5 progetti** aperti o salvati; *Info* contiene le
+  informazioni sul programma e i **crediti di sviluppo** (William Veronesi e Gabriel S. Sartori).
 - **Barra strumenti a flusso di lavoro:** i gruppi seguono le fasi Modello › Piani › Sketch › Lavorazioni ›
   Calcolo e uscita; una spia sotto ogni fase indica se è completata (verde) o in corso (gialla). I comandi non
-  utilizzabili nel contesto corrente sono spenti (il suggerimento dice perché).
-- **Navigatore** (a sinistra): oggetti, artefatti, piani › sketch › entità, lavorazioni; occhio per
+  utilizzabili nel contesto corrente sono spenti (il suggerimento dice perché): durante la creazione di un piano
+  sono spenti i comandi *Modello*; durante il disegno di uno sketch anche quelli delle *Lavorazioni*.
+- **Caricamento:** all'avvio e durante calcoli, aperture e importazioni compare il logo animato (la fresa scava
+  la passata interna e poi la "C"), con la fase in corso e, dopo 2 s, il tempo trascorso; con il movimento
+  ridotto attivo nel sistema il logo resta fermo e pulsa.
+- **Navigatore** (a sinistra): oggetti, artefatti, origini, piani › sketch › entità, lavorazioni; occhio per
   mostrare/nascondere, lucchetto per bloccare/sbloccare. **Ctrl+clic** aggiunge o toglie dalla selezione.
+  Le lavorazioni si **trascinano** per cambiarne la sequenza (con conferma della nuova sequenza), oppure
+  *Lavorazioni › Riordina lavorazioni*.
 - **Proprietà** (a destra): gruppi comprimibili e colorati; **clic sul nome di un parametro** per la sua
-  spiegazione; i campi numerici accettano espressioni (es. `40/2`).
+  spiegazione; i campi numerici accettano espressioni (es. `40/2`). Le misure degli artefatti hanno le
+  **freccette su/giù** (passo 1 mm, Maiusc ×10, Alt ×0,1; tenendo premuto si ripete). Nel gruppo *Ostacoli* di
+  una lavorazione, passando con il mouse sul nome l'ostacolo si evidenzia nella vista.
 - **Vista 3D:** Z in alto; tasto sinistro ruota, centrale/destro trasla, rotella zoom; Ctrl+clic per la
   selezione multipla. Il piano attivo (quello dell'elemento selezionato o dello sketch in modifica) è
-  riempito con bordo continuo, gli altri hanno solo il bordo tratteggiato; la normale è indicata da quattro
-  piccole frecce agli angoli.
+  riempito con bordo continuo, gli altri hanno solo il bordo tratteggiato e si selezionano con un clic in
+  qualunque punto del loro riquadro; la normale è indicata da quattro piccole frecce agli angoli.
 - **Manipolatore** (G sposta, R ruota): muove insieme oggetti, artefatti e piani selezionati. **Clic sul
   centro** del manipolatore: compaiono dei pallini verdi sui vertici della selezione, il clic su uno di essi
   lo sceglie come nuovo punto di riferimento.
 - **Cubo di orientamento** (in alto a destra): clic su una faccia (Alto, Fronte, Destra…), uno spigolo o
   un vertice per le 26 viste standard, con breve rotazione animata; trascinandolo si ruota la vista.
   Sotto il cubo: vista isometrica, adatta alla vista, proiezione ortogonale, **vista normale al piano**.
+  Nelle *Opzioni › Vista iniziale* si memorizzano orientamento e zoom attuali come vista di partenza e come
+  vista isometrica.
+
+### Posizionamento, origine e punti di origine
+
+- **Riposiziona…** (proprietà di oggetti e artefatti, gruppo *Posizionamento*): per ogni asse *Min*, *Centra*
+  o *Max*, rispetto all'origine o all'ingombro degli altri solidi, più **Appoggia su Z=0**; anteprima dello
+  spostamento e dell'ingombro risultante, un solo passo di annullamento.
+- **Sposta origine** (menu Modifica e Origini): per ogni asse la nuova origine è il **minimo, il medio o il
+  massimo dell'ingombro di tutti i solidi caricati** (anche nascosti), oppure l'origine attuale, **più un
+  offset** in mm; oppure un punto cliccato nella vista. Tutto il progetto viene traslato.
+- **Origini** (menu omonimo): punti di riferimento nella scena, chiamati *Origine 1, 2…* e rinominabili, creati
+  con un clic nella vista (aggancio ai vertici) o con coordinate. Nell'**esportazione del G-code** si sceglie
+  quale usare come **zero pezzo**: le coordinate del programma sono relative a quel punto (anche con G68.2 e
+  sui piazzamenti GRBL, con le istruzioni di azzeramento nei commenti).
+- Nelle scelte di punti nella vista (piano da 3 punti, origini) il cursore **si aggancia ai vertici visibili**
+  di solidi, sketch e piani vicini, indicati da un pallino arancione.
 
 ### Elementi bloccati
 
@@ -105,6 +131,10 @@ nella vista, diventi l'origine.
    cerchio, poligono regolare, oppure ricavala dal modello con **Da 3D** (vedi sotto). Gli strumenti di
    disegno sono attivi solo durante la modifica di uno sketch. Aggancio a griglia e punti; coordinate
    digitate `x,y`, `@dx,dy`, raggio. Un contorno dentro un altro diventa un'isola esclusa (regola pari/dispari).
+   Entrando nello sketch la vista si mette normale al piano (con la normale attuale) e si naviga come fuori
+   dallo sketch. Con lo strumento **Seleziona**, l'entità selezionata mostra i **punti di riferimento**
+   (vertici, punti medi dei lati, centro, quadranti): trascinandoli si modifica la geometria (il trascinamento
+   del punto medio di un lato di polilinea inserisce un vertice), con aggancio e Ctrl+Z.
 4. Seleziona lo sketch (oppure, con Ctrl+clic, una o più entità dello stesso sketch: solo quelle delimitano
    la zona lavorata) e scegli **Svuotatura** o **Finitura**: si sceglie l'**utensile dal magazzino** e poi il
    **setup** di lavorazione.
@@ -113,7 +143,19 @@ nella vista, diventi l'origine.
 ## Utensili, setup e parametri
 
 - **Strumenti › Magazzino utensili:** archivio delle frese (numero T, tipo, diametro, raggio di raccordo,
-  **altezza del tagliente**, lunghezza utile, gambo, taglienti, materiale, avanzamenti consigliati).
+  **altezza del tagliente**, sbalzo, diametro del collo e del gambo, taglienti, materiale, avanzamenti
+  consigliati). La fresa è **generata dai suoi parametri** (tagliente, collo ribassato, raccordo al gambo,
+  gambo e portautensile): nel magazzino c'è un'**anteprima 3D in scala** (si ruota trascinandola) o con le
+  quote; se le misure sono incongruenti (es. raggio di raccordo oltre metà diametro, sbalzo più corto del
+  tagliente, collo più largo della fresa) compare il **disegno 2D con l'errore in rosso** e il campo da
+  correggere evidenziato. Il calcolo dei percorsi verifica le collisioni della parte tagliente.
+- **Frese coniche:** diametro in punta (0 = punta a V), **angolo per lato**, punta **sferica** o **piatta** e
+  altezza del cono; sono gestite dal motore di calcolo (drop-cutter a profilo), dalla simulazione e dal G-code.
+- **Esporta / Importa** (nelle finestre degli archivi e in *Strumenti › Esporta/Importa utensili e setup*):
+  file `.json` con utensili e/o setup, da aggiungere (aggiornando quelli già presenti) o da sostituire.
+- **Utensili nel progetto:** il file `.ccam` contiene le schede degli utensili usati. All'apertura, se nel
+  magazzino mancano o hanno parametri diversi, compare l'elenco delle differenze e si può aprire il progetto
+  aggiornando il magazzino (aggiunge o modifica gli utensili spuntati), aprirlo senza aggiornare o annullare.
 - **Strumenti › Setup di lavorazione:** parametri preferiti (strategia, passi, quote, ingresso, tecnologia);
   dalle proprietà di una lavorazione **Salva come setup…** ne crea uno nuovo.
 - **Parametri relativi:** passo laterale e raggio dell'elica in **% del diametro**, passo verticale in
@@ -125,9 +167,9 @@ Gli archivi sono sul server, in `App_Data/library/tools.json` e `setups.json`.
 
 ## Simulazione
 
-**Simula tutto** esegue in sequenza tutte le lavorazioni; nella barra di simulazione il pulsante
-*Solo questa* / *Fino all'ultima* sceglie se simulare solo la lavorazione selezionata o anche tutte le
-successive. Durante la simulazione un riquadro in alto a sinistra mostra le coordinate del TCP (X, Y, Z
+**Simula tutto** esegue in sequenza tutte le lavorazioni; nella barra di simulazione il selettore
+*Solo la selezionata* / *Dalla selezionata all'ultima* sceglie se simulare solo la lavorazione selezionata o
+anche tutte le successive. Durante la simulazione un riquadro in alto a sinistra mostra le coordinate del TCP (X, Y, Z
 della punta e A, C dell'asse utensile). Facendo clic nel vuoto (la lavorazione perde la selezione) la
 simulazione si chiude.
 
@@ -136,8 +178,7 @@ simulazione si chiude.
 Nello sketch lo strumento **Da 3D** (tasto **D**) ricava i contorni dal modello:
 
 - **Facce od Oggetti:** clic sulle facce del modello (di nuovo per toglierle) oppure su oggetti interi, di
-  cui si prende la sagoma. Durante lo strumento si può ruotare la vista per raggiungere le facce; uscendo si
-  torna in pianta sul piano.
+  cui si prende la sagoma. Si può ruotare la vista per raggiungere le facce.
 - **Facce CAD vere per STEP, IGES e BREP:** all'importazione ogni triangolo conserva la sua faccia B-rep
   (salvata sul server e nel file `.ccam`). Per STL, OBJ e artefatti le facce si ricavano dalla mesh,
   raggruppando i triangoli contigui con normali entro 20°.
@@ -167,9 +208,13 @@ Ingresso nel materiale: **elica** (passa per il punto d'ingresso ed è contenuta
 **rampa** lungo il primo tratto del percorso (o attorno al contorno se corto) oppure affondo verticale;
 angolo di discesa e avanzamento di rampa configurabili, con ripiego automatico se manca spazio.
 
-**Utensili:** fresa cilindrica, **torica** (raggio di raccordo r: fondo piatto di raggio R-r più toro) e
-sferica. Il contatto torico con gli spigoli è calcolato massimizzando una funzione concava
-(sezione aurea), verificato nei test contro una ricerca a forza bruta.
+**Utensili:** fresa cilindrica, **torica** (raggio di raccordo r: fondo piatto di raggio R-r più toro),
+sferica e **conica** (punta piatta, a V o sferica raccordata al cono). Il contatto torico con gli spigoli è
+calcolato massimizzando una funzione concava (sezione aurea), verificato nei test contro una ricerca a forza
+bruta. La conica usa un profilo di rivoluzione generico per punti, maggiorato esattamente del sovrametallo
+(offset con raccordi): contatto con le facce nel punto in cui la pendenza del tagliente supera quella della
+faccia, con spigoli e vertici come per la torica; i triangoli che il cono non può raggiungere vengono scartati
+in anticipo. Per contorni, passi e risoluzioni si usa il raggio del cono alla profondità massima.
 
 **Finitura in proiezione.** Il percorso 2D (zigzag o concentrico) viene proiettato lungo la normale
 del piano direttamente sulle superfici (drop-cutter esatto per fresa cilindrica e sferica, con
@@ -215,10 +260,13 @@ Verificare sempre il programma con il simulatore della propria macchina prima de
 
 - **Strumenti › Opzioni:** colori (sfondo, griglia, oggetti, bloccati, selezione, piani, sketch, percorsi…),
   dimensioni di manipolatore, frecce della normale, mirino e pallini, **lingua** (italiano, inglese),
-  parametri della **griglia** e **tema chiaro o scuro**. Le opzioni sono salvate nel browser.
+  parametri della **griglia**, **vista iniziale** (memorizza orientamento e zoom attuali) e **tema chiaro o
+  scuro**. Le opzioni sono salvate nel browser e si **esportano/importano** in un file `.json`.
   I testi dell'interfaccia sono in italiano e fanno da chiave per le traduzioni in `wwwroot/js/i18n-en.js`.
 - **Salvataggio:** con Chrome ed Edge il progetto si salva direttamente sul file aperto (File System Access
-  API, *Salva con nome* per cambiarlo); negli altri browser il file viene scaricato.
+  API, *Salva con nome* per cambiarlo); negli altri browser il file viene scaricato. Il **nome del progetto
+  diventa quello del file**; se il progetto è stato rinominato, il salvataggio propone un nuovo file con il
+  nuovo nome.
 - **Copie di sicurezza:** il progetto è salvato di continuo nel browser e, ogni minuto se ci sono modifiche,
   sul server (`App_Data/recovery`, ultime 30 copie, *File › Copie di sicurezza*). Se il programma non è stato
   chiuso correttamente, alla riapertura viene chiesto se recuperare le modifiche non salvate.
@@ -226,6 +274,12 @@ Verificare sempre il programma con il simulatore della propria macchina prima de
   stesso file: richieste API con esito e durata, richieste lente, calcoli (parametri, tempi, avvisi),
   importazioni, salvataggi, azioni dell'utente, errori JavaScript e blocchi dell'interfaccia (con le ultime
   azioni eseguite). Si consulta e si scarica da *Aiuto › File di log*.
+- **Blackbox** (*Aiuto › Esporta blackbox*): archivio `.zip` **protetto da password** con tutto il necessario
+  per riprodurre un problema: descrizione dell'utente, progetto corrente (anche non salvato) apribile come
+  `.ccam` con le mesh, richieste di calcolo di ogni lavorazione, stato dell'interfaccia (selezione, vista,
+  modalità, simulazione), opzioni, magazzino, ultimi messaggi della sessione e file di log del server. La
+  password è in `appsettings.json` (`Blackbox:Password`, ora `1234`); la cifratura è quella ZIP tradizionale,
+  apribile con Esplora risorse e 7-Zip.
 
 ## Limiti noti
 
