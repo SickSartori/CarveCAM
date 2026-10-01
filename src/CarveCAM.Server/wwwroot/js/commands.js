@@ -176,11 +176,21 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     status(t('Aperta la copia memorizzata di "{name}"', { name: entry.name }));
   };
 
-  /** Salva il progetto (.ccam): sul file già aperto se possibile, altrimenti chiede dove (o scarica). */
+  /**
+   * Salva il progetto (.ccam): sul file già aperto se possibile, altrimenti chiede dove (o scarica).
+   * Il nome del progetto diventa quello del file; se il progetto è stato rinominato si salva in un nuovo file.
+   */
   cmd.saveProject = async (saveAs = false) => {
-    const name = `${safeName(App.project.name || t('progetto'))}.ccam`;
+    const base = safeName(App.project.name || t('progetto'));
+    if (!saveAs && App.fileHandle && fileBase(App.fileName) !== base) saveAs = true;
+    const name = `${base}.ccam`;
     try {
-      const res = await writeProjectFile(async () => {
+      const res = await writeProjectFile(async fileName => {
+        const fb = fileBase(fileName);
+        if (fb && fb !== App.project.name) {
+          log.info('Nome del progetto allineato al file', { from: App.project.name, to: fb });
+          App.project.name = fb;
+        }
         busy(t('Salvataggio progetto…'));
         try {
           // il progetto porta con sé le schede degli utensili usati (confrontate col magazzino all'apertura)
@@ -210,7 +220,10 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     const v = String(name || '').trim();
     if (!v || v === App.project.name) return;
     mutate(p => { p.name = v; });
-    if (await confirmBox(t('Salvare il progetto?'), t('Il progetto si chiama ora "{name}". Salvarlo adesso?', { name: v }), t('Salva'), t('Non ora'))) {
+    const msg = App.fileHandle
+      ? t('Il progetto si chiama ora "{name}". Salvarlo adesso nel file "{file}"?', { name: v, file: `${safeName(v)}.ccam` })
+      : t('Il progetto si chiama ora "{name}". Salvarlo adesso?', { name: v });
+    if (await confirmBox(t('Salvare il progetto?'), msg, t('Salva'), t('Non ora'))) {
       await cmd.saveProject();
     }
   };
@@ -1358,6 +1371,11 @@ export function toolLabel(tl) {
   if (tl.type === 'taper') return t('conica Ø{d} {a}° per lato', { d: tl.diameter, a: tl.taperAngle ?? 5 });
   if (tl.type === 'bull') return t('torica Ø{d} R{r}', { d: tl.diameter, r: tl.cornerRadius ?? 1 });
   return t('cilindrica Ø{d}', { d: tl.diameter });
+}
+
+/** Nome di un file senza cartella né estensione. */
+function fileBase(name) {
+  return String(name || '').replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, '').trim();
 }
 
 function safeName(s) {

@@ -114,7 +114,7 @@ export async function fileOfRecent(entry) {
 /**
  * Scrive il progetto: sul file già associato (handle), altrimenti chiede dove salvarlo (saveAs) oppure,
  * senza File System Access API, lo scarica. getBlob() produce il contenuto (chiamata dopo la scelta del file,
- * che richiede il gesto dell'utente). Ritorna { handle, fileName } o null se annullato.
+ * che richiede il gesto dell'utente) e riceve il nome del file scelto. Ritorna { handle, fileName } o null se annullato.
  */
 export async function writeProjectFile(getBlob, suggestedName, handle, saveAs = false) {
   if (fsAccess) {
@@ -128,14 +128,14 @@ export async function writeProjectFile(getBlob, suggestedName, handle, saveAs = 
       h = null;
     }
     if (h) {
-      const blob = await getBlob();
+      const blob = await getBlob(h.name);
       const w = await h.createWritable();
       await w.write(blob);
       await w.close();
       return { handle: h, fileName: h.name };
     }
   }
-  const blob = await getBlob();
+  const blob = await getBlob(suggestedName);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
