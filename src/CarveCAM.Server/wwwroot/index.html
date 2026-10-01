@@ -50,16 +50,11 @@
         <div class="panel-title">
           <span>Navigatore</span>
           <span class="panel-title-actions">
-            <button class="icon-btn" id="tree-collapse" title="Comprimi tutto">&#x2212;</button>
-            <button class="icon-btn" id="tree-expand" title="Espandi tutto">+</button>
+            <button class="icon-btn" id="tree-collapse" title="Comprimi tutto" type="button"></button>
+            <button class="icon-btn" id="tree-expand" title="Espandi tutto" type="button"></button>
           </span>
         </div>
         <div id="tree" class="tree" tabindex="0"></div>
-      </section>
-      <div id="sidebar-split" class="hsplit" title="Trascina per ridimensionare"></div>
-      <section id="props-panel" class="panel">
-        <div class="panel-title"><span id="props-title">Proprietà</span></div>
-        <div id="props" class="props"></div>
       </section>
     </aside>
     <div id="sidebar-resizer" class="vsplit" title="Trascina per ridimensionare"></div>
@@ -72,7 +67,7 @@
           <button type="button" data-view="fit" data-ico="fit" aria-label="Adatta alla vista" data-kbd="F"></button>
           <button type="button" data-view="proj" data-ico="ortho" id="btn-proj" aria-label="Proiezione ortogonale" data-kbd="5" aria-pressed="false"></button>
           <span class="vc-sep" aria-hidden="true"></span>
-          <button type="button" data-view="plane" data-ico="planeView" class="vc-plane" aria-label="Piano dalla vista" data-hint="Crea un piano di lavoro con la normale verso di te"></button>
+          <button type="button" data-view="normal" data-ico="viewNormal" class="vc-plane" aria-label="Vista normale al piano" data-hint="Guarda lungo la normale il piano selezionato (o quello dello sketch, dell'entità o della lavorazione selezionata)"></button>
         </div>
       </div>
 
@@ -116,6 +111,9 @@
       <div id="hint" class="overlay hint" hidden></div>
 
       <div id="sim-bar" class="overlay sim-bar" hidden>
+        <span id="sim-op" class="sim-op"></span>
+        <button id="sim-scope" class="sim-scope" type="button" aria-pressed="false">Solo questa</button>
+        <span class="sep"></span>
         <button id="sim-play" class="primary" title="Avvia / pausa (Spazio)">&#9654;</button>
         <button id="sim-rew" title="Dall'inizio">&#9198;</button>
         <input id="sim-slider" type="range" min="0" max="1000" value="0">
@@ -135,6 +133,13 @@
         </div>
       </div>
     </div>
+    <div id="props-resizer" class="vsplit" title="Trascina per ridimensionare"></div>
+    <aside id="propsbar">
+      <section id="props-panel" class="panel">
+        <div class="panel-title"><span id="props-title">Proprietà</span></div>
+        <div id="props" class="props"></div>
+      </section>
+    </aside>
   </div>
 
   <footer id="statusbar">

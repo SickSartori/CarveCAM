@@ -48,7 +48,9 @@ src/CarveCAM.Core      (VB.NET, libreria)   geometria, importatori mesh, CAM, po
                       ProfileBuilder (profili da 3D: ombra proiettata e booleane)
   Post/               G-code GRBL (mini CNC) e ISO/Fanuc (3 assi o 3+2 con G68.2), CL data APT
 src/CarveCAM.Server    (VB.NET, ASP.NET Core) API REST + file statici
-  Controllers/        /api/mesh (anche facce B-rep), /api/cam, /api/project, /api/profile
+  Controllers/        /api/mesh (anche facce B-rep), /api/cam, /api/project, /api/profile,
+                      /api/library (utensili e setup), /api/recovery (copie di sicurezza), /api/log
+  Services/           archivio mesh e percorsi, log su file
   wwwroot/            interfaccia web (Three.js)
 tests/CarveCAM.Tests   (VB.NET, xUnit)       test di motore, post, profili e importatori
 tools/CarveCAM.SampleProject (VB.NET)       generatore del progetto di prova
@@ -58,34 +60,76 @@ samples/blocco-L.stp                        STEP di prova (blocco a L con gradin
 ## Interfaccia
 
 - **Barra del titolo:** menu a tendina con icone (File, Modifica, Inserisci, Piani, Sketch, Lavorazioni,
-  Vista, Aiuto; navigabili con le frecce), nome del progetto modificabile con indicatore delle modifiche
-  non salvate, ricerca comandi (**Ctrl+K**), stato del server.
+  Strumenti, Vista, Aiuto; navigabili con le frecce), nome del progetto modificabile (Invio o uscita dal campo
+  chiedono se salvare) con indicatore delle modifiche non salvate, ricerca comandi (**Ctrl+K**), stato del server.
+  Il menu File contiene il riquadro degli **ultimi 5 progetti** aperti o salvati.
 - **Barra strumenti a flusso di lavoro:** i gruppi seguono le fasi Modello › Piani › Sketch › Lavorazioni ›
-  Calcolo e uscita; una spia sotto ogni fase indica se è completata (verde) o in corso (gialla).
-- **Colonna sinistra:** navigatore (oggetti, artefatti, piani › sketch › entità, lavorazioni) e
-  pannello proprietà dell'elemento selezionato (i campi numerici accettano espressioni, es. `40/2`).
-- **Vista 3D:** Z in alto; tasto sinistro ruota, centrale/destro trasla, rotella zoom;
-  manipolatore per spostare/ruotare artefatti, oggetti e piani (G / R).
+  Calcolo e uscita; una spia sotto ogni fase indica se è completata (verde) o in corso (gialla). I comandi non
+  utilizzabili nel contesto corrente sono spenti (il suggerimento dice perché).
+- **Navigatore** (a sinistra): oggetti, artefatti, piani › sketch › entità, lavorazioni; occhio per
+  mostrare/nascondere, lucchetto per bloccare/sbloccare. **Ctrl+clic** aggiunge o toglie dalla selezione.
+- **Proprietà** (a destra): gruppi comprimibili e colorati; **clic sul nome di un parametro** per la sua
+  spiegazione; i campi numerici accettano espressioni (es. `40/2`).
+- **Vista 3D:** Z in alto; tasto sinistro ruota, centrale/destro trasla, rotella zoom; Ctrl+clic per la
+  selezione multipla. Il piano attivo (quello dell'elemento selezionato o dello sketch in modifica) è
+  riempito con bordo continuo, gli altri hanno solo il bordo tratteggiato; la normale è indicata da quattro
+  piccole frecce agli angoli.
+- **Manipolatore** (G sposta, R ruota): muove insieme oggetti, artefatti e piani selezionati. **Clic sul
+  centro** del manipolatore: compaiono dei pallini verdi sui vertici della selezione, il clic su uno di essi
+  lo sceglie come nuovo punto di riferimento.
 - **Cubo di orientamento** (in alto a destra): clic su una faccia (Alto, Fronte, Destra…), uno spigolo o
   un vertice per le 26 viste standard, con breve rotazione animata; trascinandolo si ruota la vista.
-  Sotto il cubo: vista isometrica, adatta alla vista, proiezione ortogonale.
+  Sotto il cubo: vista isometrica, adatta alla vista, proiezione ortogonale, **vista normale al piano**.
+
+### Elementi bloccati
+
+Oggetti, artefatti e piani hanno la proprietà **Bloccato** (lucchetto nel navigatore, casella nelle
+proprietà, **Ctrl+L**). Un elemento bloccato cambia colore, il manipolatore compare attenuato con un
+lucchetto e non lo sposta, i campi di posizione/rotazione e i pulsanti di spostamento sono disattivati; se fa
+parte di una selezione multipla blocca il movimento di tutta la selezione. **Modifica › Sposta origine**
+trasla invece tutto il progetto (anche gli elementi bloccati) perché un punto scelto, digitato o cliccato
+nella vista, diventi l'origine.
 
 ## Flusso di lavoro
 
 1. **Importa** i modelli (File › Importa, o trascinali nella vista) e/o **inserisci artefatti**:
    cilindro, tronco di cono, sfera, parallelepipedo (dimensioni e posizione nelle proprietà).
-2. **Crea un piano di lavoro** (XY/XZ/YZ, da faccia, da 3 punti, **dalla vista**).
-   La **normale** (freccia blu) è l'**asse utensile**: la fresa lavora dal lato della freccia.
-   *Piano dalla vista* (Piani, barra strumenti o pulsante sotto il cubo): normale verso chi guarda,
-   agganciata alla vista standard più vicina entro 1° (dall'alto si ottiene esattamente +Z), piano appoggiato
-   al punto del modello più vicino all'osservatore, dimensionato sull'ingombro e con l'asse X come la destra
-   dello schermo.
-3. **Nuovo sketch** sul piano e disegna l'**area di contenimento** con polilinea, rettangolo,
-   cerchio, poligono regolare, oppure ricavala dal modello con **Da 3D** (vedi sotto). Aggancio a griglia
-   e punti; coordinate digitate `x,y`, `@dx,dy`, raggio.
-   Un contorno dentro un altro diventa un'isola esclusa (regola pari/dispari).
-4. **Nuova svuotatura** o **nuova finitura**, imposta utensile e parametri, **Calcola** (F9).
-5. **Simula** e **Esporta G-code** (o CL data).
+2. **Aggiungi piano**: il comando attiva la creazione dei piani (finché non è attivo i comandi dei piani
+   restano spenti). Si sceglie un **piano standard** dall'elenco (XY, XZ, YZ con normale positiva o negativa),
+   oppure **da faccia**, **da 3 punti** o **dalla vista**.
+   La **normale** (frecce blu) è l'**asse utensile**: la fresa lavora dal lato delle frecce.
+   *Piano dalla vista*: normale verso chi guarda, agganciata alla vista standard più vicina entro 1°
+   (dall'alto si ottiene esattamente +Z), piano appoggiato al punto del modello più vicino all'osservatore,
+   dimensionato sull'ingombro e con l'asse X come la destra dello schermo.
+3. Seleziona il piano, **Nuovo sketch** e disegna l'**area di contenimento** con polilinea, rettangolo,
+   cerchio, poligono regolare, oppure ricavala dal modello con **Da 3D** (vedi sotto). Gli strumenti di
+   disegno sono attivi solo durante la modifica di uno sketch. Aggancio a griglia e punti; coordinate
+   digitate `x,y`, `@dx,dy`, raggio. Un contorno dentro un altro diventa un'isola esclusa (regola pari/dispari).
+4. Seleziona lo sketch (oppure, con Ctrl+clic, una o più entità dello stesso sketch: solo quelle delimitano
+   la zona lavorata) e scegli **Svuotatura** o **Finitura**: si sceglie l'**utensile dal magazzino** e poi il
+   **setup** di lavorazione.
+5. **Ricalcola tutto** (o F9 sulla lavorazione selezionata), **Simula tutto** ed **Esporta G-code** (o CL data).
+
+## Utensili, setup e parametri
+
+- **Strumenti › Magazzino utensili:** archivio delle frese (numero T, tipo, diametro, raggio di raccordo,
+  **altezza del tagliente**, lunghezza utile, gambo, taglienti, materiale, avanzamenti consigliati).
+- **Strumenti › Setup di lavorazione:** parametri preferiti (strategia, passi, quote, ingresso, tecnologia);
+  dalle proprietà di una lavorazione **Salva come setup…** ne crea uno nuovo.
+- **Parametri relativi:** passo laterale e raggio dell'elica in **% del diametro**, passo verticale in
+  **% dell'altezza del tagliente**, con limiti minimo e massimo in mm; il valore effettivo è mostrato accanto.
+- **Ostacoli:** ogni lavorazione ricorda quali oggetti e artefatti considera. Gli elementi 3D aggiunti dopo
+  la sua creazione non sono ostacoli finché non vengono spuntati nel gruppo *Ostacoli* delle proprietà.
+
+Gli archivi sono sul server, in `App_Data/library/tools.json` e `setups.json`.
+
+## Simulazione
+
+**Simula tutto** esegue in sequenza tutte le lavorazioni; nella barra di simulazione il pulsante
+*Solo questa* / *Fino all'ultima* sceglie se simulare solo la lavorazione selezionata o anche tutte le
+successive. Durante la simulazione un riquadro in alto a sinistra mostra le coordinate del TCP (X, Y, Z
+della punta e A, C dell'asse utensile). Facendo clic nel vuoto (la lavorazione perde la selezione) la
+simulazione si chiude.
 
 ## Profili dal modello 3D
 
@@ -167,9 +211,26 @@ Le unità sono millimetri: se il modello è in altre unità usare la scala nelle
 
 Verificare sempre il programma con il simulatore della propria macchina prima dell'uso.
 
+## Opzioni, lingua, sicurezza e diagnostica
+
+- **Strumenti › Opzioni:** colori (sfondo, griglia, oggetti, bloccati, selezione, piani, sketch, percorsi…),
+  dimensioni di manipolatore, frecce della normale, mirino e pallini, **lingua** (italiano, inglese),
+  parametri della **griglia** e **tema chiaro o scuro**. Le opzioni sono salvate nel browser.
+  I testi dell'interfaccia sono in italiano e fanno da chiave per le traduzioni in `wwwroot/js/i18n-en.js`.
+- **Salvataggio:** con Chrome ed Edge il progetto si salva direttamente sul file aperto (File System Access
+  API, *Salva con nome* per cambiarlo); negli altri browser il file viene scaricato.
+- **Copie di sicurezza:** il progetto è salvato di continuo nel browser e, ogni minuto se ci sono modifiche,
+  sul server (`App_Data/recovery`, ultime 30 copie, *File › Copie di sicurezza*). Se il programma non è stato
+  chiuso correttamente, alla riapertura viene chiesto se recuperare le modifiche non salvate.
+- **File di log:** `App_Data/logs/carvecam-AAAAMMGG.log` (14 giorni). Server e interfaccia scrivono nello
+  stesso file: richieste API con esito e durata, richieste lente, calcoli (parametri, tempi, avvisi),
+  importazioni, salvataggi, azioni dell'utente, errori JavaScript e blocchi dell'interfaccia (con le ultime
+  azioni eseguite). Si consulta e si scarica da *Aiuto › File di log*.
+
 ## Limiti noti
 
 - Il grezzo non è modellato: la svuotatura assume che il materiale parta dal piano di lavoro.
 - Gli ingressi a rampa/elica riguardano la svuotatura; la finitura si avvicina alla superficie con affondo.
-- Il progetto (.ccam) contiene progetto e mesh; i percorsi calcolati si rigenerano all'apertura (F9).
+- I messaggi generati dal server (errori e avvisi del calcolo) restano in italiano anche con l'interfaccia in inglese.
+- Il progetto (.ccam) contiene progetto e mesh; i percorsi calcolati si rigenerano all'apertura (Ricalcola tutto).
   Si aprono anche i file `.pcam` e `.m3dz` salvati con i nomi precedenti del programma (PocketCAM, Mini3D CAM).

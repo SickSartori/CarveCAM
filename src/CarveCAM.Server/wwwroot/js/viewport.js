@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { settings, color, onSettings } from './settings.js';
 
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
@@ -48,20 +49,10 @@ export class Viewport {
     this.headLight = new THREE.DirectionalLight(0xffffff, 1.6);
     this.scene.add(this.headLight, this.headLight.target);
 
-    // griglia sul piano XY e assi
+    // griglia sul piano XY e assi (parametri e colori dalle opzioni)
     this.gridGroup = new THREE.Group();
-    const minor = new THREE.GridHelper(1000, 100, 0x2f363f, 0x2a3038);
-    const major = new THREE.GridHelper(1000, 20, 0x46505c, 0x3a424c);
-    for (const g of [minor, major]) {
-      g.rotation.x = Math.PI / 2;
-      g.material.transparent = true;
-      g.material.opacity = g === minor ? 0.55 : 0.8;
-      g.material.depthWrite = false;
-      g.renderOrder = -2;
-      this.gridGroup.add(g);
-    }
-    this.gridGroup.add(makeAxes(60));
     this.scene.add(this.gridGroup);
+    this.buildGrid();
 
     // gruppi di contenuto
     this.groups = {};
@@ -73,7 +64,7 @@ export class Viewport {
 
     // manipolatore
     const t = this.transform = new TransformControls(this.camera, r.domElement);
-    t.setSize(0.85);
+    t.setSize(settings.sizes.gizmo);
     this.scene.add(t.getHelper());
     t.addEventListener('dragging-changed', e => { c.enabled = !e.value; });
 
@@ -82,6 +73,7 @@ export class Viewport {
 
     this._buildTriad();
     this._bindInput();
+    onSettings(() => { this.buildGrid(); t.setSize(settings.sizes.gizmo); });
 
     this.clock = new THREE.Clock();
     const ro = new ResizeObserver(() => this.resize());
@@ -89,6 +81,30 @@ export class Viewport {
     this.resize();
     this._loop = this._loop.bind(this);
     requestAnimationFrame(this._loop);
+  }
+
+  /** (Ri)costruisce la griglia del piano XY secondo le opzioni (lato, passo fine e principale, colori). */
+  buildGrid() {
+    for (const c of [...this.gridGroup.children]) {
+      c.removeFromParent();
+      c.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); });
+    }
+    const g = settings.grid;
+    const size = Math.max(10, Number(g.size) || 1000);
+    const div = step => Math.max(1, Math.min(2000, Math.round(size / Math.max(0.1, Number(step) || 10))));
+    const cMinor = new THREE.Color(color('gridMinor'));
+    const cMajor = new THREE.Color(color('gridMajor'));
+    const minor = new THREE.GridHelper(size, div(g.minor), cMinor, cMinor);
+    const major = new THREE.GridHelper(size, div(g.major), cMajor, cMajor);
+    for (const gr of [minor, major]) {
+      gr.rotation.x = Math.PI / 2;
+      gr.material.transparent = true;
+      gr.material.opacity = gr === minor ? 0.6 : 0.85;
+      gr.material.depthWrite = false;
+      gr.renderOrder = -2;
+      this.gridGroup.add(gr);
+    }
+    this.gridGroup.add(makeAxes(Math.min(60, size / 4)));
   }
 
   // ---------------------------------------------------------------- dimensioni e loop
@@ -190,6 +206,20 @@ export class Viewport {
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(f.n, f.o);
     const p = new THREE.Vector3();
     return this.raycaster.ray.intersectPlane(plane, p) ? p : null;
+  }
+
+  /** Posizione sullo schermo (px rispetto all'angolo della vista) di un punto del mondo; null se dietro la camera. */
+  toScreen(p) {
+    const v = p.clone().project(this.camera);
+    if (v.z > 1 || v.z < -1) return null;
+    const w = this.el.clientWidth, h = this.el.clientHeight;
+    return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h };
+  }
+
+  /** Posizione del puntatore rispetto all'angolo della vista. */
+  pointer(ev) {
+    const rc = this.renderer.domElement.getBoundingClientRect();
+    return { x: ev.clientX - rc.left, y: ev.clientY - rc.top };
   }
 
   /** Millimetri per pixel in corrispondenza del punto dato. */

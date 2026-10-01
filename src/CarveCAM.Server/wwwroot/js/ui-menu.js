@@ -1,6 +1,7 @@
 // Menu a tendina (con icone, spunte e navigazione da tastiera) e menu contestuale.
 import { h } from './dialogs.js';
 import { TB } from './icons.js';
+import { t, LOCALE } from './i18n.js';
 
 export class MenuBar {
   /**
@@ -8,10 +9,11 @@ export class MenuBar {
    * @param menus [{ label, items: [idAzione | '-' | { head }] }]
    * @param actions registro delle azioni (createActions)
    */
-  constructor(el, menus, actions) {
+  constructor(el, menus, actions, recent = null) {
     this.el = el;
     this.menus = menus;
     this.actions = actions;
+    this.recent = recent;          // { list: [], open(entry) } progetti recenti per il menu File
     this.openIdx = -1;
     this.drop = null;
     this.rows = [];
@@ -53,6 +55,7 @@ export class MenuBar {
     for (const it of this.menus[i].items) {
       if (it === '-') { drop.append(h('div', { class: 'menu-sep', role: 'separator' })); continue; }
       if (it.head) { drop.append(h('div', { class: 'menu-head' }, it.head)); continue; }
+      if (it.recent) { drop.append(this._recentBox()); continue; }
       const a = this.actions.get(it);
       if (!a) continue;
       const row = menuRow(a, this.actions.isEnabled(a), this.actions.isChecked(a));
@@ -71,6 +74,28 @@ export class MenuBar {
     this.drop = drop;
     this.hi = -1;
     if (focusFirst) this._highlight(0);
+  }
+
+  /** Riquadro con gli ultimi progetti aperti o salvati (al massimo 5). */
+  _recentBox() {
+    const box = h('div', { class: 'menu-recent', role: 'group', 'aria-label': t('Progetti recenti') },
+      h('div', { class: 'menu-head' }, t('Progetti recenti')));
+    const list = this.recent?.list || [];
+    if (!list.length) box.append(h('div', { class: 'menu-item disabled recent-empty' }, h('span', { class: 'mi-ico' }), h('span', { class: 'mi-lbl' }, t('Nessun progetto recente')), h('span')));
+    list.slice(0, 5).forEach((e, i) => {
+      const when = new Date(e.time).toLocaleDateString(LOCALE, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const row = h('div', { class: 'menu-item recent', role: 'menuitem', title: e.fileName ? `${e.name} — ${e.fileName}` : e.name },
+        h('span', { class: 'mi-ico recent-n' }, String(i + 1)),
+        h('span', { class: 'mi-lbl' }, h('span', { class: 'recent-name' }, e.name || e.fileName), e.fileName ? h('span', { class: 'recent-file' }, e.fileName) : null),
+        h('span', { class: 'kbd' }, when));
+      const a = { id: `file.recent.${i + 1}`, run: () => this.recent.open(e) };
+      const idx = this.rows.length;
+      row.addEventListener('mouseup', () => { this.close(); setTimeout(() => a.run(), 0); });
+      row.addEventListener('mousemove', () => this._highlight(idx));
+      this.rows.push({ row, a, custom: true });
+      box.append(row);
+    });
+    return box;
   }
 
   close() {
@@ -103,7 +128,10 @@ export class MenuBar {
     else if (k === 'ArrowUp') this._highlight(this.hi < 0 ? -1 : this.hi - 1);
     else if (k === 'ArrowRight') this.open((this.openIdx + 1) % this.menus.length, true);
     else if (k === 'ArrowLeft') this.open((this.openIdx - 1 + this.menus.length) % this.menus.length, true);
-    else if (k === 'Enter' && this.hi >= 0) this._activate(this.rows[this.hi].a);
+    else if (k === 'Enter' && this.hi >= 0) {
+      const r = this.rows[this.hi];
+      if (r.custom) { this.close(); setTimeout(() => r.a.run(), 0); } else this._activate(r.a);
+    }
     else return;
     e.preventDefault();
     e.stopPropagation();

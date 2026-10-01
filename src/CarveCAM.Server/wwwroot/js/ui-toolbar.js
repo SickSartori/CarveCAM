@@ -1,6 +1,7 @@
 // Barra strumenti ordinata come il flusso di lavoro CAM, con spia di stato per ogni fase.
 import { h } from './dialogs.js';
 import { TB } from './icons.js';
+import { t } from './i18n.js';
 
 export class Toolbar {
   /**
@@ -15,6 +16,7 @@ export class Toolbar {
     this.actions = actions;
     this.stageOf = stageOf;
     this.buttons = [];
+    this.selects = [];
     this.leds = [];
     this.tip = document.getElementById('tooltip');
     this.render();
@@ -23,6 +25,7 @@ export class Toolbar {
   render() {
     this.el.innerHTML = '';
     this.buttons = [];
+    this.selects = [];
     this.leds = [];
     for (const g of this.groups) {
       if (g.end) this.el.append(h('div', { class: 'tb-spacer' }));
@@ -32,6 +35,7 @@ export class Toolbar {
         const spec = typeof it === 'string' ? { id: it } : it;
         const a = this.actions.get(spec.id);
         if (!a) continue;
+        if (a.options) { row.append(this._select(a)); continue; }
         const b = h('button', {
           class: `tb-btn${spec.label ? ' labeled' : ''}${spec.primary ? ' primary' : ''}${a.tone ? ` tone-${a.tone}` : ''}`,
           type: 'button', 'aria-label': a.label,
@@ -56,6 +60,23 @@ export class Toolbar {
     this.update();
   }
 
+  /** Elenco a discesa: la prima voce è il titolo, scegliendo un'opzione si esegue l'azione. */
+  _select(a) {
+    const s = h('select', { class: `tb-select${a.tone ? ` tone-${a.tone}` : ''}`, 'aria-label': a.label },
+      h('option', { value: '' }, `${a.label}…`),
+      a.options.map(o => h('option', { value: o.value }, o.label)));
+    s.addEventListener('change', () => {
+      const v = s.value;
+      s.value = '';
+      if (v) { this._hideTip(); this.actions.pick(a, v); }
+    });
+    const wrap = h('span', { class: 'tb-select-wrap' }, h('span', { class: 'tb-ico', html: TB[a.icon] || '' }), s);
+    wrap.addEventListener('mouseenter', () => this._showTip(wrap, a, s.disabled));
+    wrap.addEventListener('mouseleave', () => this._hideTip());
+    this.selects.push({ s, a, wrap });
+    return wrap;
+  }
+
   /** Aggiorna abilitazione, stati attivi e spie delle fasi. */
   update() {
     for (const { b, a } of this.buttons) {
@@ -66,6 +87,11 @@ export class Toolbar {
       else b.setAttribute('aria-pressed', String(on));
       b.classList.toggle('on', !!on);
     }
+    for (const { s, a, wrap } of this.selects) {
+      const en = this.actions.isEnabled(a);
+      s.disabled = !en;
+      wrap.classList.toggle('disabled', !en);
+    }
     for (const x of this.leds) {
       const st = this.stageOf(x.stage);
       x.led.dataset.state = st.state;
@@ -73,18 +99,19 @@ export class Toolbar {
     }
   }
 
-  _showTip(b, a) {
-    const t = this.tip;
-    if (!t) return;
-    t.innerHTML = '';
-    t.append(h('div', { class: 'tt-row' }, h('b', {}, a.label), a.kbd ? h('kbd', {}, a.kbd) : null));
-    if (a.hint) t.append(h('div', { class: 'tt-hint' }, a.hint));
-    if (b.disabled) t.append(h('div', { class: 'tt-hint' }, 'Non disponibile ora'));
-    t.hidden = false;
+  _showTip(b, a, disabled = b.disabled) {
+    const tt = this.tip;
+    if (!tt) return;
+    tt.innerHTML = '';
+    tt.append(h('div', { class: 'tt-row' }, h('b', {}, a.label), a.kbd ? h('kbd', {}, a.kbd) : null));
+    if (a.hint) tt.append(h('div', { class: 'tt-hint' }, a.hint));
+    if (disabled) tt.append(h('div', { class: 'tt-hint tt-off' }, a.id.startsWith('plane.') && a.id !== 'plane.add'
+      ? t('Premi prima "Aggiungi piano"') : a.id.startsWith('tool.') ? t('Disponibile durante la modifica di uno sketch') : t('Non disponibile ora')));
+    tt.hidden = false;
     const rc = b.getBoundingClientRect();
-    const w = t.offsetWidth;
-    t.style.left = `${Math.max(6, Math.min(window.innerWidth - w - 6, rc.left + rc.width / 2 - w / 2))}px`;
-    t.style.top = `${rc.bottom + 8}px`;
+    const w = tt.offsetWidth;
+    tt.style.left = `${Math.max(6, Math.min(window.innerWidth - w - 6, rc.left + rc.width / 2 - w / 2))}px`;
+    tt.style.top = `${rc.bottom + 8}px`;
   }
 
   _hideTip() {

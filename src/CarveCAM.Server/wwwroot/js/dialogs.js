@@ -1,4 +1,6 @@
 // Finestre modali, notifiche, barra di stato, indicatore di attività.
+import { t } from './i18n.js';
+import { log } from './log.js';
 
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
@@ -18,9 +20,10 @@ export function h(tag, attrs = {}, ...children) {
 }
 
 export function toast(msg, kind = 'info', ms = 3800) {
-  const t = h('div', { class: `toast ${kind}` }, msg);
-  document.getElementById('toast-root').append(t);
-  setTimeout(() => t.remove(), ms);
+  if (kind === 'err') log.warn(`Messaggio di errore: ${msg}`);
+  const el = h('div', { class: `toast ${kind}` }, msg);
+  document.getElementById('toast-root').append(el);
+  setTimeout(() => el.remove(), ms);
 }
 
 export function status(msg, isErr = false) {
@@ -30,10 +33,11 @@ export function status(msg, isErr = false) {
 }
 
 /**
- * Finestra modale. buttons: [{ label, value, primary, danger }]. Ritorna una Promise con il value scelto
- * (null se chiusa con Esc o clic fuori).
+ * Finestra modale. buttons: [{ label, value, primary, danger, left }]. Ritorna una Promise con il value scelto
+ * (null se chiusa con Esc o clic fuori). size: '' | 'wide' | 'xl'; enter: Invio preme il pulsante principale.
+ * close: funzione passata a onOpen per chiudere la finestra con un valore.
  */
-export function modal({ title, body, buttons = [{ label: 'OK', value: true, primary: true }], wide = false, onOpen }) {
+export function modal({ title, body, buttons = [{ label: t('OK'), value: true, primary: true }], wide = false, size = '', enter = true, onOpen, cls = '' }) {
   return new Promise(resolve => {
     const root = document.getElementById('modal-root');
     const content = typeof body === 'string' ? h('div', { html: body }) : body;
@@ -43,41 +47,56 @@ export function modal({ title, body, buttons = [{ label: 'OK', value: true, prim
       resolve(v);
     };
     const onKey = e => {
+      if (!root.lastElementChild || root.lastElementChild !== bd) return;   // solo la finestra più in alto
       if (e.key === 'Escape') { e.stopPropagation(); close(null); }
-      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+      if (enter && e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
         const p = buttons.find(b => b.primary);
         if (p) { e.preventDefault(); e.stopPropagation(); close(p.value); }
       }
     };
+    const sz = size || (wide ? 'wide' : '');
+    const left = buttons.filter(b => b.left);
+    const right = buttons.filter(b => !b.left);
+    const btn = b => h('button', { class: `btn${b.primary ? ' primary' : ''}${b.danger ? ' danger' : ''}`, type: 'button', onclick: () => close(b.value) }, b.label);
     const bd = h('div', { class: 'backdrop', onmousedown: e => { if (e.target === bd) close(null); } },
-      h('div', { class: `modal${wide ? ' wide' : ''}`, role: 'dialog' },
+      h('div', { class: `modal${sz ? ` ${sz}` : ''}${cls ? ` ${cls}` : ''}`, role: 'dialog', 'aria-label': typeof title === 'string' ? title : null },
         h('div', { class: 'modal-h' }, title),
         h('div', { class: 'modal-b' }, content),
-        h('div', { class: 'modal-f' }, buttons.map(b =>
-          h('button', { class: `btn${b.primary ? ' primary' : ''}${b.danger ? ' danger' : ''}`, onclick: () => close(b.value) }, b.label)))));
+        h('div', { class: 'modal-f' }, left.map(btn), left.length ? h('span', { class: 'grow' }) : null, right.map(btn))));
     root.append(bd);
     document.addEventListener('keydown', onKey, true);
-    onOpen?.(bd);
-    const first = bd.querySelector('input, select, textarea') || bd.querySelector('.btn.primary');
-    first?.focus();
+    onOpen?.(bd, close);
+    // fuoco dopo il tasto che ha aperto la finestra: un Invio in corso non deve premere il pulsante principale
+    const opened = performance.now();
+    bd.addEventListener('click', e => {
+      if (performance.now() - opened < 250 && e.target.closest('.modal-f') && e.detail === 0) { e.stopPropagation(); e.preventDefault(); }
+    }, true);
+    setTimeout(() => {
+      if (!bd.isConnected) return;
+      const first = bd.querySelector('[autofocus]') || bd.querySelector('.modal-b input, .modal-b select, .modal-b textarea') || bd.querySelector('.btn.primary');
+      first?.focus();
+    }, 0);
   });
 }
 
-export async function confirmBox(title, text, okLabel = 'OK') {
+export async function confirmBox(title, text, okLabel = t('OK'), cancelLabel = t('Annulla')) {
   return !!(await modal({
     title, body: h('div', {}, text),
-    buttons: [{ label: 'Annulla', value: false }, { label: okLabel, value: true, primary: true }],
+    buttons: [{ label: cancelLabel, value: false }, { label: okLabel, value: true, primary: true }],
   }));
 }
 
 // ------------------------------------------------------------------ attività lunga con annullamento
 let busyCtrl = null;
+let busyT0 = 0;
 export function busy(text) {
   const el = document.getElementById('busy');
   document.getElementById('busy-text').textContent = text;
   el.hidden = false;
   busyCtrl = new AbortController();
-  document.getElementById('busy-cancel').onclick = () => busyCtrl?.abort();
+  busyT0 = performance.now();
+  log.debug(`Attività: ${text}`);
+  document.getElementById('busy-cancel').onclick = () => { log.info('Attività annullata dall\'utente', { text }); busyCtrl?.abort(); };
   return busyCtrl.signal;
 }
 export function busyText(text) {
@@ -85,5 +104,6 @@ export function busyText(text) {
 }
 export function idle() {
   document.getElementById('busy').hidden = true;
+  if (busyCtrl) log.debug(`Attività conclusa in ${Math.round(performance.now() - busyT0)} ms`);
   busyCtrl = null;
 }

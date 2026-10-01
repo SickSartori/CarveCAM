@@ -7,6 +7,7 @@ import { api } from './api.js';
 import { status, toast } from './dialogs.js';
 import { evalNum } from './ui-props.js';
 import { facesOf, triangleCount, triVertices } from './faces.js';
+import { t, num } from './i18n.js';
 
 const COLOR = { hover: 0x3fa7ff, picked: 0xffb547, outer: 0x7cf2ff, hole: 0xff8a3d };
 const MODE_LABEL = { union: 'unione', subtract: 'sottrazione', intersect: 'intersezione', separate: 'contorni separati' };
@@ -82,11 +83,11 @@ export class Profile3D {
     const mesh = hit.object;
     const { type, id } = mesh.userData;
     const src = type === 'object' ? App.project.objects.find(o => o.id === id) : App.project.artifacts.find(a => a.id === id);
-    const name = src?.name || 'Oggetto';
+    const name = src?.name || t('Oggetto');
     if (this.pick === 'object') return { key: `${type}:${id}`, mesh, tris: null, name };
     const f = facesOf(mesh);
     const fid = f.faceOf[hit.faceIndex];
-    return { key: `${type}:${id}:${fid}`, mesh, tris: f.groups.get(fid), name: `${name}, faccia ${fid + 1}`, brep: f.brep };
+    return { key: `${type}:${id}:${fid}`, mesh, tris: f.groups.get(fid), name: t('{name}, faccia {n}', { name, n: fid + 1 }), brep: f.brep };
   }
 
   hover(ev) {
@@ -96,7 +97,7 @@ export class Profile3D {
     const it = this._itemAt(ev);
     this._setHover(it);
     const el = document.getElementById('st-coords');
-    if (el) el.textContent = it ? `${it.name}${it.tris ? ` (${it.brep ? 'faccia CAD' : 'faccia ricavata dalla mesh'})` : ''}` : '';
+    if (el) el.textContent = it ? `${it.name}${it.tris ? ` (${it.brep ? t('faccia CAD') : t('faccia ricavata dalla mesh')})` : ''}` : '';
   }
 
   leave() { this._setHover(null); }
@@ -115,7 +116,7 @@ export class Profile3D {
 
   toggle(ev) {
     const it = this._itemAt(ev);
-    if (!it) { toast('Nessuna faccia sotto il cursore', 'warn', 1500); return; }
+    if (!it) { toast(t('Nessuna faccia sotto il cursore'), 'warn', 1500); return; }
     const i = this.items.findIndex(x => x.key === it.key);
     if (i >= 0) {
       this._dispose(this.items[i].overlay);
@@ -230,7 +231,7 @@ export class Profile3D {
     } catch (e) {
       if (seq !== this._seq) return;
       this.result = null;
-      toast(`Profilo non calcolato: ${e.message}`, 'err');
+      toast(t('Profilo non calcolato: {msg}', { msg: e.message }), 'err');
     } finally {
       if (seq === this._seq) { this.busy = false; this._syncUi(); this.sketch._redraw(); }
     }
@@ -238,10 +239,10 @@ export class Profile3D {
 
   /** Aggiunge il profilo allo sketch come polilinee chiuse (fori compresi: vale la regola pari/dispari). */
   async commit() {
-    if (!this.items.length) { toast('Seleziona prima una o più facce del modello', 'warn'); return; }
+    if (!this.items.length) { toast(t('Seleziona prima una o più facce del modello'), 'warn'); return; }
     await this._compute();
     const shapes = this.result?.shapes || [];
-    if (!shapes.length) { toast(this.result?.warnings?.[0] || 'Il profilo è vuoto', 'warn', 5000); return; }
+    if (!shapes.length) { toast(this.result?.warnings?.[0] || t('Il profilo è vuoto'), 'warn', 5000); return; }
     const sid = this.sketch.sketchId;
     let loops = 0, area = 0, last = null;
     mutate(() => {
@@ -262,7 +263,7 @@ export class Profile3D {
     for (const w of this.result.warnings || []) toast(w, 'warn', 5000);
     this.clear();
     if (last) select({ type: 'entity', id: last, sketchId: sid });
-    status(`Profilo da 3D (${mode}): ${loops} contorn${loops === 1 ? 'o' : 'i'}, area ${area.toLocaleString('it-IT', { maximumFractionDigits: 1 })} mm²`);
+    status(t('Profilo da 3D ({mode}): {n} contorni, area {area} mm²', { mode: t(mode), n: loops, area: num(area, { maximumFractionDigits: 1 }) }));
   }
 
   // ---------------------------------------------------------------- anteprima e interfaccia
@@ -303,11 +304,11 @@ export class Profile3D {
     }
     const n = this.items.length;
     const what = this.pick === 'face' ? (n === 1 ? 'faccia' : 'facce') : (n === 1 ? 'oggetto' : 'oggetti');
-    let txt = n ? `${n} ${what}` : (this.pick === 'face' ? 'Clic sulle facce' : 'Clic sugli oggetti');
-    if (n && this.busy) txt += ', calcolo…';
+    let txt = n ? `${n} ${t(what)}` : (this.pick === 'face' ? t('Clic sulle facce') : t('Clic sugli oggetti'));
+    if (n && this.busy) txt += t(', calcolo…');
     else if (n && this.result) {
       const a = this.result.shapes.reduce((s, x) => s + x.area, 0);
-      txt += this.result.shapes.length ? `, area ${a.toLocaleString('it-IT', { maximumFractionDigits: 1 })} mm²` : ', profilo vuoto';
+      txt += this.result.shapes.length ? t(', area {a} mm²', { a: num(a, { maximumFractionDigits: 1 }) }) : t(', profilo vuoto');
     }
     this.countEl.textContent = txt;
     document.getElementById('sk-pmake').disabled = !n;

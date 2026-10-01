@@ -20,6 +20,10 @@ export const ICONS = {
   eye: s('<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>'),
   eyeOff: s('<path d="M2 2l12 12M6.4 4a6.7 6.7 0 0 1 1.6-.5c4 0 6.5 4.5 6.5 4.5a11 11 0 0 1-1.9 2.4M10 11.9a5.5 5.5 0 0 1-2 .6C4 12.5 1.5 8 1.5 8a11.6 11.6 0 0 1 2.6-3"/>'),
   plus: s('<path d="M8 3v10M3 8h10"/>'),
+  lock: s('<rect x="3.5" y="7" width="9" height="6.8" rx="1.2" fill="currentColor" fill-opacity=".3"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/>'),
+  unlock: s('<rect x="3.5" y="7" width="9" height="6.8" rx="1.2"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 4.9-.7"/>'),
+  collapseAll: s('<path d="M4.5 6.5 8 3l3.5 3.5M4.5 13 8 9.5l3.5 3.5"/>'),
+  expandAll: s('<path d="M4.5 3 8 6.5 11.5 3M4.5 9.5 8 13l3.5-3.5"/>'),
 };
 
 // ------------------------------------------------------------------ icone di comando (20 px, colore dal CSS)
@@ -31,6 +35,15 @@ export const TB = {
   new: t('<path d="M5 2.5h6.5l4 4v11H5z"/><path d="M11.5 2.5v4h4"/><path d="M10.25 9.5v5M7.75 12h5"/>'),
   open: t('<path d="M2.5 15.5v-11h5l1.5 1.5h6.5v2.5"/><path d="M2.5 15.5 5 9h12.5L15 15.5z"/>'),
   save: t('<path d="M3.5 3.5h10l3 3v10h-13z"/><path d="M6.5 3.5v4h6v-4"/><rect x="6" y="11" width="8" height="5.5" rx=".5"/>'),
+  saveAs: t('<path d="M3.5 3.5h9l3 3v4"/><path d="M3.5 3.5v13h6"/><path d="M6.5 3.5v3.5h5.5v-3.5"/><path d="M15.5 12.2 17.3 14l-4.6 4.6H11v-1.8z"/>'),
+  history: t('<path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6"/><path d="M3 3.5v3h3"/><path d="M10 6.5V10l2.5 1.8"/>'),
+  lock: t('<rect x="4.5" y="9" width="11" height="8.5" rx="1.5"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/>' + dot(10, 13.2)),
+  origin: t('<path d="M3 17h14M3 17V3"/><path d="M3 17l5.5-5.5"/><circle cx="12.5" cy="7.5" r="2.5"/><path d="M12.5 3.5v1.5M12.5 10v1.5M8.5 7.5H10M15 7.5h1.5"/>'),
+  planeAdd: t('<path d="M2 15 5.5 9h12.5L14.5 15z"/><path d="M14.5 2.5v5M12 5h5"/>'),
+  toolLib: t('<path d="M3 17.5h14"/><path d="M5 17.5V8M10 17.5V5M15 17.5V9.5"/><path d="M4 8h2M9 5h2M14 9.5h2"/><path d="M5 4.5v1M10 2.5v1M15 6v1.5" stroke-dasharray="1 1"/>'),
+  setups: t('<path d="M4 5h12M4 10h12M4 15h12"/><circle cx="7" cy="5" r="1.6" fill="currentColor"/><circle cx="13" cy="10" r="1.6" fill="currentColor"/><circle cx="9" cy="15" r="1.6" fill="currentColor"/>'),
+  options: t('<circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6"/>'),
+  log: t('<path d="M5 2.5h7l3.5 3.5v11.5H5z"/><path d="M12 2.5V6h3.5"/><path d="M7.5 9.5h2M7.5 12h5M7.5 14.5h4"/><path d="M11 9.5h1.5"/>'),
   rename: t('<path d="M3 15.5h14"/><path d="M12.5 3.5l2.5 2.5-7 7H5.5v-2.5z"/>'),
   undo: t('<path d="M7 4.5 3.5 8 7 11.5"/><path d="M3.5 8h8.25a4.25 4.25 0 0 1 0 8.5H9"/>'),
   redo: t('<path d="M13 4.5 16.5 8 13 11.5"/><path d="M16.5 8H8.25a4.25 4.25 0 0 0 0 8.5H11"/>'),

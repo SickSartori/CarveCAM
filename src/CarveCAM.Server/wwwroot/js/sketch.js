@@ -1,19 +1,22 @@
 // Modalità sketch: disegno 2D sul piano di lavoro (polilinea, rettangolo, cerchio, poligono) con aggancio e coordinate.
 import * as THREE from 'three';
-import { App, emit, mutate, getSketch, select, uid } from './state.js';
+import { App, emit, mutate, getSketch, select, toggleSelect, uid } from './state.js';
 import { planeFrame, frameMatrix, toLocal, entityLoop, entitySnapPoints, distToLoop, fmt } from './geom.js';
 import { status, toast } from './dialogs.js';
 import { evalNum } from './ui-props.js';
 import { Profile3D } from './profile3d.js';
+import { settings } from './settings.js';
+import { t } from './i18n.js';
 
-const HINTS = {
+const HINTS_IT = {
   profile: 'Clic su facce del modello per selezionarle (di nuovo per toglierle), trascina per ruotare · <b>Invio</b> crea il profilo · <b>Backspace</b> toglie l\'ultima · <b>Esc</b> svuota',
-  select: 'Clic su un\'entità per selezionarla · <b>Canc</b> elimina · <b>Esc</b> termina sketch',
+  select: 'Clic su un\'entità per selezionarla (<b>Ctrl</b>+clic per aggiungerla) · <b>Canc</b> elimina · <b>Esc</b> termina sketch',
   polyline: 'Clic per aggiungere vertici · clic sul primo punto, doppio clic o <b>Invio</b> per chiudere · <b>Backspace</b> annulla vertice',
   rect: 'Clic sul primo angolo, poi sull\'angolo opposto (o digita <b>@larghezza,altezza</b>)',
   circle: 'Clic sul centro, poi sul raggio (o digita il raggio)',
   polygon: 'Clic sul centro, poi su un vertice (o digita il raggio circoscritto)',
 };
+const HINTS = Object.fromEntries(Object.entries(HINTS_IT).map(([k, v]) => [k, t(v)]));
 
 export class SketchMode {
   constructor(vp) {
@@ -40,6 +43,7 @@ export class SketchMode {
       e.stopPropagation();
     });
     for (const inp of [this.sides, this.stepBox]) inp.addEventListener('keydown', e => e.stopPropagation());
+    this.stepBox.value = String(settings.grid.snapStep || 1);
     this.profile = new Profile3D(vp, this);
   }
 
@@ -150,6 +154,11 @@ export class SketchMode {
   onClick(ev) {
     if (ev.button !== 0) return;
     if (this.tool === 'profile') { this.profile.toggle(ev); return; }
+    if (this.tool === 'select') {
+      const q = this._local(ev);
+      if (q) this._pick([q.x, q.y], q.px, ev.ctrlKey || ev.metaKey || ev.shiftKey);
+      return;
+    }
     const q = this._snap(this._local(ev));
     if (!q) return;
     this._point([q.x, q.y], q.px);
@@ -181,27 +190,27 @@ export class SketchMode {
   }
 
   _point(p, px = 0.1) {
-    const t = this.tool;
-    if (t === 'select') { this._pick(p, px); return; }
-    if (t === 'polyline') {
+    const tool = this.tool;
+    if (tool === 'select') { this._pick(p, px); return; }
+    if (tool === 'polyline') {
       if (this.pts.length >= 3 && Math.hypot(p[0] - this.pts[0][0], p[1] - this.pts[0][1]) < px * 9) { this._finishPolyline(); return; }
       const last = this.pts[this.pts.length - 1];
       if (last && Math.hypot(p[0] - last[0], p[1] - last[1]) < 1e-9) return;
       this.pts.push(p);
-    } else if (t === 'rect') {
+    } else if (tool === 'rect') {
       if (!this.pts.length) this.pts.push(p);
       else {
         const [a] = this.pts;
-        if (Math.abs(p[0] - a[0]) < 1e-9 || Math.abs(p[1] - a[1]) < 1e-9) { toast('Rettangolo degenere', 'warn'); return; }
+        if (Math.abs(p[0] - a[0]) < 1e-9 || Math.abs(p[1] - a[1]) < 1e-9) { toast(t('Rettangolo degenere'), 'warn'); return; }
         this._add({ kind: 'rect', x1: Math.min(a[0], p[0]), y1: Math.min(a[1], p[1]), x2: Math.max(a[0], p[0]), y2: Math.max(a[1], p[1]) });
       }
-    } else if (t === 'circle' || t === 'polygon') {
+    } else if (tool === 'circle' || tool === 'polygon') {
       if (!this.pts.length) this.pts.push(p);
       else {
         const [c] = this.pts;
         const rr = Math.hypot(p[0] - c[0], p[1] - c[1]);
         if (rr < 1e-6) return;
-        if (t === 'circle') this._add({ kind: 'circle', cx: c[0], cy: c[1], r: rr });
+        if (tool === 'circle') this._add({ kind: 'circle', cx: c[0], cy: c[1], r: rr });
         else {
           const rot = THREE.MathUtils.radToDeg(Math.atan2(p[1] - c[1], p[0] - c[0]));
           this._add({ kind: 'polygon', cx: c[0], cy: c[1], r: rr, sides: Math.max(3, Math.round(evalNum(this.sides.value) || 6)), rot });
@@ -228,12 +237,12 @@ export class SketchMode {
       if (this.tool === 'rect' && this.pts.length === 1 && Number.isFinite(v) && v !== 0) {
         this._point([last[0] + v, last[1] + v]);
       } else {
-        toast('Formato: x,y   x;y   oppure @dx,dy (relativo)', 'warn');
+        toast(t('Formato: x,y   x;y   oppure @dx,dy (relativo)'), 'warn');
       }
       return;
     }
     let x = evalNum(parts[0]), y = evalNum(parts[1]);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) { toast('Coordinate non valide', 'err'); return; }
+    if (!Number.isFinite(x) || !Number.isFinite(y)) { toast(t('Coordinate non valide'), 'err'); return; }
     if (rel) {
       const base = last || [0, 0];
       x += base[0]; y += base[1];
@@ -243,7 +252,7 @@ export class SketchMode {
   }
   _finishPolyline() {
     if (this.pts.length < 3) {
-      if (this.pts.length) toast('Servono almeno 3 vertici', 'warn');
+      if (this.pts.length) toast(t('Servono almeno 3 vertici'), 'warn');
       return;
     }
     this._add({ kind: 'polyline', pts: this.pts.map(p => [p[0], p[1]]), closed: true });
@@ -258,11 +267,11 @@ export class SketchMode {
     });
     this.pts = [];
     select({ type: 'entity', id, sketchId: sid });
-    status(`Entità aggiunta allo sketch`);
+    status(t('Entità aggiunta allo sketch'));
     this._redraw();
   }
 
-  _pick(p, px) {
+  _pick(p, px, add = false) {
     const r = getSketch(this.sketchId);
     if (!r) return;
     let best = null, bd = px * 8;
@@ -270,8 +279,15 @@ export class SketchMode {
       const d = distToLoop(p[0], p[1], entityLoop(e));
       if (d < bd) { bd = d; best = e; }
     }
-    if (best) select({ type: 'entity', id: best.id, sketchId: this.sketchId });
-    else select({ type: 'sketch', id: this.sketchId });
+    const ref = best ? { type: 'entity', id: best.id, sketchId: this.sketchId } : null;
+    // Ctrl+clic: aggiunge o toglie l'entità dalla selezione (entità dello stesso sketch)
+    if (add && ref) {
+      if (App.selected.some(s => s.type !== 'entity' || s.sketchId !== this.sketchId)) select(ref);
+      else toggleSelect(ref);
+      return;
+    }
+    if (ref) select(ref);
+    else if (!add) select({ type: 'sketch', id: this.sketchId });
   }
 
   // ---------------------------------------------------------------- grafica di anteprima
@@ -315,7 +331,7 @@ export class SketchMode {
     for (const p of this.pts) this.group.add(square(p, px * 3.5, 0x7cf2ff));
     // cursore a croce
     if (c) {
-      const s = px * 14;
+      const s = px * (settings.sizes.cursor || 14);
       const geo = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(c.x - s, c.y, 0.06), new THREE.Vector3(c.x + s, c.y, 0.06),
         new THREE.Vector3(c.x, c.y - s, 0.06), new THREE.Vector3(c.x, c.y + s, 0.06)]);

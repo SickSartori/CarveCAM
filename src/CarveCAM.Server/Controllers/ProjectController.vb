@@ -4,6 +4,7 @@ Imports System.Text
 Imports System.Text.Json
 Imports Microsoft.AspNetCore.Http
 Imports Microsoft.AspNetCore.Mvc
+Imports Microsoft.Extensions.Logging
 Imports CarveCAM.Core.Meshes
 Imports CarveCAM.Server.Services
 
@@ -18,9 +19,11 @@ Namespace Controllers
         Inherits ControllerBase
 
         Private ReadOnly _meshes As MeshStore
+        Private ReadOnly _log As ILogger(Of ProjectController)
 
-        Public Sub New(meshes As MeshStore)
+        Public Sub New(meshes As MeshStore, log As ILogger(Of ProjectController))
             _meshes = meshes
+            _log = log
         End Sub
 
         Private Shared Function MeshIds(root As JsonElement) As List(Of String)
@@ -51,8 +54,11 @@ Namespace Controllers
                     ids = MeshIds(doc.RootElement)
                 End Using
             Catch ex As JsonException
+                _log.LogWarning("Salvataggio: progetto non valido ({Message})", ex.Message)
                 Return BadRequest(New With {.Error = "Progetto non valido."})
             End Try
+            Dim missingMeshes = ids.Where(Function(i) _meshes.TryGet(i) Is Nothing).ToList()
+            If missingMeshes.Count > 0 Then _log.LogWarning("Salvataggio: {Count} mesh non presenti sul server ({Ids})", missingMeshes.Count, String.Join(", ", missingMeshes))
             Using ms As New MemoryStream()
                 Using zip As New ZipArchive(ms, ZipArchiveMode.Create, True)
                     Dim pe = zip.CreateEntry("project.json", CompressionLevel.Optimal)
@@ -76,6 +82,7 @@ Namespace Controllers
                         End If
                     Next
                 End Using
+                _log.LogInformation("Progetto salvato: {Bytes} byte, {Meshes} mesh", ms.Length, ids.Count - missingMeshes.Count)
                 Return File(ms.ToArray(), "application/zip", "progetto.ccam")
             End Using
         End Function
@@ -112,9 +119,11 @@ Namespace Controllers
                                 End Using
                             Next
                         Next
+                        _log.LogInformation("Progetto aperto: {File} ({Bytes} byte, {Entries} voci)", file.FileName, file.Length, zip.Entries.Count)
                         Return Content(json, "application/json", Encoding.UTF8)
                     End Using
                 Catch ex As InvalidDataException
+                    _log.LogWarning(ex, "Apertura di {File} non riuscita: archivio non valido", file.FileName)
                     Return BadRequest(New With {.Error = "File progetto non valido."})
                 End Try
             End Using

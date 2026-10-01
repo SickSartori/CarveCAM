@@ -1,6 +1,7 @@
 // Ricerca comandi (Ctrl+K): elenca tutte le azioni dei menu, filtrabili per nome.
 import { h } from './dialogs.js';
 import { TB } from './icons.js';
+import { t } from './i18n.js';
 
 const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -26,9 +27,9 @@ export class CommandPalette {
 
   open() {
     if (this.root) return;
-    this.input = h('input', { class: 'pal-input', placeholder: 'Cerca un comando: piano, sketch, calcola, esporta…', 'aria-label': 'Cerca un comando', spellcheck: 'false' });
+    this.input = h('input', { class: 'pal-input', placeholder: t('Cerca un comando: piano, sketch, calcola, esporta…'), 'aria-label': t('Cerca un comando'), spellcheck: 'false' });
     this.list = h('div', { class: 'pal-list', role: 'listbox' });
-    const box = h('div', { class: 'pal-box', role: 'dialog', 'aria-label': 'Cerca un comando' },
+    const box = h('div', { class: 'pal-box', role: 'dialog', 'aria-label': t('Cerca un comando') },
       h('div', { class: 'pal-head' }, h('span', { class: 'pal-ico', html: TB.search }), this.input, h('kbd', {}, 'Esc')),
       this.list);
     this.root = h('div', { class: 'pal-backdrop', onmousedown: e => { if (e.target === this.root) this.close(); } }, box);
@@ -49,7 +50,7 @@ export class CommandPalette {
     this.shown = this.entries.filter(x => words.every(w => x.key.includes(w)));
     this.list.innerHTML = '';
     if (!this.shown.length) {
-      this.list.append(h('div', { class: 'pal-empty' }, 'Nessun comando trovato. Prova con un\'altra parola.'));
+      this.list.append(h('div', { class: 'pal-empty' }, t('Nessun comando trovato. Prova con un\'altra parola.')));
     }
     this.shown.forEach((x, i) => {
       const en = this.actions.isEnabled(x.a);
