@@ -56,7 +56,7 @@ export class Toolbar {
         if (a.options) { row.append(this._select(a)); continue; }
         const b = h('button', {
           class: `tb-btn${spec.label ? ' labeled' : ''}${spec.primary ? ' primary' : ''}${a.tone ? ` tone-${a.tone}` : ''}`,
-          type: 'button', 'aria-label': a.label,
+          type: 'button', 'aria-label': a.label, 'data-action': a.id,
         }, h('span', { class: 'tb-ico', html: TB[a.icon] || '' }), spec.label ? h('span', { class: 'tb-lbl' }, a.short || a.label) : null);
         b.addEventListener('click', () => { this._hideTip(); this.actions.run(a); });
         b.addEventListener('mouseenter', () => this._showTip(b, a));
@@ -73,7 +73,9 @@ export class Toolbar {
         cap.prepend(led);
         this.leds.push({ led, cap, stage: g.stage, caption: g.caption });
       }
-      this.el.append(h('div', { class: `tb-group${g.stage ? ' stage' : ''}${g.end ? ' view-group' : ''}`, role: 'group', 'aria-label': g.caption }, row, cap));
+      // data-group: fase (o "project", "view") per la guida, che indica i gruppi nell'interfaccia
+      this.el.append(h('div', { class: `tb-group${g.stage ? ' stage' : ''}${g.end ? ' view-group' : ''}`, role: 'group', 'aria-label': g.caption,
+        'data-group': g.stage || (g.end ? 'view' : 'project') }, row, cap));
     }
     this.update();
     this.fit();
@@ -89,7 +91,7 @@ export class Toolbar {
       s.value = '';
       if (v) { this._hideTip(); this.actions.pick(a, v); }
     });
-    const wrap = h('span', { class: 'tb-select-wrap' }, h('span', { class: 'tb-ico', html: TB[a.icon] || '' }), s);
+    const wrap = h('span', { class: 'tb-select-wrap', 'data-action': a.id }, h('span', { class: 'tb-ico', html: TB[a.icon] || '' }), s);
     wrap.addEventListener('mouseenter', () => this._showTip(wrap, a, s.disabled));
     wrap.addEventListener('mouseleave', () => this._hideTip());
     this.selects.push({ s, a, wrap });

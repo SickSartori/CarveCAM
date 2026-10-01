@@ -130,6 +130,8 @@ export function createActions({ cmd, vp, sketch }) {
     { id: 'view.rapids', label: 'Movimenti rapidi', icon: 'rapids', run: cmd.toggleRapids, checked: () => App.view.rapids },
     { id: 'view.wire', label: 'Fil di ferro', icon: 'wire', run: cmd.toggleWireframe, checked: () => App.view.wireframe },
     // ---- aiuto
+    { id: 'help.guide', label: 'Guida di CarveCAM…', icon: 'help', kbd: 'F1', run: () => cmd.guide?.(),
+      hint: 'Guida illustrata per chi comincia: interfaccia, flusso di lavoro, lavorazioni, utensili, G-code' },
     { id: 'help.palette', label: 'Cerca un comando…', icon: 'search', kbd: 'Ctrl+K', run: () => cmd.openPalette?.() },
     { id: 'help.shortcuts', label: 'Scorciatoie da tastiera', icon: 'keyboard', run: cmd.shortcuts },
     { id: 'help.log', label: 'File di log…', icon: 'log', run: cmd.showLog, hint: 'Registro di diagnostica di server e interfaccia, per cercare errori e blocchi' },
@@ -184,7 +186,7 @@ export const MENUS = [
   { label: 'Lavorazioni', items: ['op.pocket', 'op.finish', '-', 'op.reorder', '-', 'op.compute', 'op.computeAll', '-', 'op.simulate', 'op.simulateAll', '-', 'file.gcode', 'file.cl'] },
   { label: 'Strumenti', items: ['tools.library', 'tools.setups', '-', 'tools.libExport', 'tools.libImport', '-', 'tools.options'] },
   { label: 'Vista', items: ['view.top', 'view.front', 'view.right', 'view.left', 'view.back', 'view.bottom', 'view.iso', '-', 'plane.normalView', 'view.fit', 'view.ortho', '-', 'view.grid', 'view.paths', 'view.rapids', 'view.wire'] },
-  { label: 'Aiuto', items: ['help.palette', 'help.shortcuts', '-', 'help.log', 'help.blackbox', '-', 'file.demo'] },
+  { label: 'Aiuto', items: ['help.guide', 'help.palette', 'help.shortcuts', '-', 'help.log', 'help.blackbox', '-', 'file.demo'] },
   { label: 'Info', items: ['help.about'] },
 ];
 for (const m of MENUS) {

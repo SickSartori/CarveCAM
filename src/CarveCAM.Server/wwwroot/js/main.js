@@ -25,6 +25,7 @@ import { status, toast, h, modal } from './dialogs.js';
 import { fmt } from './geom.js';
 import { previousSessionCrashed, startSession } from './recovery.js';
 import { initLoaders, splashText, splashDone } from './loader.js';
+import { openGuide, initGuide, guideOpen } from './guide.js';
 
 applyTheme();
 translateDom();
@@ -47,6 +48,9 @@ const recent = { list: [], open: e => cmd.openRecent(e) };
 const menuBar = new MenuBar(document.getElementById('menubar'), MENUS, actions, recent);
 const palette = new CommandPalette(actions, MENUS);
 cmd.openPalette = () => { menuBar.close(); palette.open(); };
+// guida e schermata iniziale
+initGuide({ run: id => actions.run(id) });
+cmd.guide = page => { menuBar.close(); return openGuide(page); };
 async function refreshRecent() { recent.list = await cmd.recentProjects(); }
 on('recent', refreshRecent);
 
@@ -117,7 +121,7 @@ document.getElementById('cmd-search').addEventListener('click', () => cmd.openPa
 document.querySelector('#cmd-search .cs-ico').innerHTML = TB.search;
 const helpBtn = document.getElementById('btn-help');
 helpBtn.innerHTML = `<span class="tb-ico">${TB.help}</span>`;
-helpBtn.addEventListener('click', () => cmd.shortcuts());
+helpBtn.addEventListener('click', () => cmd.guide());
 
 // stato del server VB.NET (verificato periodicamente)
 const srv = document.getElementById('srv-status');
@@ -302,6 +306,7 @@ document.addEventListener('keydown', e => {
   const ctrl = e.ctrlKey || e.metaKey;
   const k = e.key.toLowerCase();
   const key = (id, fn) => { e.preventDefault(); log.action(`key:${id}`); fn(); };
+  if (e.key === 'F1') return key('guide', () => { if (!guideOpen()) cmd.guide(); });
   if (ctrl && k === 'k') return key('palette', () => cmd.openPalette());
   if (ctrl && e.shiftKey && k === 's') return key('saveAs', () => cmd.saveProjectAs());
   if (ctrl && k === 's') return key('save', () => cmd.saveProject());

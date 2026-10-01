@@ -10,6 +10,7 @@ import { planeFrame, angleOfU, fmt, toWorld, entitySnapPoints } from './geom.js'
 import { modal, confirmBox, toast, status, busy, busyText, idle, h } from './dialogs.js';
 import { SERVER_FORMATS, CLIENT_FORMATS, extOf, parseInBrowser, buildDisplayGeometry } from './importers.js';
 import { sampleMesh, sampleProject, SAMPLE_VERSION, SAMPLE_BOUNDS } from './sample.js';
+import { shortcutRows } from './shortcuts.js';
 import { OP_DEFAULTS, effParam, round4 } from './oplib.js';
 import {
   pickTool, pickSetup, toolFromLibrary, getTools, getSetups, openToolLibrary, openSetupLibrary, saveOperationAsSetup,
@@ -1722,20 +1723,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
 
   // ================================================================ AIUTO
   cmd.shortcuts = () => {
-    const rows = [
-      ['Ctrl+K', t('Cerca un comando')], ['Ctrl+S / Ctrl+O', t('Salva / apri progetto (.ccam)')], ['Ctrl+Shift+S', t('Salva con nome')], ['Ctrl+I', t('Importa modello 3D')],
-      ['Ctrl+Z / Ctrl+Y', t('Annulla / ripeti')], ['Canc', t('Elimina selezione')], ['Ctrl+D', t('Duplica')],
-      [t('Ctrl+clic'), t('Aggiunge o toglie dalla selezione (navigatore, vista, entità dello sketch)')], ['Ctrl+L', t('Blocca / sblocca la selezione')],
-      ['G / R', t('Manipolatore: sposta / ruota')], [t('Clic sul centro'), t('Manipolatore: scegli un nuovo punto di riferimento')],
-      ['Esc', t('Annulla comando / deseleziona / esci dallo sketch')],
-      ['F', t('Adatta alla vista')], ['7 / 1 / 3 / 0', t('Vista alto / fronte / destra / iso')], ['5', t('Prospettica ↔ ortogonale')],
-      ['F9', t('Calcola lavorazione selezionata (o tutte)')], ['Spazio', t('Avvia/pausa simulazione')],
-      [t('Sketch: L R C P S'), t('Polilinea, rettangolo, cerchio, poligono, seleziona')],
-      [t('Sketch: Invio / Backspace'), t('Chiudi polilinea / annulla ultimo vertice')],
-      [t('Sketch: coordinate'), t('x,y assolute · @dx,dy relative · numero = raggio')],
-      [t('Mouse'), t('Sinistro ruota · centrale/destro trasla · rotella zoom')],
-    ];
-    modal({ title: t('Scorciatoie da tastiera'), body: h('table', {}, rows.map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v)))) });
+    modal({ title: t('Scorciatoie da tastiera'), body: h('table', {}, shortcutRows().map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v)))) });
   };
 
   /** Mesh della targa di esempio sul server: quella caricata in precedenza se c'è ancora, altrimenti la si genera. */
