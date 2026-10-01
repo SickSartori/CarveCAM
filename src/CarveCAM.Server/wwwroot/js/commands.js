@@ -6,7 +6,7 @@ import {
 } from './state.js';
 import { ICONS } from './icons.js';
 import { api, download } from './api.js';
-import { planeFrame, angleOfU, fmt, toWorld, entitySnapPoints } from './geom.js';
+import { planeFrame, angleOfU, fmt, toWorld, entitySnapPoints, mirrorEntityV } from './geom.js';
 import { modal, confirmBox, toast, status, busy, busyText, idle, h } from './dialogs.js';
 import { SERVER_FORMATS, CLIENT_FORMATS, extOf, parseInBrowser, buildDisplayGeometry } from './importers.js';
 import { sampleMesh, sampleProject, SAMPLE_VERSION, SAMPLE_BOUNDS } from './sample.js';
@@ -1157,11 +1157,20 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     }
   }
 
+  /**
+   * Inverte la normale (asse utensile) del piano lasciando gli sketch dove sono: con la normale opposta e la
+   * rotazione nel piano cambiata di segno l'asse U resta lo stesso e l'asse V si inverte, quindi le entità si
+   * ribaltano in V (altrimenti comparirebbero specchiate).
+   */
   cmd.flipNormal = planeId => {
     const pl = getPlane(planeId);
     if (!pl) return;
     if (pl.locked) { lockedWarn(); return; }
-    mutate(() => { pl.normal = pl.normal.map(v => (v === 0 ? 0 : -v)); });
+    mutate(() => {
+      pl.normal = pl.normal.map(v => (v === 0 ? 0 : -v));
+      pl.angle = pl.angle ? -pl.angle : 0;
+      for (const s of pl.sketches) for (const e of s.entities) mirrorEntityV(e);
+    });
     sketch.refreshFrame();
   };
 
