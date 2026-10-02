@@ -831,6 +831,15 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     return id;
   };
 
+  /** Nuovo punto di applicazione di un'origine esistente: clic nella vista, con aggancio ai vertici. */
+  cmd.relocateOrigin = id => {
+    const og = getOrigin(id);
+    if (!og) return;
+    if (og.locked) { lockedWarn(); return; }
+    if (modelBlocked()) return;
+    startPick({ kind: 'reloc', id }, t('Clic sul nuovo punto di "{name}" (si aggancia ai vertici di solidi, sketch e piani vicini) · <b>Esc</b> annulla', { name: og.name }));
+  };
+
   cmd.originFromPoint = () => {
     if (modelBlocked()) return;
     startPick({ kind: 'ref' }, t('Clic su un punto (si aggancia ai vertici di solidi, sketch e piani vicini): diventa un punto di origine · <b>Esc</b> annulla'));
@@ -992,7 +1001,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   };
 
   // ---------------------------------------------------------------- aggancio ai vertici (piano da 3 punti, origini)
-  const SNAP_KINDS = ['3pt', 'origin', 'ref'];
+  const SNAP_KINDS = ['3pt', 'origin', 'ref', 'reloc'];
   const SNAP_PX = 12;
   let snapMarker = null;
 
@@ -1141,6 +1150,16 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     if (pm.kind === 'ref') {
       cmd.cancelPick();
       cmd.createOrigin([p.x, p.y, p.z]);
+      return;
+    }
+    if (pm.kind === 'reloc') {
+      cmd.cancelPick();
+      const og = getOrigin(pm.id);
+      if (!og) return;
+      mutate(() => { og.position = [p.x, p.y, p.z].map(round4); });
+      select({ type: 'origin', id: og.id });
+      log.info('Punto di origine spostato', { name: og.name, position: og.position });
+      status(t('"{name}" spostato in {p}', { name: og.name, p: og.position.map(v => fmt(v, 3)).join('; ') }));
       return;
     }
     // piano da 3 punti

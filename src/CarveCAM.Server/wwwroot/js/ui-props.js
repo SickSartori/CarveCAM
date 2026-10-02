@@ -250,6 +250,7 @@ export class Props {
       { key: 'visible', label: 'Visibile', type: 'check' },
       ...this._lockFields('origin', o),
       { type: 'buttons', items: [
+        { label: 'Sposta il punto…', disabled: locked, title: 'Clic nella vista sul nuovo punto (si aggancia ai vertici)', action: () => this.cmd.relocateOrigin(o.id) },
         { label: 'Esporta G-code con questo zero…', primary: true, action: () => this.cmd.exportGcode(null, o.id) },
       ] },
       { note: 'Nell\'esportazione del G-code si sceglie quale punto usare come zero pezzo: le coordinate del programma sono relative a quel punto.' },
