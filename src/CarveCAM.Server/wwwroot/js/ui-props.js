@@ -389,6 +389,7 @@ export class Props {
       pocket ? { key: 'stepdown', label: 'Passo verticale', type: 'rel' } : null,
       { key: 'maxDepth', label: 'Profondità max', type: 'num', unit: 'mm', min: 0.001 },
       { key: 'stock', label: 'Sovrametallo', type: 'num', unit: 'mm', min: 0 },
+      { key: 'belowGrid', label: 'Sotto la griglia', help: 'belowGrid', type: 'select', options: [['', 'Chiedi conferma'], ['allow', 'Consenti'], ['limit', 'Limita al piano']] },
       { sec: 'Quote e precisione', tone: 'op', id: 'heights' },
       { key: 'safeHeight', label: 'Quota sicurezza', type: 'num', unit: 'mm', min: 0.1 },
       { key: 'clearance', label: 'Avvicinamento', type: 'num', unit: 'mm', min: 0 },

@@ -93,6 +93,25 @@ Namespace Cam
                     addPositions(Primitives.Build(a), Nothing)
                 Next
             End If
+            ' limite al piano della griglia: un piano (z = Floor) sotto il pezzo, che la fresa tocca senza sovrametallo
+            ' (abbassato del sovrametallo, che il drop-cutter riaggiunge) e appena più in basso per l'arrotondamento
+            Dim floorZ As Double? = Nothing
+            If req.Floor.HasValue Then
+                If frame.N.Z < 0.05 Then
+                    tp.Warnings.Add("Limite al piano della griglia non applicato: il piano della lavorazione è verticale o rivolto verso il basso.")
+                Else
+                    floorZ = req.Floor.Value
+                    Dim zT = req.Floor.Value - stock - 0.0005
+                    Dim corner = Function(u As Double, v As Double) As Vec3
+                                     Return New Vec3(u, v, (zT - frame.Origin.Z - u * frame.U.Z - v * frame.V.Z) / frame.N.Z)
+                                 End Function
+                    Dim q0 = corner(winMinU, winMinV), q1 = corner(winMaxU, winMinV), q2 = corner(winMaxU, winMaxV), q3 = corner(winMinU, winMaxV)
+                    If Math.Max(Math.Max(q0.Z, q1.Z), Math.Max(q2.Z, q3.Z)) + stock > floor - 1 Then
+                        tris.Add(New LocalTri(q0, q1, q2))
+                        tris.Add(New LocalTri(q0, q2, q3))
+                    End If
+                End If
+            End If
 
             Dim dc = DropCutter.ForTool(tris, op.Tool, stock)
             tp.Stats.Triangles = dc.TriangleCount
@@ -124,7 +143,16 @@ Namespace Cam
             tp.Stats.SafeW = safeW
 
             If isPocket Then
-                ComputePocket(tp, op, dc, region0, bb, stepover, safeW, stockMap, ct)
+                ' sopra il piano della griglia: l'ultima terrazza si ferma dove la fresa lo tocca
+                Dim wGrid = Double.NegativeInfinity
+                If floorZ.HasValue Then
+                    Dim low = op.Tool.LowestOffset(frame.N.Z)
+                    wGrid = Double.PositiveInfinity
+                    For Each c In {(bb.MinX, bb.MinY), (bb.MaxX, bb.MinY), (bb.MaxX, bb.MaxY), (bb.MinX, bb.MaxY)}
+                        wGrid = Math.Min(wGrid, (floorZ.Value - low - frame.Origin.Z - c.Item1 * frame.U.Z - c.Item2 * frame.V.Z) / frame.N.Z)
+                    Next
+                End If
+                ComputePocket(tp, op, dc, region0, bb, stepover, safeW, stockMap, wGrid, ct)
             Else
                 ComputeFinish(tp, op, dc, region0, stepover, safeW, stockMap, ct)
             End If
@@ -138,6 +166,17 @@ Namespace Cam
 
             If tp.Points.Count = 0 Then tp.Warnings.Add("Nessun percorso generato: area non lavorabile con i parametri indicati.")
             tp.ComputeStats()
+            ' punto più basso raggiunto dal tagliente (per il controllo del piano della griglia)
+            If tp.Points.Count > 0 Then
+                Dim minW = Double.PositiveInfinity
+                For Each p In tp.Points
+                    minW = Math.Min(minW, frame.ToWorld(p.U, p.V, p.W).Z)
+                Next
+                tp.Stats.MinZ = minW + op.Tool.LowestOffset(frame.N.Z)
+                If floorZ.HasValue AndAlso tp.Stats.MinZ < floorZ.Value + 0.002 Then
+                    tp.Warnings.Add($"Percorso limitato al piano della griglia (Z {floorZ.Value:0.###}): la fresa non scende sotto.")
+                End If
+            End If
             ' verifica con utensile ridotto della tolleranza (in tutte le direzioni)
             Dim delta = Math.Max(0.005, op.Tolerance)
             Dim dcCheck = If(dc.TriangleCount = 0, dc, DropCutter.ForTool(tris, op.Tool, stock, delta))
@@ -180,7 +219,7 @@ Namespace Cam
         ' ================================================================ SVUOTATURA
         Private Sub ComputePocket(tp As Toolpath, op As OperationDef, dc As DropCutter, region0 As Paths64,
                                   bb As (MinX As Double, MinY As Double, MaxX As Double, MaxY As Double),
-                                  stepover As Double, safeW As Double, stockMap As StockMap, ct As CancellationToken)
+                                  stepover As Double, safeW As Double, stockMap As StockMap, wGrid As Double, ct As CancellationToken)
             Dim R = op.Tool.WorkRadius(op.MaxDepth)
             ' raggio di curvatura minimo dei contorni delle zone bloccate: per la fresa conica è quello della punta
             ' (attorno agli spigoli degli ostacoli appena sopra la terrazza tocca solo la punta)
@@ -196,6 +235,8 @@ Namespace Cam
             Dim floor = -op.MaxDepth
             Dim hf As HeightField = Nothing
             If dc.TriangleCount > 0 Then hf = New HeightField(dc, bb.MinX, bb.MinY, bb.MaxX, bb.MaxY, res, floor - 1, ct)
+            ' limite al piano della griglia (wGrid: quota della punta che lo tocca, la più bassa nell'area)
+            If wGrid > floor Then floor = wGrid
 
             ' con il grezzo le terrazze partono dalla sua sommità (anche sopra il piano, per non urtarlo) e
             ' coprono solo dove c'è materiale; il limite di profondità resta quello misurato dal piano
@@ -209,6 +250,10 @@ Namespace Cam
                 End If
                 wStart = Math.Max(0, wTop)
                 material = stockMap.MaterialField()
+            End If
+            If floor >= wStart - 0.001 Then
+                tp.Warnings.Add("Nessuna terrazza sopra il piano della griglia: la lavorazione resta vuota.")
+                Return
             End If
             Dim levels As New List(Of Double)()
             Dim d = op.Stepdown

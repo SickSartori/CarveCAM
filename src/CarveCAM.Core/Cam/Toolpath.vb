@@ -42,6 +42,8 @@ Namespace Cam
         ''' <summary>Massima penetrazione rilevata dalla verifica (mm), 0 = nessuna.</summary>
         Public Property MaxGouge As Double
         Public Property GougeSamples As Integer
+        ''' <summary>Quota Z mondo più bassa raggiunta dal tagliente (0 senza percorso).</summary>
+        Public Property MinZ As Double
     End Class
 
     ''' <summary>Percorso utensile calcolato per una lavorazione.</summary>

@@ -138,6 +138,32 @@ Namespace Model
             Return rt + hh * TaperTan
         End Function
 
+        ''' <summary>
+        ''' Quota del punto più basso del tagliente rispetto alla punta, lungo Z mondo, con l'asse utensile (dalla
+        ''' punta verso il mandrino) di componente Z axisZ: 0 con l'asse verticale, negativa con l'asse inclinato
+        ''' (scende il bordo del tagliente).
+        ''' </summary>
+        Public Function LowestOffset(axisZ As Double) As Double
+            Dim nz = Math.Max(-1, Math.Min(1, axisZ))
+            Dim s = Math.Sqrt(Math.Max(0, 1 - nz * nz))
+            If s < 0.000000001 Then Return If(nz >= 0, 0, -ConeHeight)
+            Dim rc = EffectiveCorner, r = Radius
+            Dim prof = Function(h As Double) As Double
+                           If IsTaper Then Return RadiusAt(h)
+                           If h < rc Then Return (r - rc) + Math.Sqrt(Math.Max(0, rc * rc - (rc - h) * (rc - h)))
+                           Return r
+                       End Function
+            ' con l'asse rivolto in basso conta solo il primo tratto (raccordo, cono); altrimenti tutto il tagliente
+            Dim hMax = If(IsTaper OrElse nz <= 0, ConeHeight, Math.Max(rc, 0.000001))
+            Dim best = 0.0
+            Const N = 256
+            For k = 0 To N
+                Dim h = hMax * k / N
+                best = Math.Min(best, h * nz - prof(h) * s)
+            Next
+            Return best
+        End Function
+
         ''' <summary>Raggio massimo del tagliente (in cima al cono per la fresa conica).</summary>
         Public ReadOnly Property MaxRadius As Double
             Get
@@ -242,6 +268,8 @@ Namespace Model
         Public Property Stock As StockDef
         ''' <summary>Percorso della lavorazione precedente: il grezzo parte da quello che ha lasciato.</summary>
         Public Property StockFrom As String
+        ''' <summary>Quota Z mondo sotto cui l'utensile non scende (piano della griglia); Nothing = nessun limite.</summary>
+        Public Property Floor As Double?
     End Class
 
 End Namespace

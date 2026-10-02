@@ -1613,6 +1613,8 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       objects: App.project.objects.filter(x => obst.has(x.id) && x.meshId && !x.stock).map(objectReq),
       artifacts: App.project.artifacts.filter(x => obst.has(x.id) && !x.stock).map(x => artifactReq(x, send)),
       ...stockOf(op, send),
+      // la fresa non scende sotto il piano della griglia (z 0) se la lavorazione è limitata
+      floor: o.belowGrid === 'limit' ? 0 : null,
     };
   }
 
@@ -1646,7 +1648,15 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     const req = buildRequest(op, true);
     const t0 = performance.now();
     log.info(`Calcolo "${op.name}"`, { kind: op.kind, strategy: op.strategy, tool: req.operation.tool, stepover: req.operation.stepover, stepdown: req.operation.stepdown, boundary: req.boundary.length, objects: req.objects.length, artifacts: req.artifacts.length });
-    const res = await api.compute(req, signal);
+    let res = await api.compute(req, signal);
+    // la fresa scende sotto il piano della griglia: si chiede se consentirlo (la scelta resta nella lavorazione)
+    if (!op.belowGrid && res.stats?.minZ < -0.001) {
+      const choice = await askBelowGrid(op, -res.stats.minZ);
+      if (!choice) throw new DOMException(t('Calcolo annullato'), 'AbortError');
+      mutate(() => { op.belowGrid = choice; });
+      log.info(`"${op.name}" sotto la griglia: ${choice}`, { minZ: res.stats.minZ });
+      if (choice === 'limit') res = await api.compute(buildRequest(op, true), signal);
+    }
     const tp = await api.getToolpath(res.toolpathId);
     App.runtime.toolpaths.set(op.id, {
       toolpathId: res.toolpathId, hash: requestHash(buildRequest(op)), stats: res.stats, warnings: res.warnings || [],
@@ -1654,6 +1664,22 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     });
     log.info(`Calcolo "${op.name}" concluso in ${Math.round(performance.now() - t0)} ms`, { points: res.stats?.pointCount, warnings: res.warnings?.length || 0, maxGouge: res.stats?.maxGouge });
     return res;
+  }
+
+  /** Chiede se la lavorazione può scendere sotto il piano della griglia: 'allow', 'limit' o null (annulla). */
+  function askBelowGrid(op, depth) {
+    return modal({
+      title: t('Sotto il piano della griglia'),
+      body: h('div', {},
+        h('p', { style: { marginTop: 0 } }, t('La lavorazione "{name}" porta la fresa fino a {d} mm sotto il piano base della griglia (Z 0), dove di solito appoggia il pezzo.', { name: op.name, d: fmt(depth, 2) })),
+        h('p', {}, t('Consentire di scendere sotto il piano?')),
+        h('p', { class: 'p-note' }, t('"Limita al piano" ricalcola la lavorazione fermando la fresa sul piano della griglia. La scelta resta nelle proprietà della lavorazione (Sotto la griglia).'))),
+      buttons: [
+        { label: t('Annulla'), value: null, left: true },
+        { label: t('Scendi sotto il piano'), value: 'allow', danger: true },
+        { label: t('Limita al piano'), value: 'limit', primary: true },
+      ],
+    });
   }
 
   cmd.compute = async opId => {
