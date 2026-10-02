@@ -213,7 +213,7 @@ export const TOOLBAR = [
   { caption: 'Piani', stage: 'planes', items: [{ id: 'plane.add', label: true }, 'plane.preset', 'plane.face', 'plane.3pt', 'plane.view'] },
   { caption: 'Sketch', stage: 'sketch', items: ['sketch.new', '|', 'tool.select', 'tool.polyline', 'tool.rect', 'tool.circle', 'tool.polygon', 'tool.profile'] },
   { caption: 'Lavorazioni', stage: 'ops', items: [{ id: 'op.pocket', label: true }, { id: 'op.finish', label: true }] },
-  { caption: 'Calcolo e uscita', stage: 'output', items: [{ id: 'op.computeAll', label: true, primary: true }, { id: 'op.simulateAll', label: true }, { id: 'file.gcode', label: true }] },
+  { caption: 'Calcolo e uscita', stage: 'output', items: [{ id: 'op.computeAll', label: true }, { id: 'op.simulateAll', label: true }, { id: 'file.gcode', label: true }] },
   { caption: 'Vista', end: true, items: ['gizmo.move', 'gizmo.rotate', 'edit.lock', '|', 'view.grid', 'view.paths', 'view.rapids', '|', 'view.fit'] },
 ];
 for (const g of TOOLBAR) g.caption = t(g.caption);
