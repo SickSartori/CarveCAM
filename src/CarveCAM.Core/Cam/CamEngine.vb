@@ -17,7 +17,12 @@ Namespace Cam
     ''' </summary>
     Public Module CamEngine
 
-        Public Function Compute(req As ComputeRequest, meshProvider As Func(Of String, Single()), ct As CancellationToken) As Toolpath
+        ''' <summary>
+        ''' Calcola il percorso. previous: lavorazione precedente, il cui grezzo residuo è il punto di partenza;
+        ''' altrimenti il grezzo sono i solidi di req.Stock (se ci sono).
+        ''' </summary>
+        Public Function Compute(req As ComputeRequest, meshProvider As Func(Of String, Single()), ct As CancellationToken,
+                                Optional previous As Toolpath = Nothing) As Toolpath
             Dim sw = Stopwatch.StartNew()
             Dim op = req.Operation
             If op Is Nothing Then Throw New ArgumentException("Parametri della lavorazione mancanti.")
@@ -92,19 +97,43 @@ Namespace Cam
             Dim dc = DropCutter.ForTool(tris, op.Tool, stock)
             tp.Stats.Triangles = dc.TriangleCount
 
-            ' ---- quota di sicurezza (sopra tutti gli ostacoli dell'area)
+            ' ---- grezzo nel sistema del piano: quello lasciato dalla lavorazione precedente, oppure i solidi del grezzo
+            Dim stockMap As StockMap = Nothing
+            If previous IsNot Nothing AndAlso previous.StockAfter IsNot Nothing Then
+                stockMap = StockMap.Reframe(previous.StockAfter, frame)
+            ElseIf req.Stock IsNot Nothing Then
+                stockMap = StockMap.FromTriangles(StockTriangles(req.Stock, meshProvider, tp), frame)
+            End If
+            ct.ThrowIfCancellationRequested()
+            tp.StockBefore = stockMap
+
+            ' ---- quota di sicurezza (sopra tutti gli ostacoli e il grezzo dell'area)
             Dim safeW = Math.Max(op.SafeHeight, 1)
             If dc.TriangleCount > 0 AndAlso dc.MaxW + stock + 2 > safeW Then
                 safeW = dc.MaxW + stock + Math.Max(2, op.SafeHeight)
                 tp.Warnings.Add($"Quota di sicurezza alzata a {safeW:0.###} mm sopra il piano per superare gli ostacoli.")
             End If
+            If stockMap IsNot Nothing Then
+                Dim stockTop = stockMap.MaxTop(winMinU, winMinV, winMaxU, winMaxV)
+                If stockTop + 2 > safeW Then
+                    safeW = stockTop + Math.Max(2, op.SafeHeight)
+                    tp.Warnings.Add($"Quota di sicurezza alzata a {safeW:0.###} mm sopra il piano per superare il grezzo.")
+                End If
+            End If
             tp.SafeW = safeW
             tp.Stats.SafeW = safeW
 
             If isPocket Then
-                ComputePocket(tp, op, dc, region0, bb, stepover, safeW, ct)
+                ComputePocket(tp, op, dc, region0, bb, stepover, safeW, stockMap, ct)
             Else
-                ComputeFinish(tp, op, dc, region0, stepover, safeW, ct)
+                ComputeFinish(tp, op, dc, region0, stepover, safeW, stockMap, ct)
+            End If
+
+            ' grezzo residuo per la lavorazione successiva
+            If stockMap IsNot Nothing Then
+                Dim after = stockMap.Clone()
+                after.Cut(tp.Points, op.Tool)
+                tp.StockAfter = after
             End If
 
             If tp.Points.Count = 0 Then tp.Warnings.Add("Nessun percorso generato: area non lavorabile con i parametri indicati.")
@@ -117,6 +146,32 @@ Namespace Cam
             Return tp
         End Function
 
+        ''' <summary>Triangoli (coordinate mondo) dei solidi del grezzo.</summary>
+        Private Function StockTriangles(st As StockDef, meshProvider As Func(Of String, Single()), tp As Toolpath) As Single()
+            Dim all As New List(Of Single)()
+            If st.Objects IsNot Nothing Then
+                For Each o In st.Objects
+                    If String.IsNullOrEmpty(o.MeshId) Then Continue For
+                    Dim pos = meshProvider(o.MeshId)
+                    If pos Is Nothing Then
+                        tp.Warnings.Add($"Mesh del grezzo '{o.Name}' non disponibile sul server: ignorata.")
+                        Continue For
+                    End If
+                    Dim m = Mat4.FromTRS(o.Position, o.Rotation, o.Scale)
+                    For t = 0 To pos.Length - 3 Step 3
+                        Dim p = Tp3(m, pos, t)
+                        all.Add(CSng(p.X)) : all.Add(CSng(p.Y)) : all.Add(CSng(p.Z))
+                    Next
+                Next
+            End If
+            If st.Artifacts IsNot Nothing Then
+                For Each a In st.Artifacts
+                    all.AddRange(Primitives.Build(a))
+                Next
+            End If
+            Return all.ToArray()
+        End Function
+
         Private Function Tp3(m As Mat4, pos As Single(), i As Integer) As Vec3
             Dim p As New Vec3(pos(i), pos(i + 1), pos(i + 2))
             Return If(m Is Nothing, p, m.TransformPoint(p))
@@ -125,7 +180,7 @@ Namespace Cam
         ' ================================================================ SVUOTATURA
         Private Sub ComputePocket(tp As Toolpath, op As OperationDef, dc As DropCutter, region0 As Paths64,
                                   bb As (MinX As Double, MinY As Double, MaxX As Double, MaxY As Double),
-                                  stepover As Double, safeW As Double, ct As CancellationToken)
+                                  stepover As Double, safeW As Double, stockMap As StockMap, ct As CancellationToken)
             Dim R = op.Tool.WorkRadius(op.MaxDepth)
             ' raggio di curvatura minimo dei contorni delle zone bloccate: per la fresa conica è quello della punta
             ' (attorno agli spigoli degli ostacoli appena sopra la terrazza tocca solo la punta)
@@ -142,32 +197,56 @@ Namespace Cam
             Dim hf As HeightField = Nothing
             If dc.TriangleCount > 0 Then hf = New HeightField(dc, bb.MinX, bb.MinY, bb.MaxX, bb.MaxY, res, floor - 1, ct)
 
+            ' con il grezzo le terrazze partono dalla sua sommità (anche sopra il piano, per non urtarlo) e
+            ' coprono solo dove c'è materiale; il limite di profondità resta quello misurato dal piano
+            Dim wStart = 0.0
+            Dim material As HeightField = Nothing
+            If stockMap IsNot Nothing Then
+                Dim wTop = stockMap.MaxTop(bb.MinX - R, bb.MinY - R, bb.MaxX + R, bb.MaxY + R)
+                If wTop <= floor + 0.0001 Then
+                    tp.Warnings.Add("Il grezzo non ha materiale da togliere nella zona e nella profondità della lavorazione.")
+                    Return
+                End If
+                wStart = Math.Max(0, wTop)
+                material = stockMap.MaterialField()
+            End If
             Dim levels As New List(Of Double)()
             Dim d = op.Stepdown
-            While d < op.MaxDepth - 0.0001
-                levels.Add(-d)
+            While wStart - d > floor + 0.0001
+                levels.Add(wStart - d)
                 d += op.Stepdown
             End While
             levels.Add(floor)
 
             Dim safety = res * res / (4 * Math.Max(rCurv, res / 2)) + 0.003
             Dim pb As New PathBuilder(tp)
-            Dim prevL = 0.0
+            Dim prevL = wStart
             Dim done = 0
             For Each L In levels
                 ct.ThrowIfCancellationRequested()
-                Dim region = region0
+                Dim free = region0
                 If hf IsNot Nothing Then
                     Dim blocked = Poly.Union(Poly.ToPaths(hf.BlockedLoops(L, ct)), FillRule.NonZero)
                     If blocked.Count > 0 Then
                         blocked = Poly.Offset(blocked, safety)
-                        region = Poly.Difference(region0, blocked)
-                        region = Poly.RemoveSmall(Poly.Opening(region, 0.005), 0.0005)
+                        free = Poly.Difference(region0, blocked)
+                        free = Poly.RemoveSmall(Poly.Opening(free, 0.005), 0.0005)
                     End If
                 End If
-                If region.Count = 0 Then
+                If free.Count = 0 Then
                     If done = 0 Then tp.Warnings.Add("Gli ostacoli occupano tutta l'area già dalla prima terrazza.")
                     Exit For
+                End If
+                ' zona da lavorare: posizioni della fresa che toccano materiale a questa quota (materiale allargato
+                ' del raggio meno una cella della mappa: i residui fuori portata, es. negli angoli, non si
+                ' ripassano; le zone più piccole di una cella sono imprecisioni della mappa); niente passate in aria
+                Dim region = free
+                If material IsNot Nothing Then
+                    Dim mat = Poly.Union(Poly.ToPaths(material.BlockedLoops(L, ct)), FillRule.NonZero)
+                    If mat.Count = 0 Then Continue For
+                    region = Poly.Intersect(free, Poly.Offset(mat, Math.Max(0.01, R - stockMap.Res)))
+                    region = Poly.RemoveSmall(Poly.Opening(region, 0.005), stockMap.Res * stockMap.Res)
+                    If region.Count = 0 Then Continue For
                 End If
 
                 Dim segs As List(Of PathSeg2D)
@@ -191,7 +270,8 @@ Namespace Cam
                     If s = 0 OrElse seg.Link = LinkKind.Retract Then
                         Dim w0 = prevL + Math.Max(0.1, op.Clearance)
                         pb.RetractTo(st.X, st.Y, safeW, w0)
-                        EmitEntry(pb, op, tp, region, seg.Points, w0, L)
+                        ' elica e rampa possono passare anche dove non c'è materiale: basta che la zona sia libera
+                        EmitEntry(pb, op, tp, free, seg.Points, w0, L)
                     Else
                         pb.Feed(st.X, st.Y, L)
                     End If
@@ -325,7 +405,7 @@ Namespace Cam
 
         ' ================================================================ FINITURA
         Private Sub ComputeFinish(tp As Toolpath, op As OperationDef, dc As DropCutter, region0 As Paths64,
-                                  stepover As Double, safeW As Double, ct As CancellationToken)
+                                  stepover As Double, safeW As Double, stockMap As StockMap, ct As CancellationToken)
             Dim R = op.Tool.WorkRadius(op.MaxDepth)
             Dim floor = -op.MaxDepth
             ' fresa conica: campionamento sulla scala della punta (i dettagli che tocca sono piccoli come la punta)
@@ -352,25 +432,103 @@ Namespace Cam
                     proj(s) = SimplifyRdp(p3, tol * 0.5)
                 End Sub)
 
+            ' con il grezzo: i tratti dove la fresa non tocca materiale (già tolto o mai presente) si saltano
+            Dim lift = If(stockMap IsNot Nothing, StockMap.LiftTable(op.Tool), Nothing)
+            Dim minAir = Math.Max(5.0, 4 * R)
             Dim pb As New PathBuilder(tp)
             For s = 0 To segs.Count - 1
                 Dim pts = proj(s)
                 If pts Is Nothing OrElse pts.Count < 2 Then Continue For
-                Dim first = 0
-                If s = 0 OrElse segs(s).Link = LinkKind.Retract Then
-                    Dim p0 = pts(0)
-                    pb.RetractTo(p0.X, p0.Y, safeW, Math.Min(safeW, p0.Z + Math.Max(0.1, op.Clearance)))
-                    pb.Plunge(p0.X, p0.Y, p0.Z)
-                Else
-                    first = 1 ' il primo punto coincide con la fine del tratto precedente
-                End If
-                For i = first To pts.Count - 1
-                    pb.Feed(pts(i).X, pts(i).Y, pts(i).Z)
+                Dim pieces = If(stockMap IsNot Nothing, SplitAir(pts, stockMap, lift, minAir), New List(Of List(Of Vec3)) From {pts})
+                For pi = 0 To pieces.Count - 1
+                    Dim piece = pieces(pi)
+                    Dim first = 0
+                    Dim cur = pb.Current
+                    ' prosegue dal tratto precedente se ne è la continuazione, altrimenti disimpegno e affondo
+                    If pb.HasCurrent AndAlso Math.Abs(cur.U - piece(0).X) < 0.000001 AndAlso Math.Abs(cur.V - piece(0).Y) < 0.000001 AndAlso
+                       Math.Abs(cur.W - piece(0).Z) < 0.000001 AndAlso Not (s = 0 OrElse segs(s).Link = LinkKind.Retract) Then
+                        first = 1
+                    ElseIf pi > 0 AndAlso pb.HasCurrent Then
+                        ' salto di un tratto in aria nella stessa passata: appena sopra pezzo e grezzo, non alla quota di sicurezza
+                        Dim p0 = piece(0)
+                        Dim hTr = Math.Min(safeW, TransferHeight(dc, stockMap, New Vec2(cur.U, cur.V), New Vec2(p0.X, p0.Y), R, floor) + Math.Max(0.5, op.Clearance))
+                        pb.Rapid(cur.U, cur.V, Math.Max(cur.W, hTr))
+                        pb.Rapid(p0.X, p0.Y, Math.Max(hTr, p0.Z))
+                        pb.Plunge(p0.X, p0.Y, p0.Z)
+                    Else
+                        Dim p0 = piece(0)
+                        pb.RetractTo(p0.X, p0.Y, safeW, Math.Min(safeW, p0.Z + Math.Max(0.1, op.Clearance)))
+                        pb.Plunge(p0.X, p0.Y, p0.Z)
+                    End If
+                    For i = first To piece.Count - 1
+                        pb.Feed(piece(i).X, piece(i).Y, piece(i).Z)
+                    Next
                 Next
             Next
             If pb.HasCurrent Then pb.Rapid(pb.Current.U, pb.Current.V, safeW)
             tp.Stats.Levels = 1
         End Sub
+
+        ''' <summary>Quota a cui la fresa passa da a a b senza toccare pezzo (con sovrametallo) né grezzo.</summary>
+        Private Function TransferHeight(dc As DropCutter, stockMap As StockMap, a As Vec2, b As Vec2, r As Double, floor As Double) As Double
+            Dim len = Vec2.Distance(a, b)
+            Dim n = Math.Max(1, CInt(Math.Ceiling(len / Math.Max(0.2, r / 2))))
+            Dim best = floor
+            For k = 0 To n
+                Dim q = Vec2.Lerp(a, b, k / n)
+                best = Math.Max(best, dc.Contact(q.X, q.Y, floor))
+                best = Math.Max(best, stockMap.MaxTop(q.X - r, q.Y - r, q.X + r, q.Y + r))
+            Next
+            Return best
+        End Function
+
+        ''' <summary>
+        ''' Divide un tratto di finitura togliendo le parti in aria (la fresa non tocca il grezzo) più lunghe di minAir;
+        ''' le parti in aria più corte restano, per non moltiplicare i disimpegni.
+        ''' </summary>
+        Private Function SplitAir(pts As List(Of Vec3), stockMap As StockMap, lift As (RMax As Double, Lift As Double()), minAir As Double) As List(Of List(Of Vec3))
+            Dim n = pts.Count
+            Dim cuts(n - 2) As Boolean
+            Dim stepLen = Math.Max(0.3, lift.RMax / 2)
+            For i = 0 To n - 2
+                Dim a = pts(i), b = pts(i + 1)
+                Dim len = Math.Sqrt((b.X - a.X) ^ 2 + (b.Y - a.Y) ^ 2)
+                Dim m = Math.Max(1, CInt(Math.Ceiling(len / stepLen)))
+                For k = 0 To m
+                    Dim t = k / m
+                    If stockMap.Engages(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t, a.Z + (b.Z - a.Z) * t, lift) Then cuts(i) = True : Exit For
+                Next
+            Next
+            Dim res As New List(Of List(Of Vec3))()
+            Dim cur As List(Of Vec3) = Nothing
+            Dim i0 = 0
+            While i0 <= n - 2
+                If cuts(i0) Then
+                    If cur Is Nothing Then cur = New List(Of Vec3) From {pts(i0)}
+                    cur.Add(pts(i0 + 1))
+                    i0 += 1
+                    Continue While
+                End If
+                ' tratto in aria: da i0 a i1 (escluso)
+                Dim i1 = i0, airLen = 0.0
+                While i1 <= n - 2 AndAlso Not cuts(i1)
+                    airLen += Math.Sqrt((pts(i1 + 1).X - pts(i1).X) ^ 2 + (pts(i1 + 1).Y - pts(i1).Y) ^ 2)
+                    i1 += 1
+                End While
+                Dim lead = cur IsNot Nothing, tail = i1 <= n - 2
+                If airLen < minAir AndAlso lead AndAlso tail Then
+                    For k = i0 To i1 - 1
+                        cur.Add(pts(k + 1))
+                    Next
+                ElseIf cur IsNot Nothing Then
+                    res.Add(cur)
+                    cur = Nothing
+                End If
+                i0 = i1
+            End While
+            If cur IsNot Nothing AndAlso cur.Count >= 2 Then res.Add(cur)
+            Return res
+        End Function
 
         ''' <summary>Campiona la polilinea 2D, calcola la quota con il drop-cutter e raffina dove la superficie varia.</summary>
         Public Function ProjectPolyline(dc As DropCutter, pts As List(Of Vec2), stepLen As Double, tol As Double, floor As Double) As List(Of Vec3)

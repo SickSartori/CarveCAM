@@ -1,4 +1,4 @@
-// Navigatore: oggetti, artefatti, piani (con sketch ed entità), lavorazioni.
+// Navigatore: oggetti, artefatti, grezzo, origini, piani (con sketch ed entità), lavorazioni.
 // Clic seleziona, Ctrl+clic aggiunge o toglie dalla selezione; il lucchetto blocca o sblocca l'elemento.
 // Le lavorazioni si trascinano per cambiarne la sequenza (con conferma).
 import { App, select, toggleSelect, isSelected } from './state.js';
@@ -32,21 +32,28 @@ export class Tree {
     const scroll = this.el.scrollTop;
     this.el.innerHTML = '';
 
-    this._section(t('Oggetti'), p.objects.length);
-    if (!p.objects.length) this.el.append(h('div', { class: 'tree-empty' }, t('Nessun oggetto importato')));
-    for (const o of p.objects) {
-      this._row({ depth: 0, icon: ICONS.object, label: o.name, sub: o.triangles ? `${fmtCount(o.triangles)} ${t('tr.')}` : '',
-        sel: { type: 'object', id: o.id }, visible: o.visible !== false, onEye: () => this.cmd.toggleVisible('object', o.id),
-        locked: !!o.locked, onLock: () => this.cmd.toggleLock({ type: 'object', id: o.id }) });
-    }
+    // i solidi considerati grezzo stanno nel loro elenco, non tra oggetti e artefatti
+    const objRow = o => this._row({ depth: 0, icon: ICONS.object, label: o.name, sub: o.triangles ? `${fmtCount(o.triangles)} ${t('tr.')}` : '',
+      sel: { type: 'object', id: o.id }, visible: o.visible !== false, onEye: () => this.cmd.toggleVisible('object', o.id),
+      locked: !!o.locked, onLock: () => this.cmd.toggleLock({ type: 'object', id: o.id }) });
+    const artRow = a => this._row({ depth: 0, icon: ICONS[a.kind] || ICONS.box, label: a.name, sub: t(KIND_LABEL[a.kind] || 'Artefatto'),
+      sel: { type: 'artifact', id: a.id }, visible: a.visible !== false, onEye: () => this.cmd.toggleVisible('artifact', a.id),
+      locked: !!a.locked, onLock: () => this.cmd.toggleLock({ type: 'artifact', id: a.id }) });
+    const objs = p.objects.filter(o => !o.stock), arts = p.artifacts.filter(a => !a.stock);
+    const stockObjs = p.objects.filter(o => o.stock), stockArts = p.artifacts.filter(a => a.stock);
 
-    this._section(t('Artefatti'), p.artifacts.length);
-    if (!p.artifacts.length) this.el.append(h('div', { class: 'tree-empty' }, t('Nessun artefatto')));
-    for (const a of p.artifacts) {
-      this._row({ depth: 0, icon: ICONS[a.kind], label: a.name, sub: t(KIND_LABEL[a.kind]),
-        sel: { type: 'artifact', id: a.id }, visible: a.visible !== false, onEye: () => this.cmd.toggleVisible('artifact', a.id),
-        locked: !!a.locked, onLock: () => this.cmd.toggleLock({ type: 'artifact', id: a.id }) });
-    }
+    this._section(t('Oggetti'), objs.length);
+    if (!objs.length) this.el.append(h('div', { class: 'tree-empty' }, t('Nessun oggetto importato')));
+    objs.forEach(objRow);
+
+    this._section(t('Artefatti'), arts.length);
+    if (!arts.length) this.el.append(h('div', { class: 'tree-empty' }, t('Nessun artefatto')));
+    arts.forEach(artRow);
+
+    this._section(t('Grezzo'), stockObjs.length + stockArts.length);
+    if (!stockObjs.length && !stockArts.length) this.el.append(h('div', { class: 'tree-empty' }, t('Tasto destro su un solido › Considera come grezzo')));
+    stockObjs.forEach(objRow);
+    stockArts.forEach(artRow);
 
     const origins = p.origins || [];
     if (origins.length) {

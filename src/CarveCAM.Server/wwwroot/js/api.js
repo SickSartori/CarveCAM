@@ -24,11 +24,16 @@ async function req(url, opts = {}) {
 async function check(res) {
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
+    let code = null;
     try {
       const j = await res.json();
       if (j && (j.error || j.title)) msg = j.error || j.title;
+      code = j?.code || null;
     } catch { /* risposta non JSON */ }
-    throw new Error(msg);
+    const err = new Error(msg);
+    err.status = res.status;
+    err.code = code;
+    throw err;
   }
   return res;
 }
@@ -86,6 +91,11 @@ export const api = {
 
   async compute(request, signal) {
     return (await postJson('/api/cam/compute', request, signal)).json();
+  },
+
+  /** Grezzo prima della lavorazione (per la simulazione dell'erosione): ArrayBuffer di StockMap.ToBinary. */
+  async getStock(id) {
+    return (await check(await req(`/api/cam/toolpath/${encodeURIComponent(id)}/stock`))).arrayBuffer();
   },
 
   async getToolpath(id) {

@@ -38,6 +38,16 @@ Namespace Cam
             H = arr
         End Sub
 
+        ''' <summary>
+        ''' Campo da quote già note sui nodi (U0 + i·res, V0 + j·res), es. la sommità del grezzo: i punti di
+        ''' attraversamento si interpolano linearmente tra i nodi.
+        ''' </summary>
+        Public Sub New(u0 As Double, v0 As Double, res As Double, nu As Integer, nv As Integer, h As Double())
+            Me.U0 = u0 : Me.V0 = v0 : Me.Res = res
+            Me.Nu = nu : Me.Nv = nv
+            Me.H = h
+        End Sub
+
         Public Function NodePos(i As Integer, j As Integer) As Vec2
             Return New Vec2(U0 + i * Res, V0 + j * Res)
         End Function
@@ -135,6 +145,12 @@ Namespace Cam
             Dim pa = NodePos(i, j), pb = NodePos(i2, j2)
             Dim inside = i >= 0 AndAlso j >= 0 AndAlso i2 < Nu AndAlso j2 < Nv
             If Not inside Then Return Vec2.Lerp(pa, pb, 0.5)
+            If _dc Is Nothing Then
+                ' quote dei nodi senza drop-cutter: interpolazione lineare (nodo vuoto: a metà)
+                Dim ha = H(j * Nu + i), hb = H(j2 * Nu + i2)
+                If ha < -1.0E+29 OrElse hb < -1.0E+29 OrElse Math.Abs(hb - ha) < 1.0E-12 Then Return Vec2.Lerp(pa, pb, 0.5)
+                Return Vec2.Lerp(pa, pb, Math.Max(0, Math.Min(1, (thr - ha) / (hb - ha))))
+            End If
             ' a = lato bloccato, b = lato libero
             Dim a = pa, b = pb
             If Not Blocked(i, j, thr) Then a = pb : b = pa

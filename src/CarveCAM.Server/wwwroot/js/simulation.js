@@ -3,6 +3,9 @@
 // all'ultima; durante la simulazione un riquadro mostra le coordinate del TCP (X, Y, Z, A, C).
 import * as THREE from 'three';
 import { App, getOperation, getSketch } from './state.js';
+import { api } from './api.js';
+import { color } from './settings.js';
+import { parseStockMap, liftTable, StockView } from './stocksim.js';
 import { planeFrame, frameQuaternion, fmt } from './geom.js';
 import { toast, h } from './dialogs.js';
 import { t } from './i18n.js';
@@ -19,6 +22,7 @@ export class Simulator {
     this.sync = sync;
     this.opId = null;          // lavorazione di partenza (quella selezionata)
     this.segs = [];
+    this.stockVer = 0;         // caricamento del grezzo in corso (si annulla chiudendo la simulazione)
     this.playing = false;
     this.prepare = async () => true;   // calcola i percorsi mancanti (impostato dai comandi)
     try { this.scope = localStorage.getItem(SCOPE_KEY) === 'rest' ? 'rest' : 'one'; } catch { this.scope = 'one'; }
@@ -88,10 +92,65 @@ export class Simulator {
     this.playing = true;
     log.info('Simulazione avviata', { ops: segs.map(s => s.op.name), scope: this.scope, minutes: Math.round(this.total * 100) / 100 });
     this._apply();
+    this._loadStock();
+  }
+
+  /** Grezzo di ogni lavorazione (dal server, nel sistema del suo piano): mentre la fresa passa se ne vede l'erosione. */
+  async _loadStock() {
+    const segs = this.segs;
+    const ver = ++this.stockVer;
+    for (const s of segs) {
+      if (!s.data.hasStock) continue;
+      try {
+        const map = parseStockMap(await api.getStock(s.data.toolpathId));
+        if (ver !== this.stockVer) return;   // simulazione chiusa o riavviata nel frattempo
+        const view = new StockView(map, color('stock'));
+        // percorso nel sistema del piano della mappa
+        const { o, u, v, n } = map.frame;
+        const P = s.data.positions, L = new Float32Array(P.length);
+        for (let i = 0; i < P.length; i += 3) {
+          const dx = P[i] - o.x, dy = P[i + 1] - o.y, dz = P[i + 2] - o.z;
+          L[i] = dx * u.x + dy * u.y + dz * u.z;
+          L[i + 1] = dx * v.x + dy * v.y + dz * v.z;
+          L[i + 2] = dx * n.x + dy * n.y + dz * n.z;
+        }
+        Object.assign(s, { stock: view, local: L, lift: liftTable(s.op.tool), applied: 0, lastT: 0 });
+        view.mesh.visible = false;
+        this.vp.scene.add(view.mesh);
+      } catch (e) {
+        log.warn('Grezzo della simulazione non disponibile', e);
+      }
+    }
+    if (ver !== this.stockVer || !segs.some(s => s.stock)) return;
+    App.runtime.simStock = true;   // i solidi del grezzo si nascondono: si vede quello eroso
+    this.sync.sync();
+    this._apply();
+  }
+
+  /** Erosione fino al punto i del percorso (kk: frazione del tratto in corso), solo sul grezzo della lavorazione k. */
+  _erode(k, seg, i, kk, lt) {
+    this.segs.forEach((s, j) => { if (s.stock) s.stock.mesh.visible = j === k; });
+    const st = seg.stock;
+    if (!st) return;
+    const L = seg.local, types = seg.data.types, lift = seg.lift;
+    if (lt < seg.lastT - 1e-9) { st.reset(); seg.applied = 0; }   // all'indietro: si riparte dal grezzo iniziale
+    for (let s = seg.applied + 1; s <= i - 1; s++) {
+      if (types[s] !== 0) st.stampSegment(L[s * 3 - 3], L[s * 3 - 2], L[s * 3 - 1], L[s * 3], L[s * 3 + 1], L[s * 3 + 2], lift);
+    }
+    if (i - 1 > seg.applied) seg.applied = i - 1;
+    if (types[i] !== 0 && kk > 0) {
+      const a = (i - 1) * 3, b = i * 3;
+      st.stampSegment(L[a], L[a + 1], L[a + 2], L[a] + (L[b] - L[a]) * kk, L[a + 1] + (L[b + 1] - L[a + 1]) * kk, L[a + 2] + (L[b + 2] - L[a + 2]) * kk, lift);
+    }
+    st.flush();
+    seg.lastT = lt;
   }
 
   stop() {
     if (!this.opId) return;
+    this.stockVer++;
+    for (const s of this.segs) s.stock?.dispose();
+    App.runtime.simStock = false;
     for (const s of this.segs) this.sync.setToolpathProgress(s.id, null, false);
     this._removeTool();
     this.opId = null;
@@ -175,6 +234,7 @@ export class Simulator {
       positions[a + 1] + (positions[b + 1] - positions[a + 1]) * kk,
       positions[a + 2] + (positions[b + 2] - positions[a + 2]) * kk);
     this.sync.setToolpathProgress(seg.id, kk >= 1 ? i : i - 1, true);
+    this._erode(k, seg, i, kk, lt);
     this.slider.value = this.total ? Math.round((this.t / this.total) * 1000) : 0;
     this.timeEl.textContent = `${mmss(this.t)} / ${mmss(this.total)}`;
     this.playBtn.innerHTML = this.playing ? '&#10074;&#10074;' : '&#9654;';

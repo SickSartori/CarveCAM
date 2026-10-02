@@ -5,6 +5,8 @@ import { planeFrame, frameQuaternion, entityLoop } from './geom.js';
 import { settings, color, onSettings } from './settings.js';
 
 const D2R = Math.PI / 180;
+/** Grezzo: semitrasparente, il pezzo dentro resta visibile; non scrive la profondità (non nasconde nulla). */
+const STOCK_LOOK = it => (it.stock ? { transparent: true, opacity: 0.32, depthWrite: false } : {});
 
 export class SceneSync {
   constructor(vp) {
@@ -88,14 +90,15 @@ export class SceneSync {
     if (!geo) return;
     const k = this.key('object', o.id);
     seen.add(k);
-    const col = o.locked ? color('locked') : (o.color || color('object'));
-    const sig = `${o.meshId}|${col}|${App.view.wireframe}|${this.ver}`;
+    const col = o.locked ? color('locked') : o.stock ? color('stock') : (o.color || color('object'));
+    const sig = `${o.meshId}|${col}|${!!o.stock}|${App.view.wireframe}|${this.ver}`;
     let n = this.nodes.get(k);
     if (!n || n.sig !== sig) {
       const mat = new THREE.MeshStandardMaterial({
         color: col, metalness: 0.15, roughness: 0.55,
         side: THREE.DoubleSide, wireframe: App.view.wireframe,
         polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+        ...STOCK_LOOK(o),
       });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.userData = { type: 'object', id: o.id };
@@ -110,15 +113,15 @@ export class SceneSync {
     m.position.fromArray(o.position);
     m.rotation.set(o.rotation[0] * D2R, o.rotation[1] * D2R, o.rotation[2] * D2R, 'XYZ');
     m.scale.fromArray(o.scale);
-    m.visible = o.visible !== false;
+    m.visible = o.visible !== false && !(o.stock && App.runtime.simStock);
   }
 
   // ---------------------------------------------------------------- artefatti
   _syncArtifact(a, seen) {
     const k = this.key('artifact', a.id);
     seen.add(k);
-    const col = a.locked ? color('locked') : (a.color || color('artifact'));
-    const sig = JSON.stringify([a.kind, a.size, a.radius, a.radius2, a.height, col, App.view.wireframe, this.ver]);
+    const col = a.locked ? color('locked') : a.stock ? color('stock') : (a.color || color('artifact'));
+    const sig = JSON.stringify([a.kind, a.size, a.radius, a.radius2, a.height, col, !!a.stock, App.view.wireframe, this.ver]);
     let n = this.nodes.get(k);
     if (!n || n.sig !== sig) {
       const geo = artifactGeometry(a);
@@ -126,6 +129,7 @@ export class SceneSync {
         color: col, metalness: 0.05, roughness: 0.5,
         transparent: true, opacity: 0.8, wireframe: App.view.wireframe,
         polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+        ...STOCK_LOOK(a),
       });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.userData = { type: 'artifact', id: a.id };
@@ -138,7 +142,7 @@ export class SceneSync {
     const m = n.obj;
     m.position.fromArray(a.position);
     m.rotation.set(a.rotation[0] * D2R, a.rotation[1] * D2R, a.rotation[2] * D2R, 'XYZ');
-    m.visible = a.visible !== false;
+    m.visible = a.visible !== false && !(a.stock && App.runtime.simStock);
   }
 
   // ---------------------------------------------------------------- piani e sketch

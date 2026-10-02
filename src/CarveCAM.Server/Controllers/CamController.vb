@@ -14,6 +14,8 @@ Namespace Controllers
         Public Property ToolpathId As String
         Public Property Stats As ToolpathStats
         Public Property Warnings As List(Of String)
+        ''' <summary>Il percorso ha il grezzo (GET toolpath/{id}/stock).</summary>
+        Public Property HasStock As Boolean
     End Class
 
     Public Class ExportRequest
@@ -46,8 +48,17 @@ Namespace Controllers
                                op.Kind, op.Name, op.Strategy, op.Tool?.Type, op.Tool?.Diameter, op.Tool?.CornerRadius, op.Stepover, op.Stepdown, op.MaxDepth,
                                If(req.Boundary?.Count, 0), If(req.Objects?.Count, 0), If(req.Artifacts?.Count, 0),
                                req.Plane?.N?.ElementAtOrDefault(0), req.Plane?.N?.ElementAtOrDefault(1), req.Plane?.N?.ElementAtOrDefault(2))
+            ' grezzo: si parte da quello lasciato dalla lavorazione precedente, che deve essere ancora sul server
+            Dim previous As Toolpath = Nothing
+            If Not String.IsNullOrEmpty(req.StockFrom) Then
+                previous = _paths.TryGet(req.StockFrom)
+                If previous Is Nothing OrElse previous.StockAfter Is Nothing Then
+                    _log.LogInformation("Calcolo '{Name}': grezzo della lavorazione precedente {Id} non disponibile", op.Name, req.StockFrom)
+                    Return Conflict(New With {.Error = "Grezzo della lavorazione precedente non disponibile: ricalcolare le lavorazioni precedenti.", .Code = "stock-chain"})
+                End If
+            End If
             Try
-                Dim tp = Await Task.Run(Function() CamEngine.Compute(req, AddressOf _meshes.TryGet, ct), ct)
+                Dim tp = Await Task.Run(Function() CamEngine.Compute(req, AddressOf _meshes.TryGet, ct, previous), ct)
                 _paths.Add(tp)
                 Dim s = tp.Stats
                 _log.LogInformation("Calcolo '{Name}' concluso in {Ms} ms: {Points} punti, {Levels} livelli, lavoro {Feed:0.0} mm, rapidi {Rapid:0.0} mm, interferenza max {Gouge:0.000} mm, {Warnings} avvisi",
@@ -55,7 +66,7 @@ Namespace Controllers
                 For Each w In If(tp.Warnings, New List(Of String)())
                     _log.LogWarning("Calcolo '{Name}': {Warning}", op.Name, w)
                 Next
-                Return Ok(New ComputeResponse With {.ToolpathId = tp.Id, .Stats = tp.Stats, .Warnings = tp.Warnings})
+                Return Ok(New ComputeResponse With {.ToolpathId = tp.Id, .Stats = tp.Stats, .Warnings = tp.Warnings, .HasStock = tp.StockBefore IsNot Nothing})
             Catch ex As ArgumentException
                 _log.LogWarning("Calcolo '{Name}' rifiutato dopo {Ms} ms: {Message}", op.Name, sw.ElapsedMilliseconds, ex.Message)
                 Return BadRequest(New With {.Error = ex.Message})
@@ -74,6 +85,14 @@ Namespace Controllers
             Dim tp = _paths.TryGet(id)
             If tp Is Nothing Then Return NotFound(New With {.Error = "Percorso non trovato: ricalcolare."})
             Return File(tp.ToBinary(), "application/octet-stream")
+        End Function
+
+        ''' <summary>Grezzo prima della lavorazione, per la simulazione dell'asportazione (formato di StockMap.ToBinary).</summary>
+        <HttpGet("toolpath/{id}/stock")>
+        Public Function GetStock(id As String) As IActionResult
+            Dim tp = _paths.TryGet(id)
+            If tp Is Nothing OrElse tp.StockBefore Is Nothing Then Return NotFound(New With {.Error = "Grezzo non disponibile: ricalcolare."})
+            Return File(tp.StockBefore.ToBinary(), "application/octet-stream")
         End Function
 
         Private Function Collect(req As ExportRequest, ByRef missing As String) As List(Of Toolpath)

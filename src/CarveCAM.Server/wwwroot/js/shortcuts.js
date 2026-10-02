@@ -15,5 +15,6 @@ export function shortcutRows() {
     [t('Sketch: L R C P S'), t('Polilinea, rettangolo, cerchio, poligono, seleziona')],
     [t('Sketch: Invio / Backspace'), t('Chiudi polilinea / annulla ultimo vertice')],
     [t('Mouse'), t('Sinistro ruota · centrale/destro trasla · rotella zoom')],
+    [t('Tasto destro (clic)'), t('Menu dell\'elemento sotto il cursore (vista e navigatore)')],
   ];
 }

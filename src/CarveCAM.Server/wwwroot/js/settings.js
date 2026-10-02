@@ -16,7 +16,7 @@ export const DEFAULTS = {
     background: '', gridMinor: '', gridMajor: '',
     object: '#9aa8b8', artifact: '#ffb547', locked: '#7a8aa3', selection: '#1d5a96',
     plane: '#3fa7ff', normal: '#4f9dff', sketch: '#ffe066', entitySel: '#ff8a3d',
-    feed: '#2fd3ff', plunge: '#ffd23f', ramp: '#ff9f43', rapid: '#ff4d6d', pivot: '#39d353',
+    feed: '#2fd3ff', plunge: '#ffd23f', ramp: '#ff9f43', rapid: '#ff4d6d', pivot: '#39d353', stock: '#c9a46b',
   },
   sizes: {
     gizmo: 0.85,        // scala del manipolatore

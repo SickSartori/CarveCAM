@@ -2,8 +2,9 @@
 import { log } from './log.js';
 import * as THREE from 'three';
 import {
-  App, on, select, toggleSelect, setProject, newProject, loadAutosave, allSketches, isProjectDoc, isProjectFile,
+  App, on, select, toggleSelect, isSelected, resolve, setProject, newProject, loadAutosave, allSketches, isProjectDoc, isProjectFile,
 } from './state.js';
+import { contextMenu } from './ui-menu.js';
 import { applyTheme, settings } from './settings.js';
 import { t, translateDom, LOCALE } from './i18n.js';
 import { Viewport } from './viewport.js';
@@ -201,10 +202,15 @@ const findItem = o => {
   for (let x = o; x; x = x.parent) if (x.userData && x.userData.type) return { type: x.userData.type, id: x.userData.id };
   return null;
 };
-/** Primo elemento colpito: oggetti e artefatti prima dei piani; i piani non attivi solo vicino al bordo. */
+/**
+ * Primo elemento colpito: oggetti e artefatti prima dei piani, e tra i solidi quelli che non sono grezzo (il pezzo
+ * dentro il grezzo trasparente si seleziona con un clic; il grezzo, cliccandolo dove non c'è altro).
+ */
 function hitItem(ev) {
   const hits = vp.raycast(ev, sync.pickables(), false).filter(x => x.object.userData.type !== 'plane' || sync.planeHitAccepted(x));
-  const hit = hits.find(x => x.object.userData.type !== 'plane') || hits[0];
+  const solid = x => x.object.userData.type !== 'plane';
+  const stock = x => { const it = findItem(x.object); return !!(it && resolve(it)?.item.stock); };
+  const hit = hits.find(x => solid(x) && !stock(x)) || hits.find(solid) || hits[0];
   return hit ? findItem(hit.object) : null;
 }
 const coordsEl = document.getElementById('st-coords');
@@ -247,6 +253,14 @@ vp.handlers.click = ev => {
   if (App.pickMode?.kind === 'pivot') { gizmo.pivotClick(ev); return; }
   if (sketch.active) { sketch.onClick(ev); return; }
   if (App.pickMode) { cmd.handlePick(ev); return; }
+  // tasto destro su un elemento: lo seleziona (se non lo è già) e apre il suo menu
+  if (ev.button === 2) {
+    const it = hitItem(ev);
+    if (!it) return;
+    if (!isSelected(it.type, it.id)) select(it);
+    contextMenu(ev, cmd.contextItems(it));
+    return;
+  }
   if (ev.button !== 0) return;
   const it = hitItem(ev);
   if (ev.ctrlKey || ev.metaKey || ev.shiftKey) { if (it) toggleSelect(it); return; }

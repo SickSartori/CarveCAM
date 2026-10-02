@@ -15,6 +15,7 @@ const COLOR_ROWS = [
   ['gridMajor', 'Griglia principale', true],
   ['object', 'Oggetti importati (nuovi)'],
   ['artifact', 'Artefatti (nuovi)'],
+  ['stock', 'Grezzo'],
   ['locked', 'Elementi bloccati'],
   ['selection', 'Evidenziazione selezione'],
   ['plane', 'Piani di lavoro'],

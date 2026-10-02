@@ -172,6 +172,14 @@ export class Props {
     ].filter(Boolean);
   }
 
+  /** Grezzo: il solido è il materiale da lavorare, non un ostacolo. */
+  _stockFields(it) {
+    return [
+      { key: 'stock', label: 'Grezzo', type: 'check', off: true, hint: 'materiale da lavorare' },
+      it.stock ? { note: t('Grezzo: è il materiale da lavorare, non un ostacolo. Le lavorazioni partono dalla sua sommità e passano solo dove c\'è materiale; dopo ogni lavorazione il grezzo si aggiorna per quella successiva.') } : null,
+    ].filter(Boolean);
+  }
+
   _schema_object(r) {
     const o = r.item;
     const locked = !!o.locked;
@@ -181,6 +189,7 @@ export class Props {
       { label: 'Triangoli', type: 'info', value: it => num(it.triangles || 0) },
       { label: 'Dimensioni', type: 'info', value: it => it.size ? it.size.map((v, i) => fmt(v * (it.scale[i] || 1), 2)).join(' × ') + ' mm' : '–' },
       ...this._lockFields('object', o),
+      ...this._stockFields(o),
       { sec: 'Posizionamento', tone: 'model' },
       { key: 'position', label: 'Posizione', type: 'vec3', unit: 'mm', disabled: locked },
       { key: 'rotation', label: 'Rotazione', type: 'vec3', unit: '°', disabled: locked },
@@ -216,6 +225,7 @@ export class Props {
       ...dims,
       { note: a.kind === 'box' || a.kind === 'sphere' ? 'Centrato nella propria posizione.' : 'Asse lungo Z locale, centrato nella propria posizione (raggio inferiore verso -Z).' },
       ...this._lockFields('artifact', a),
+      ...this._stockFields(a),
       { sec: 'Posizionamento', tone: 'model' },
       { key: 'position', label: 'Posizione', type: 'vec3', unit: 'mm', disabled: locked },
       { key: 'rotation', label: 'Rotazione', type: 'vec3', unit: '°', disabled: locked },
@@ -613,10 +623,12 @@ export class Props {
         const c = h('input', { type: 'checkbox', 'data-key': f.key, disabled: !!f.disabled });
         c.addEventListener('change', () => commit(c.checked));
         field.append(c);
-        const isOn = it => (f.key === 'locked' ? !!getPath(it, f.key) : getPath(it, f.key) !== false);
+        // caselle spente se il valore manca (locked, off), accese per le altre (visible)
+        const isOn = it => (f.key === 'locked' || f.off ? !!getPath(it, f.key) : getPath(it, f.key) !== false);
         this.bindings.push({ update: it => { c.checked = isOn(it); } });
         c.checked = isOn(r.item);
         if (f.key === 'locked') field.append(h('span', { class: 'unit' }, t('blocca spostamenti e rotazioni')));
+        if (f.hint) field.append(h('span', { class: 'unit' }, t(f.hint)));
         break;
       }
       case 'color': {

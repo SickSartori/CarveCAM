@@ -484,6 +484,20 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     sketch.refreshFrame();
   };
 
+  /** Solidi (oggetti, artefatti) considerati o no come grezzo: elenco Grezzo del navigatore. */
+  cmd.setStock = (refs, on) => {
+    const items = refs.map(r => resolve(r)).filter(r => r && (r.type === 'object' || r.type === 'artifact'));
+    if (!items.length) return;
+    mutate(() => { for (const r of items) r.item.stock = !!on; });
+    log.info(on ? 'Solidi considerati grezzo' : 'Solidi tolti dal grezzo', { items: items.map(r => r.item.name) });
+    status(on
+      ? t('Grezzo: {names}. Le lavorazioni lo usano come materiale da togliere, aggiornandolo dall\'una alla successiva', { names: items.map(r => r.item.name).join(', ') })
+      : t('{names}: non più grezzo', { names: items.map(r => r.item.name).join(', ') }));
+  };
+
+  /** Il progetto ha un grezzo (solidi considerati come grezzo). */
+  const hasStock = () => App.project.objects.some(o => o.stock && o.meshId) || App.project.artifacts.some(a => a.stock);
+
   cmd.toggleVisible = (type, id) => {
     mutate(() => {
       const r = resolve({ type, id });
@@ -1424,6 +1438,17 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   cmd.setupLibrary = () => openSetupLibrary();
   cmd.options = () => openOptions({ vp });
 
+  /** Artefatto e oggetto per il server. */
+  const artifactReq = x => ({
+    id: x.id, name: x.name, kind: x.kind, size: x.size, radius: x.radius, radius2: x.radius2, height: x.height,
+    position: x.position, rotation: x.rotation, include: true,
+  });
+  const objectReq = x => ({ meshId: x.meshId, name: x.name, position: x.position, rotation: x.rotation, scale: x.scale, include: true });
+
+  /**
+   * Richiesta di calcolo. Con il grezzo: la prima lavorazione riceve i solidi del grezzo, le successive il percorso
+   * della precedente (il server parte dal grezzo che ha lasciato).
+   */
   function buildRequest(op) {
     const sk = getSketch(op.sketchId);
     if (!sk) throw new Error(t('"{name}": selezionare uno sketch di contorno', { name: op.name }));
@@ -1454,14 +1479,21 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
         id: e.id, kind: e.kind, pts: e.pts, closed: true, x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2,
         cx: e.cx, cy: e.cy, r: e.r, sides: e.sides, rot: e.rot,
       })),
-      objects: App.project.objects.filter(x => obst.has(x.id) && x.meshId).map(x => ({
-        meshId: x.meshId, name: x.name, position: x.position, rotation: x.rotation, scale: x.scale, include: true,
-      })),
-      artifacts: App.project.artifacts.filter(x => obst.has(x.id)).map(x => ({
-        id: x.id, name: x.name, kind: x.kind, size: x.size, radius: x.radius, radius2: x.radius2, height: x.height,
-        position: x.position, rotation: x.rotation, include: true,
-      })),
+      objects: App.project.objects.filter(x => obst.has(x.id) && x.meshId && !x.stock).map(objectReq),
+      artifacts: App.project.artifacts.filter(x => obst.has(x.id) && !x.stock).map(artifactReq),
+      ...stockOf(op),
     };
+  }
+
+  function stockOf(op, send) {
+    if (!hasStock()) return {};
+    const ops = App.project.operations;
+    const prev = ops[ops.indexOf(op) - 1];
+    if (prev) return { stockFrom: App.runtime.toolpaths.get(prev.id)?.toolpathId || '' };
+    return { stock: {
+      objects: App.project.objects.filter(x => x.stock && x.meshId).map(objectReq),
+      artifacts: App.project.artifacts.filter(x => x.stock).map(x => artifactReq(x, send)),
+    } };
   }
 
   function requestHash(req) {
@@ -1487,7 +1519,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     const tp = await api.getToolpath(res.toolpathId);
     App.runtime.toolpaths.set(op.id, {
       toolpathId: res.toolpathId, hash: requestHash(req), stats: res.stats, warnings: res.warnings || [],
-      positions: tp.positions, types: tp.types,
+      positions: tp.positions, types: tp.types, hasStock: !!res.hasStock,
     });
     log.info(`Calcolo "${op.name}" concluso in ${Math.round(performance.now() - t0)} ms`, { points: res.stats?.pointCount, warnings: res.warnings?.length || 0, maxGouge: res.stats?.maxGouge });
     return res;
@@ -1496,6 +1528,13 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   cmd.compute = async opId => {
     const op = getOperation(opId);
     if (!op) return;
+    // con il grezzo la lavorazione dipende dalle precedenti: si calcolano in ordine quelle non aggiornate
+    if (hasStock()) {
+      const ok = await ensureComputed([op], true);
+      const d = App.runtime.toolpaths.get(op.id);
+      if (ok && d) status(t('"{name}": {pts} punti, {len} m di lavoro, {ms} ms', { name: op.name, pts: num(d.stats.pointCount), len: fmt(d.stats.feedLength / 1000, 2), ms: d.stats.computeMs }));
+      return ok;
+    }
     if (sim.active && sim.listFor(sim.opId).includes(opId)) sim.stop();
     const signal = busy(t('Calcolo "{name}"…', { name: op.name }));
     try {
@@ -1523,17 +1562,41 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     toast(t('Nessuna lavorazione da calcolare'), 'warn');
   };
 
-  /** Calcola le lavorazioni indicate (o tutte) che non sono aggiornate. */
+  /**
+   * Calcola le lavorazioni indicate che non sono aggiornate (force: tutte quelle indicate). Con il grezzo ogni
+   * lavorazione parte da quello lasciato dalla precedente: si considerano anche le precedenti, in ordine, e lo
+   * stato si valuta man mano (ricalcolarne una rende da ricalcolare le successive).
+   */
   async function ensureComputed(ops, force = false) {
-    const todo = ops.filter(op => op && (force || cmd.opStatus(op) !== 'ok'));
-    if (!todo.length) return true;
+    ops = ops.filter(Boolean);
+    const all = App.project.operations;
+    const chain = hasStock();
+    const list = chain && ops.length ? all.slice(0, Math.max(...ops.map(o => all.indexOf(o))) + 1) : ops;
+    const forced = new Set(force ? ops.map(o => o.id) : []);
+    const needs = op => forced.has(op.id) || cmd.opStatus(op) !== 'ok';
+    if (!list.some(needs)) return true;
     sim.stop();   // i percorsi cambiano: la simulazione in corso non è più valida
     const signal = busy(t('Calcolo lavorazioni…'));
     try {
-      for (let i = 0; i < todo.length; i++) {
-        busyText(t('Calcolo {i}/{n}: "{name}"…', { i: i + 1, n: todo.length, name: todo[i].name }));
-        const res = await computeOne(todo[i], signal);
-        for (const w of res.warnings || []) toast(`${todo[i].name}: ${w}`, 'warn', 6000);
+      let retried = false;
+      for (let i = 0; i < list.length; i++) {
+        const op = list[i];
+        if (!needs(op)) continue;
+        busyText(t('Calcolo {i}/{n}: "{name}"…', { i: i + 1, n: list.length, name: op.name }));
+        let res;
+        try {
+          res = await computeOne(op, signal);
+        } catch (e) {
+          // il server non ha più il grezzo della lavorazione precedente (es. riavviato): si ricalcola la catena
+          if (e.code !== 'stock-chain' || retried) throw e;
+          retried = true;
+          for (const o of all) App.runtime.toolpaths.delete(o.id);
+          for (const o of list) forced.add(o.id);
+          i = -1;
+          continue;
+        }
+        forced.delete(op.id);
+        for (const w of res.warnings || []) toast(`${op.name}: ${w}`, 'warn', 6000);
       }
       return true;
     } catch (e) {
@@ -1852,6 +1915,11 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     };
     if (multi) {
       const items = [];
+      const solids = App.selected.filter(s => s.type === 'object' || s.type === 'artifact');
+      if (solids.length === App.selected.length) {
+        const allStock = resolveAll().every(x => x.item.stock);
+        items.push({ label: allStock ? t('Non considerare come grezzo') : t('Considera come grezzo'), action: () => cmd.setStock(solids, !allStock) });
+      }
       if (movableSelected().length) items.push(lockItem(), { sep: true });
       if (operationSource() && !sketch.active) items.push({ label: t('Nuova svuotatura'), action: () => cmd.newOperation('pocket') }, { label: t('Nuova finitura'), action: () => cmd.newOperation('finish') }, { sep: true });
       return [...items, ...common];
@@ -1861,7 +1929,8 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     switch (sel.type) {
       case 'object':
       case 'artifact':
-        return [lockItem(), { sep: true },
+        return [{ label: r?.item.stock ? t('Non considerare come grezzo') : t('Considera come grezzo'), action: () => cmd.setStock([sel], !r?.item.stock) },
+          lockItem(), { sep: true },
           { label: t('Riposiziona…'), enabled: () => !locked && !sketch.active && !App.planeMode, action: () => cmd.reposition(sel) },
           { label: t('Appoggia su Z=0'), enabled: () => !locked, action: () => cmd.dropToFloor(sel) },
           { label: t('Centra in XY'), enabled: () => !locked, action: () => cmd.centerXY(sel) },

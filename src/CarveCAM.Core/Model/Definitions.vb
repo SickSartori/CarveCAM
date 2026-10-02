@@ -221,12 +221,22 @@ Namespace Model
     End Class
 
     ''' <summary>Richiesta di calcolo percorso: tutto ciò che serve per essere autosufficiente.</summary>
+    ''' <summary>Solidi del grezzo (materiale da lavorare, non ostacoli).</summary>
+    Public Class StockDef
+        Public Property Objects As List(Of SceneObjectDef)
+        Public Property Artifacts As List(Of ArtifactDef)
+    End Class
+
     Public Class ComputeRequest
         Public Property Operation As OperationDef
         Public Property Plane As PlaneDef
         Public Property Boundary As List(Of SketchEntityDef)
         Public Property Objects As List(Of SceneObjectDef)
         Public Property Artifacts As List(Of ArtifactDef)
+        ''' <summary>Grezzo iniziale (prima lavorazione).</summary>
+        Public Property Stock As StockDef
+        ''' <summary>Percorso della lavorazione precedente: il grezzo parte da quello che ha lasciato.</summary>
+        Public Property StockFrom As String
     End Class
 
 End Namespace
