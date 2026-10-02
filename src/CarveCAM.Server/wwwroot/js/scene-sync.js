@@ -149,7 +149,7 @@ export class SceneSync {
     const selPlane = ctx.sel.has(k);
     const active = ctx.active === pl.id;
     const editing = App.sketch && App.sketch.planeId === pl.id ? App.sketch.sketchId : '';
-    const sig = JSON.stringify([pl.size, pl.sketches, selEnts, selPlane, active, editing, !!pl.locked, this.ver]);
+    const sig = JSON.stringify([pl.name, pl.size, pl.sketches, selEnts, selPlane, active, editing, !!pl.locked, this.ver]);
     let n = this.nodes.get(k);
     if (!n || n.sig !== sig) {
       const g = new THREE.Group();
@@ -178,6 +178,15 @@ export class SceneSync {
         arrow.traverse(o => { o.raycast = () => {}; });
         if (!active) arrow.traverse(o => { if (o.material) { o.material.transparent = true; o.material.opacity = 0.6; } });
         g.add(arrow);
+      }
+      // nome del piano accanto all'angolo (-U, +V), a dimensione costante sullo schermo
+      if (pl.name) {
+        const label = makeTextSprite(pl.name, selPlane ? color('entitySel') : '#' + new THREE.Color(col).lerp(new THREE.Color(0xffffff), 0.45).getHexString(), true);
+        label.position.set(-h, h, 0);
+        label.center.set(0, -0.15);
+        label.material.opacity = active || selPlane ? 0.95 : 0.7;
+        label.raycast = () => {};
+        g.add(label);
       }
       const cSketch = new THREE.Color(color('sketch'));
       const cDim = cSketch.clone().multiplyScalar(0.7);
@@ -302,7 +311,8 @@ export class SceneSync {
 }
 
 /** Etichetta di testo sempre rivolta alla camera (larghezza proporzionale al testo, altezza 1). */
-function makeTextSprite(text, col) {
+/** Etichetta di testo; screen: dimensione costante sullo schermo (altezza in frazione della vista). */
+function makeTextSprite(text, col, screen = false) {
   const px = 48;
   const cv = document.createElement('canvas');
   const ctx = cv.getContext('2d');
@@ -319,9 +329,10 @@ function makeTextSprite(text, col) {
   ctx.fillText(text, 8, cv.height / 2);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, sizeAttenuation: !screen }));
   sp.center.set(0, 0.5);
-  sp.scale.set(cv.width / cv.height, 1, 1);
+  const k = screen ? 0.026 : 1;
+  sp.scale.set(cv.width / cv.height * k, k, 1);
   sp.renderOrder = 8;
   return sp;
 }
