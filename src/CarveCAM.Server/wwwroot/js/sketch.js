@@ -289,7 +289,8 @@ export class SketchMode {
       else {
         const [a] = this.pts;
         if (Math.abs(p[0] - a[0]) < 1e-9 || Math.abs(p[1] - a[1]) < 1e-9) { toast(t('Rettangolo degenere'), 'warn'); return; }
-        this._add({ kind: 'rect', x1: Math.min(a[0], p[0]), y1: Math.min(a[1], p[1]), x2: Math.max(a[0], p[0]), y2: Math.max(a[1], p[1]) });
+        // x1, y1: il primo punto cliccato (riferimento del rettangolo); x2, y2: l'angolo opposto
+        this._add({ kind: 'rect', x1: a[0], y1: a[1], x2: p[0], y2: p[1] });
       }
     } else if (tool === 'circle' || tool === 'polygon') {
       if (!this.pts.length) this.pts.push(p);
@@ -452,19 +453,16 @@ function applyGrip(e0, g, p) {
   switch (e0.kind) {
     case 'rect': {
       if (g.role === 'center') return { x1: e0.x1 + dx, y1: e0.y1 + dy, x2: e0.x2 + dx, y2: e0.y2 + dy };
+      // si sposta solo l'angolo (o il lato) trascinato: l'opposto resta fermo e il primo punto resta x1, y1
       let { x1, y1, x2, y2 } = e0;
       if (g.role === 'corner') {
-        // l'angolo opposto resta fermo
-        const fx = g.i === 0 || g.i === 3 ? e0.x2 : e0.x1;
-        const fy = g.i === 0 || g.i === 1 ? e0.y2 : e0.y1;
-        [x1, x2] = [Math.min(fx, x), Math.max(fx, x)];
-        [y1, y2] = [Math.min(fy, y), Math.max(fy, y)];
+        if (g.i === 0 || g.i === 3) x1 = x; else x2 = x;
+        if (g.i === 0 || g.i === 1) y1 = y; else y2 = y;
       } else if (g.role === 'edge') {
-        // il lato opposto resta fermo
-        if (g.i === 0) [y1, y2] = [Math.min(y, e0.y2), Math.max(y, e0.y2)];
-        if (g.i === 2) [y1, y2] = [Math.min(y, e0.y1), Math.max(y, e0.y1)];
-        if (g.i === 1) [x1, x2] = [Math.min(x, e0.x1), Math.max(x, e0.x1)];
-        if (g.i === 3) [x1, x2] = [Math.min(x, e0.x2), Math.max(x, e0.x2)];
+        if (g.i === 0) y1 = y;
+        if (g.i === 2) y2 = y;
+        if (g.i === 1) x2 = x;
+        if (g.i === 3) x1 = x;
       }
       return ok(x2 - x1) && ok(y2 - y1) ? { x1, y1, x2, y2 } : null;
     }

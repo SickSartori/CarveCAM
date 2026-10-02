@@ -300,9 +300,16 @@ export class Props {
     const e = r.item;
     const f = [{ sec: ENT_LABEL[e.kind] || 'Entità', tone: 'sketch' }, { key: 'name', label: 'Nome', type: 'text', placeholder: t(ENT_LABEL[e.kind]) }];
     if (e.kind === 'rect') {
-      f.push({ key: 'x1', label: 'Angolo 1 · X', type: 'num', unit: 'mm' }, { key: 'y1', label: 'Angolo 1 · Y', type: 'num', unit: 'mm' },
-        { key: 'x2', label: 'Angolo 2 · X', type: 'num', unit: 'mm' }, { key: 'y2', label: 'Angolo 2 · Y', type: 'num', unit: 'mm' },
-        { label: 'Dimensioni', type: 'info', value: it => `${fmt(Math.abs(it.x2 - it.x1))} × ${fmt(Math.abs(it.y2 - it.y1))} mm` });
+      // il primo punto (quello cliccato per primo) è il riferimento: spostandolo si sposta il rettangolo,
+      // cambiando i lati resta fermo e il rettangolo cresce verso l'angolo opposto
+      const move = (ax, v) => it => { const d = v - it[`${ax}1`]; it[`${ax}1`] = v; it[`${ax}2`] += d; };
+      const side = ax => (it, v) => { it[`${ax}2`] = it[`${ax}1`] + (it[`${ax}2`] < it[`${ax}1`] ? -v : v); };
+      f.push({ id: 'x1', label: 'Primo punto · X', type: 'num', unit: 'mm', get: it => it.x1, set: (it, v) => move('x', v)(it) },
+        { id: 'y1', label: 'Primo punto · Y', type: 'num', unit: 'mm', get: it => it.y1, set: (it, v) => move('y', v)(it) },
+        { id: 'sx', label: 'Lato X (U)', type: 'num', unit: 'mm', min: 0.001, spin: 1, get: it => Math.abs(it.x2 - it.x1), set: side('x') },
+        { id: 'sy', label: 'Lato Y (V)', type: 'num', unit: 'mm', min: 0.001, spin: 1, get: it => Math.abs(it.y2 - it.y1), set: side('y') },
+        { key: 'x2', label: 'Angolo opposto · X', type: 'num', unit: 'mm' }, { key: 'y2', label: 'Angolo opposto · Y', type: 'num', unit: 'mm' },
+        { note: 'Il primo punto è il riferimento: spostandolo si sposta tutto il rettangolo, cambiando i lati resta fermo.' });
     } else if (e.kind === 'circle') {
       f.push({ key: 'cx', label: 'Centro X', type: 'num', unit: 'mm' }, { key: 'cy', label: 'Centro Y', type: 'num', unit: 'mm' },
         { key: 'r', label: 'Raggio', type: 'num', unit: 'mm', min: 0.001 },
@@ -311,6 +318,10 @@ export class Props {
       f.push({ key: 'cx', label: 'Centro X', type: 'num', unit: 'mm' }, { key: 'cy', label: 'Centro Y', type: 'num', unit: 'mm' },
         { key: 'r', label: 'Raggio circoscritto', type: 'num', unit: 'mm', min: 0.001 },
         { key: 'sides', label: 'Lati', type: 'num', min: 3, max: 256, int: true },
+        // lato = 2 r sin(π/n): cambiandolo cambia il raggio, centro e rotazione restano
+        { id: 'side', label: 'Lunghezza lato', type: 'num', unit: 'mm', min: 0.001, spin: 1,
+          get: it => 2 * it.r * Math.sin(Math.PI / Math.max(3, it.sides | 0)),
+          set: (it, v) => { it.r = v / (2 * Math.sin(Math.PI / Math.max(3, it.sides | 0))); } },
         { key: 'rot', label: 'Rotazione', type: 'num', unit: '°' });
     } else if (e.kind === 'polyline') {
       f.push({ key: 'pts', label: 'Vertici (x y)', type: 'points' },
@@ -515,7 +526,9 @@ export class Props {
     const field = h('div', { class: 'p-field' });
     el.append(h('div', { class: `p-row${f.disabled ? ' disabled' : ''}` }, this._label(f), field));
     const sel = { ...App.selection };
-    const commit = v => this.cmd.setProp(sel, f.key, v);
+    // campi calcolati (get/set): il valore si ricava dall'elemento e la modifica la applica set
+    const commit = f.set ? v => this.cmd.editItem(sel, it => f.set(it, v)) : v => this.cmd.setProp(sel, f.key, v);
+    const getV = f.get || (it => getPath(it, f.key));
 
     switch (f.type) {
       case 'info': {
@@ -535,7 +548,7 @@ export class Props {
         break;
       }
       case 'num': {
-        const inp = h('input', { 'data-key': f.key, inputmode: 'decimal', disabled: !!f.disabled });
+        const inp = h('input', { 'data-key': f.key || f.id, inputmode: 'decimal', disabled: !!f.disabled });
         const apply = () => {
           let v = evalNum(inp.value);
           if (!Number.isFinite(v)) { inp.classList.add('bad'); return; }
@@ -559,7 +572,7 @@ export class Props {
         });
         field.append(f.spin ? withSpin(inp, f.spin, apply) : inp);
         if (f.unit) field.append(h('span', { class: 'unit' }, f.unit));
-        this._bind(inp, it => fmt(getPath(it, f.key), 4));
+        this._bind(inp, it => fmt(getV(it), 4));
         break;
       }
       case 'vec3': {

@@ -64,7 +64,7 @@ export function circleSegments(r, tol = 0.01) {
 export function mirrorEntityV(e) {
   const neg = v => (v ? -v : 0);
   switch (e.kind) {
-    case 'rect': { const y1 = neg(e.y2), y2 = neg(e.y1); e.y1 = y1; e.y2 = y2; break; }
+    case 'rect': e.y1 = neg(e.y1); e.y2 = neg(e.y2); break;   // il primo punto resta il primo
     case 'circle': e.cy = neg(e.cy); break;
     case 'polygon': e.cy = neg(e.cy); e.rot = neg(e.rot); break;
     case 'polyline': if (Array.isArray(e.pts)) e.pts = e.pts.map(p => [p[0], neg(p[1])]).reverse(); break;

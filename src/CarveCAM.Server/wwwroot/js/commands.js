@@ -478,6 +478,12 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     sketch.refreshFrame();
   };
 
+  /** Modifica annullabile dell'elemento selezionato sel con una funzione (campi calcolati delle proprietà). */
+  cmd.editItem = (sel, fn) => {
+    mutate(() => { const r = resolve(sel); if (r) fn(r.item); });
+    sketch.refreshFrame();
+  };
+
   cmd.toggleVisible = (type, id) => {
     mutate(() => {
       const r = resolve({ type, id });
