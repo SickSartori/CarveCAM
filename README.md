@@ -82,11 +82,14 @@ samples/blocco-L.stp                        STEP di prova (blocco a L con gradin
 
 - **Schermata iniziale:** dopo il caricamento, al posto dell'area di lavoro vuota: nuovo progetto, apri, importa,
   progetto di esempio, il progetto da riprendere (con l'anteprima e le modifiche non salvate), i progetti recenti
-  con le miniature, la guida e il flusso di lavoro. Si riapre da *File › Schermata iniziale* o con un clic sul
-  logo; *Mostra all'avvio* (anche in *Opzioni › Avvio*) decide se compare all'avvio. Mentre è aperta la vista 3D
-  non viene disegnata.
-- **Barra del titolo:** menu a tendina con icone (File, Modifica, Inserisci, Origini, Piani, Sketch, Lavorazioni,
-  Strumenti, Vista, Aiuto, Info; navigabili con le frecce), nome del progetto modificabile (Invio o uscita dal
+  con le miniature, la guida e il flusso di lavoro, le cui fasi si illuminano in sequenza. Accanto, una vetrina
+  animata in prospettiva (`home-anim.js`, CSS 3D e SVG, senza librerie): una fresa scava la "C" del logo in una
+  lastra con passate concentriche e una passata di contorno, con la riga di G-code e l'avanzamento; un clic apre
+  il progetto di esempio. Si riapre da *File › Schermata iniziale* o con un clic sul logo; *Mostra all'avvio*
+  (anche in *Opzioni › Avvio*) decide se compare all'avvio. Mentre è aperta la vista 3D non viene disegnata; le
+  animazioni si fermano quando si chiude e, con *riduci movimento* del sistema, restano ferme.
+- **Barra del titolo:** menu a tendina con icone (File, Modifica, Inserisci, Booleane, Origini, Piani, Sketch,
+  Lavorazioni, Strumenti, Vista, Aiuto, Info; navigabili con le frecce), nome del progetto modificabile (Invio o uscita dal
   campo chiedono se salvare) con indicatore delle modifiche non salvate, ricerca comandi (**Ctrl+K**), stato del
   server. Il menu File contiene il riquadro degli **ultimi 5 progetti** aperti o salvati; *Info › Informazioni
   su CarveCAM* mostra versione, descrizione, **crediti di sviluppo** (William Veronesi e Gabriel S. Sartori) e
@@ -99,8 +102,9 @@ samples/blocco-L.stp                        STEP di prova (blocco a L con gradin
 - **Caricamento:** all'avvio e durante calcoli, aperture e importazioni compare il logo animato (la fresa scava
   la passata interna e poi la "C"), con la fase in corso e, dopo 2 s, il tempo trascorso; con il movimento
   ridotto attivo nel sistema il logo resta fermo e pulsa.
-- **Navigatore** (a sinistra): oggetti, artefatti, origini, piani › sketch › entità, lavorazioni; occhio per
-  mostrare/nascondere, lucchetto per bloccare/sbloccare. **Ctrl+clic** aggiunge o toglie dalla selezione.
+- **Navigatore** (a sinistra): oggetti, artefatti, **grezzo**, origini, piani › sketch › entità, lavorazioni;
+  occhio per mostrare/nascondere, lucchetto per bloccare/sbloccare. **Ctrl+clic** aggiunge o toglie dalla
+  selezione; il **tasto destro** su un elemento, nel navigatore o nella vista, apre il suo menu.
   Le lavorazioni si **trascinano** per cambiarne la sequenza (con conferma della nuova sequenza), oppure
   *Lavorazioni › Riordina lavorazioni*.
 - **Proprietà** (a destra): gruppi comprimibili e colorati; **clic sul nome di un parametro** per la sua
@@ -110,7 +114,8 @@ samples/blocco-L.stp                        STEP di prova (blocco a L con gradin
 - **Vista 3D:** Z in alto; tasto sinistro ruota, centrale/destro trasla, rotella zoom; Ctrl+clic per la
   selezione multipla. Il piano attivo (quello dell'elemento selezionato o dello sketch in modifica) è
   riempito con bordo continuo, gli altri hanno solo il bordo tratteggiato e si selezionano con un clic in
-  qualunque punto del loro riquadro; la normale è indicata da quattro piccole frecce agli angoli.
+  qualunque punto del loro riquadro; la normale è indicata da quattro piccole frecce agli angoli e il nome del
+  piano è scritto accanto a un angolo del riquadro.
 - **Manipolatore** (G sposta, R ruota): muove insieme oggetti, artefatti e piani selezionati. **Clic sul
   centro** del manipolatore: compaiono dei pallini verdi sui vertici della selezione, il clic su uno di essi
   lo sceglie come nuovo punto di riferimento.
@@ -129,7 +134,8 @@ samples/blocco-L.stp                        STEP di prova (blocco a L con gradin
   massimo dell'ingombro di tutti i solidi caricati** (anche nascosti), oppure l'origine attuale, **più un
   offset** in mm; oppure un punto cliccato nella vista. Tutto il progetto viene traslato.
 - **Origini** (menu omonimo): punti di riferimento nella scena, chiamati *Origine 1, 2…* e rinominabili, creati
-  con un clic nella vista (aggancio ai vertici) o con coordinate. Nell'**esportazione del G-code** si sceglie
+  con un clic nella vista (aggancio ai vertici) o con coordinate; *Sposta il punto…* (proprietà dell'origine)
+  lo porta su un altro punto con un clic nella vista. Nell'**esportazione del G-code** si sceglie
   quale usare come **zero pezzo**: le coordinate del programma sono relative a quel punto (anche con G68.2 e
   sui piazzamenti GRBL, con le istruzioni di azzeramento nei commenti).
 - Nelle scelte di punti nella vista (piano da 3 punti, origini) il cursore **si aggancia ai vertici visibili**
@@ -165,7 +171,9 @@ nella vista, diventi l'origine.
    Entrando nello sketch la vista si mette normale al piano (con la normale attuale) e si naviga come fuori
    dallo sketch. Con lo strumento **Seleziona**, l'entità selezionata mostra i **punti di riferimento**
    (vertici, punti medi dei lati, centro, quadranti): trascinandoli si modifica la geometria (il trascinamento
-   del punto medio di un lato di polilinea inserisce un vertice), con aggancio e Ctrl+Z.
+   del punto medio di un lato di polilinea inserisce un vertice), con aggancio e Ctrl+Z. Nelle proprietà il
+   **rettangolo** ha il primo punto cliccato come riferimento (spostandolo si sposta tutto) e la **lunghezza dei
+   due lati** (cambiandola il primo punto resta fermo); il **poligono** ha anche la **lunghezza del lato**.
 4. Seleziona lo sketch (oppure, con Ctrl+clic, una o più entità dello stesso sketch: solo quelle delimitano
    la zona lavorata) e scegli **Svuotatura** o **Finitura**: si sceglie l'**utensile dal magazzino** e poi il
    **setup** di lavorazione.
@@ -195,6 +203,41 @@ nella vista, diventi l'origine.
   la sua creazione non sono ostacoli finché non vengono spuntati nel gruppo *Ostacoli* delle proprietà.
 
 Gli archivi sono sul server, in `App_Data/library/tools.json` e `setups.json`.
+
+## Solidi: profilo estruso e booleane
+
+- **Estrudi profilo** (gruppo *Modello* e menu *Inserisci*): con uno sketch (o alcune sue entità) selezionato,
+  estrude i contorni in linea retta perpendicolarmente al piano, per l'altezza scelta, nel materiale (opposta
+  alla normale), verso l'utensile o in modo simmetrico. Un contorno dentro un altro è un foro. Il solido è un
+  artefatto (*Profilo estruso*) con il profilo copiato nel suo sistema locale: altezza e direzione si cambiano
+  nelle proprietà, la posizione con il manipolatore. Il server riceve i triangoli preparati dal client.
+- **Booleane** (menu omonimo): **Unione**, **Sottrazione** (il primo solido selezionato meno gli altri) e
+  **Intersezione** tra due o più oggetti e artefatti selezionati, calcolate nel browser con
+  [three-bvh-csg](https://github.com/gkjohnson/three-bvh-csg). Il risultato è un nuovo oggetto (mesh caricata sul
+  server); i solidi di partenza si tolgono o restano nascosti e le lavorazioni che li avevano come ostacolo usano
+  il risultato. I solidi devono essere chiusi.
+
+## Grezzo
+
+Un solido (oggetto o artefatto, anche un profilo estruso) diventa **grezzo** con il tasto destro › *Considera
+come grezzo* o con la casella *Grezzo* nelle proprietà: passa nell'elenco *Grezzo* del navigatore, è disegnato
+semitrasparente e non è più un ostacolo ma il **materiale da togliere**.
+
+- Per ogni lavorazione il grezzo diventa una **mappa di quote** nel sistema del suo piano (una fascia di
+  materiale per colonna, circa 160 000 celle) rasterizzando i triangoli dei solidi.
+- **Svuotatura:** le terrazze partono dalla **sommità del grezzo** (anche sopra il piano, per non urtarlo) e a ogni
+  quota coprono solo le posizioni della fresa che toccano materiale (materiale allargato del raggio): niente
+  passate in aria; la profondità massima resta misurata dal piano. Elica e rampa possono passare dove il
+  materiale non c'è, purché la zona sia libera dagli ostacoli. La quota di sicurezza supera anche il grezzo.
+- **Finitura:** i tratti più lunghi di 5 mm (o 4 raggi) in cui la fresa non tocca materiale si saltano, passando
+  appena sopra pezzo e grezzo invece che alla quota di sicurezza.
+- **In catena:** dopo ogni lavorazione il server toglie dal grezzo il volume spazzato dalla fresa (profilo del
+  tagliente, anche conico) e la lavorazione successiva parte da quello: le riprese lavorano solo il materiale
+  rimasto. Le lavorazioni si calcolano nell'ordine del navigatore; con un piano parallelo la mappa si trasla, con
+  un'altra normale (3+2) si ricampiona dalla sua superficie. Se il server non ha più il grezzo intermedio (es.
+  dopo un riavvio) il client ricalcola la catena.
+- **Simulazione:** il grezzo di ogni lavorazione (`GET /api/cam/toolpath/{id}/stock`) si mostra come superficie
+  che si abbassa dove passa la fresa: si vede l'erosione del materiale.
 
 ## Simulazione
 
@@ -238,6 +281,13 @@ altrimenti disimpegno alla quota di sicurezza.
 Ingresso nel materiale: **elica** (passa per il punto d'ingresso ed è contenuta nella zona lavorabile),
 **rampa** lungo il primo tratto del percorso (o attorno al contorno se corto) oppure affondo verticale;
 angolo di discesa e avanzamento di rampa configurabili, con ripiego automatico se manca spazio.
+
+**Piano della griglia.** Se la fresa scende sotto il piano base della griglia (Z 0 mondo, dove di solito
+appoggia il pezzo) il client chiede se consentirlo: *Scendi sotto il piano* tiene il percorso, *Limita al
+piano* lo ricalcola con il piano come limite. La scelta resta nella lavorazione (*Sotto la griglia*: chiedi
+conferma, consenti, limita al piano). Il server riporta la quota più bassa raggiunta dal tagliente
+(`stats.minZ`, anche con l'asse inclinato: conta il bordo della fresa) e, con `floor`, aggiunge sotto il pezzo
+un piano che la fresa tocca senza sovrametallo: le terrazze si fermano sul piano, la finitura ci passa sopra.
 
 **Utensili:** fresa cilindrica, **torica** (raggio di raccordo r: fondo piatto di raggio R-r più toro),
 sferica e **conica** (punta piatta, a V o sferica raccordata al cono). Il contatto torico con gli spigoli è
@@ -314,7 +364,8 @@ Verificare sempre il programma con il simulatore della propria macchina prima de
 
 ## Limiti noti
 
-- Il grezzo non è modellato: la svuotatura assume che il materiale parta dal piano di lavoro.
+- Senza grezzo la svuotatura assume che il materiale parta dal piano di lavoro. Il grezzo è una mappa di quote
+  per piano (una fascia per colonna): i sottosquadri rispetto all'asse utensile non sono rappresentati.
 - Gli ingressi a rampa/elica riguardano la svuotatura; la finitura si avvicina alla superficie con affondo.
 - I messaggi generati dal server (errori e avvisi del calcolo) restano in italiano anche con l'interfaccia in inglese.
 - Il progetto (.ccam) contiene progetto e mesh; i percorsi calcolati si rigenerano all'apertura (Ricalcola tutto).

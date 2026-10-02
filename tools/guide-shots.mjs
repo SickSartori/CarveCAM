@@ -176,21 +176,7 @@ async function shoot(lang, sampleMesh) {
       const s = carvecam.sim; s.playing = false; s.t = s.total * 0.09; s._apply(); await __wait(500);
       return { 1: __rect('#sim-bar'), 2: __rect('#sim-scope'), 3: __rect('#tcp-box') };`);
     await save('simulation', { marks: m });
-    // immagine della schermata iniziale: solo il pezzo, i percorsi e la fresa (senza piano, origine, cubo e riquadri)
-    m = await page.run(`const P = carvecam.App.project;
-      P.planes[0].visible = false; P.origins[0].visible = false; __st.emit('project');
-      for (const id of ['sim-bar', 'tcp-box', 'view-tools']) document.getElementById(id).style.visibility = 'hidden';
-      window.__ov = [...carvecam.vp.overlays]; carvecam.vp.overlays.clear();
-      carvecam.vp.viewFrom(new __THREE.Vector3(0.75, -1.25, 0.95), false);
-      carvecam.vp.fit(new __THREE.Box3(new __THREE.Vector3(-60, -32, 0), new __THREE.Vector3(60, 32, 46))); await __wait(600);
-      const v = __rect('#viewport');
-      return { clip: [v[0] + v[2] * 0.08, v[1] + v[3] * 0.06, v[2] * 0.84, v[3] * 0.88] };`);
-    await save('hero', m);
-    await page.run(`const P = carvecam.App.project;
-      P.planes[0].visible = true; P.origins[0].visible = true; __st.emit('project');
-      for (const id of ['sim-bar', 'tcp-box', 'view-tools']) document.getElementById(id).style.visibility = '';
-      for (const f of window.__ov) carvecam.vp.overlays.add(f);
-      carvecam.sim.stop(); await __wait(200);`);
+    await page.run(`carvecam.sim.stop(); await __wait(200);`);
 
     // 5. sketch in modifica con il rettangolo della scritta selezionato (maniglie)
     m = await page.run(`const p = carvecam.App.project.planes[0], sk = p.sketches[0], e = sk.entities[1];
@@ -220,6 +206,27 @@ async function shoot(lang, sampleMesh) {
       return { clip: __rect('#modal-root .modal') };`);
     await save('toollib', m);
     await page.run(`document.querySelector('#modal-root .modal-f .btn').click(); await __wait(300);`);
+
+    // 8. grezzo: blocco poco più grande della targa, considerato grezzo; simulazione con l'erosione
+    await page.run(`const st = __st;
+      st.mutate(p => { p.artifacts.push({ id: 'art_guide_stock', name: '${lang === 'en' ? 'Stock block' : 'Blocco grezzo'}', kind: 'box', size: [124, 68, 13], radius: 10, radius2: 5, height: 20,
+        position: [0, 0, 6.5], rotation: [0, 0, 0], color: '#ffb547', visible: true, locked: false }); });
+      carvecam.cmd.setStock([{ type: 'artifact', id: 'art_guide_stock' }], true);
+      carvecam.vp.paused = true;
+      await carvecam.cmd.computeAll();
+      carvecam.vp.paused = false;
+      __clean();`);
+    m = await page.run(`carvecam.vp.viewFrom(new __THREE.Vector3(0.9, -1.3, 1.25), false);
+      carvecam.vp.fit(new __THREE.Box3(new __THREE.Vector3(-62, -34, 0), new __THREE.Vector3(62, 34, 13)));
+      await carvecam.cmd.simulate('${ops[0]}', 'rest');
+      for (let i = 0; i < 100 && !carvecam.sim.segs.some(s => s.stock); i++) await __wait(100);
+      const s = carvecam.sim; s.playing = false; s.t = s.total * 0.3; s._apply(); await __wait(600);
+      const sec = [...document.querySelectorAll('.tree-sec')].find(e => /grezzo|stock/i.test(e.textContent));
+      const rows = [sec]; for (let e = sec.nextElementSibling; e && !e.classList.contains('tree-sec'); e = e.nextElementSibling) rows.push(e);
+      const vp = __rect('#viewport');
+      return { 1: __union(rows.map(__rect)), 2: __inset(vp, 0.22), 3: __rect('#sim-bar') };`);
+    await save('stock', { marks: m });
+    await page.run(`carvecam.sim.stop(); await __wait(200);`);
 
     writeFileSync(join(dir, 'shots.json'), `${JSON.stringify(info, null, 1)}\n`);
     return mesh;

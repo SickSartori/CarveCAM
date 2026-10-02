@@ -119,6 +119,12 @@ export function guidePages() {
           L('[[origin]] <b>Sposta origine</b>: trasla tutto il progetto perché l\'origine sia, per ogni asse, il minimo, il medio o il massimo dei solidi, più un offset.', '[[origin]] <b>Move origin</b>: shifts the whole project so that the origin is, for each axis, the minimum, middle or maximum of the solids, plus an offset.'),
           L('[[lock]] <b>Blocca</b> ({{Ctrl+L}}): un elemento bloccato non si sposta per errore.', '[[lock]] <b>Lock</b> ({{Ctrl+L}}): a locked item cannot be moved by mistake.'),
         ]),
+        h3(L('Solidi dagli sketch e operazioni booleane', 'Solids from sketches and boolean operations')),
+        ul([
+          L('[[extrude]] <b>Estrudi profilo</b>: seleziona uno sketch (o alcune sue entità) e scegli altezza e direzione: i contorni diventano un solido, estruso perpendicolarmente al piano (un contorno dentro un altro è un foro). Il solido è un artefatto: altezza e direzione si cambiano nelle proprietà.', '[[extrude]] <b>Extrude profile</b>: select a sketch (or some of its entities) and choose height and direction: the outlines become a solid, extruded perpendicular to the plane (an outline inside another is a hole). The solid is a primitive: height and direction are changed in its properties.'),
+          L('[[boolUnion]] <b>Booleane</b> (menu omonimo): con due o più solidi selezionati ({{Ctrl}}+clic) <b>Unione</b>, <b>Sottrazione</b> (il primo selezionato meno gli altri) o <b>Intersezione</b>. Il risultato è un nuovo oggetto; i solidi di partenza si tolgono o restano nascosti.', '[[boolUnion]] <b>Booleans</b> (menu of the same name): with two or more solids selected ({{Ctrl}}+click) <b>Union</b>, <b>Subtraction</b> (the first selected minus the others) or <b>Intersection</b>. The result is a new object; the original solids are removed or kept hidden.'),
+          L('Il <b>tasto destro</b> su un elemento (nella vista o nel navigatore) apre il suo menu.', 'A <b>right-click</b> on an item (in the view or in the navigator) opens its menu.'),
+        ]),
         act([show('[data-action="file.import"]', L('Mostrami Importa', 'Show me Import')), show('[data-group="model"]', L('Mostrami il gruppo Modello', 'Show me the Model group'))]),
       ],
     },
@@ -167,6 +173,7 @@ export function guidePages() {
         ul([
           L('<b>Aggancio</b> alla griglia (passo nella barra dello sketch) e ai punti delle entità esistenti. Finito il disegno di un\'entità si torna allo strumento Seleziona, con l\'entità selezionata.', '<b>Snapping</b> to the grid (step in the sketch bar) and to the points of existing entities. When an entity is finished the Select tool comes back, with the entity selected.'),
           L('Con <b>Seleziona</b> l\'entità mostra vertici, punti medi, centro e quadranti: trascinandoli si modifica (trascinare il punto medio di un lato aggiunge un vertice). {{Ctrl+Z}} annulla.', 'With <b>Select</b> the entity shows vertices, midpoints, centre and quadrants: drag them to edit it (dragging a side midpoint adds a vertex). {{Ctrl+Z}} undoes.'),
+          L('Nelle proprietà il <b>rettangolo</b> ha il primo punto cliccato come riferimento e la lunghezza dei due lati: cambiando i lati il primo punto resta fermo. Il <b>poligono</b> ha anche la lunghezza del lato.', 'In the properties the <b>rectangle</b> has the first clicked point as reference and the length of its two sides: changing the sides keeps the first point fixed. The <b>polygon</b> also has the side length.'),
         ]),
         art('island'),
         p(L('Un contorno dentro un altro diventa un\'<b>isola</b> che non viene lavorata. Per lavorare solo alcune entità selezionale con {{Ctrl}}+clic prima di creare la lavorazione: il progetto di esempio usa così il rettangolo della scritta.',
@@ -198,12 +205,38 @@ export function guidePages() {
           L('<b>Passo laterale</b>: distanza tra passate affiancate, in % del diametro (con limiti in mm). <b>Passo verticale</b>: altezza di ogni terrazza, in % dell\'altezza del tagliente.', '<b>Stepover</b>: distance between side-by-side passes, as a % of the diameter (with limits in mm). <b>Stepdown</b>: height of each terrace, as a % of the flute length.'),
           L('<b>Profondità massima</b> dal piano; <b>sovrametallo</b>: materiale lasciato sul modello per la finitura.', '<b>Maximum depth</b> from the plane; <b>stock allowance</b>: material left on the model for finishing.'),
           L('<b>Quota di sicurezza</b> per i movimenti rapidi e <b>tolleranza</b> del calcolo.', '<b>Safe height</b> for rapid moves and computing <b>tolerance</b>.'),
+          L('Se la fresa scenderebbe sotto il <b>piano della griglia</b> (Z 0, dove appoggia il pezzo) il calcolo chiede conferma: <b>Scendi sotto il piano</b> o <b>Limita al piano</b>. La scelta resta nella proprietà <i>Sotto la griglia</i>.', 'If the cutter would go below the <b>grid plane</b> (Z 0, where the part rests) the computation asks for confirmation: <b>Go below the plane</b> or <b>Limit to the plane</b>. The choice is kept in the <i>Below the grid</i> property.'),
         ]),
         art('entries'),
         art('obstacles'),
         p(L('Ogni lavorazione considera come <b>ostacoli</b> gli oggetti e gli artefatti spuntati nel gruppo <i>Ostacoli</i> delle proprietà (passando sul nome l\'ostacolo si illumina nella vista). Gli elementi aggiunti dopo non sono ostacoli finché non li spunti.',
           'Each operation treats as <b>obstacles</b> the objects and primitives checked in the <i>Obstacles</i> group of the properties (hovering a name highlights it in the view). Items added later are not obstacles until you check them.')),
+        tip(L('Con un <b>grezzo</b> le lavorazioni passano solo dove c\'è materiale e ognuna parte da quello lasciato dalla precedente: vedi il capitolo successivo.', 'With a <b>stock</b> the operations pass only where there is material and each starts from what the previous one left: see the next chapter.')),
         tip(L('<b>Salva come setup…</b> (nelle proprietà) conserva i parametri per riusarli. Per cambiare l\'ordine delle lavorazioni trascinale nel navigatore o usa [[reorder]] <b>Riordina lavorazioni</b>.', '<b>Save as setup…</b> (in the properties) keeps the parameters for reuse. To change the order of the operations drag them in the navigator or use [[reorder]] <b>Reorder operations</b>.')),
+      ],
+    },
+    {
+      id: 'stock', icon: 'box', title: L('Il grezzo', 'The stock'), nav: L('Grezzo', 'Stock'),
+      blocks: [
+        p(L('Il <b>grezzo</b> è il blocco di materiale da cui si ricava il pezzo. Senza grezzo le lavorazioni partono dal piano e lavorano tutta l\'area del contorno; con il grezzo sanno dov\'è il materiale.', 'The <b>stock</b> is the block of material the part is cut from. Without stock the operations start from the plane and machine the whole outline; with stock they know where the material is.')),
+        steps([
+          { icon: 'box', html: L('Crea il solido del grezzo: un <b>parallelepipedo</b>, un modello importato o un <b>profilo estruso</b> [[extrude]] dal contorno del pezzo.', 'Create the stock solid: a <b>box</b>, an imported model or an <b>extruded profile</b> [[extrude]] from the outline of the part.') },
+          { icon: 'select', html: L('<b>Tasto destro</b> sul solido › <b>Considera come grezzo</b> (o la casella <i>Grezzo</i> nelle proprietà): passa nell\'elenco <b>Grezzo</b> del navigatore e diventa semitrasparente.', '<b>Right-click</b> the solid › <b>Treat as stock</b> (or the <i>Stock</i> box in the properties): it moves to the <b>Stock</b> list of the navigator and becomes semi-transparent.') },
+          { icon: 'computeAll', html: L('<b>Ricalcola tutto</b>: le lavorazioni si calcolano nell\'ordine del navigatore, ognuna dal grezzo lasciato dalla precedente.', '<b>Recompute all</b>: operations are computed in the navigator order, each from the stock left by the previous one.') },
+        ]),
+        shot('stock', [
+          S(1, L('L\'elenco <b>Grezzo</b> del navigatore.', 'The <b>Stock</b> list of the navigator.')),
+          S(2, L('Il grezzo che si erode durante la simulazione: dove la fresa è passata il materiale è sceso.', 'The stock being eroded during the simulation: where the cutter has passed the material has gone down.')),
+          S(3, L('La simulazione di tutte le lavorazioni, ognuna sul grezzo lasciato dalla precedente.', 'The simulation of all the operations, each on the stock left by the previous one.')),
+        ], L('Il progetto di esempio con un blocco grezzo', 'The sample project with a stock block')),
+        ul([
+          L('Il grezzo è il <b>materiale da togliere</b>, non un ostacolo: gli ostacoli restano i modelli e gli artefatti spuntati nella lavorazione.', 'The stock is the <b>material to remove</b>, not an obstacle: obstacles are still the models and primitives checked in the operation.'),
+          L('La svuotatura parte dalla <b>sommità del grezzo</b> (anche sopra il piano, così la fresa non lo urta) e passa <b>solo dove c\'è materiale</b>: niente passate in aria. La profondità massima resta misurata dal piano.', 'Pocketing starts from the <b>top of the stock</b> (also above the plane, so the cutter does not hit it) and passes <b>only where there is material</b>: no air cuts. The maximum depth is still measured from the plane.'),
+          L('La finitura salta i tratti dove la fresa non tocca materiale; le lavorazioni successive lavorano solo il <b>materiale rimasto</b> (ripresa).', 'Finishing skips the stretches where the cutter touches no material; later operations machine only the <b>remaining material</b> (rest machining).'),
+          L('Funziona anche con piani diversi (lavorazioni 3+2): il grezzo lasciato da una lavorazione si ricampiona nel sistema del piano della successiva.', 'It also works with different planes (3+2 machining): the stock left by one operation is resampled in the plane system of the next.'),
+          L('In <b>simulazione</b> il grezzo si erode mentre la fresa passa.', 'In the <b>simulation</b> the stock is eroded as the cutter passes.'),
+        ]),
+        tip(L('Con il grezzo una lavorazione dipende dalle precedenti: cambiando la prima, le successive tornano <b>da ricalcolare</b>; {{F9}} su una lavorazione calcola prima quelle precedenti non aggiornate.', 'With stock an operation depends on the previous ones: changing the first one makes the following ones <b>to recompute</b>; {{F9}} on an operation first computes the previous ones that are not up to date.')),
       ],
     },
     {
@@ -252,6 +285,7 @@ export function guidePages() {
           'The <b>work zero</b> is the point of the part where program coordinates start: on the machine you zero on the same point. Usually a corner or the centre of the top face of the stock.')),
         ul([
           L('[[refPoint]] <b>Origini › Nuova origine da un punto</b> (clic nella vista, con aggancio ai vertici) o <b>da coordinate</b> (con i punti notevoli dell\'ingombro). I punti si chiamano <i>Origine 1, 2…</i> e si rinominano nelle proprietà.', '[[refPoint]] <b>Origins › New origin from a point</b> (click in the view, snapping to vertices) or <b>from coordinates</b> (with the key points of the bounds). The points are called <i>Origin 1, 2…</i> and can be renamed in the properties.'),
+          L('Nelle proprietà di un\'origine <b>Sposta il punto…</b> la porta su un altro punto con un clic nella vista (con aggancio ai vertici).', 'In the properties of an origin <b>Move the point…</b> moves it to another point with a click in the view (snapping to vertices).'),
           L('[[gcode]] <b>Esporta G-code</b>: scegli il controllo, lo zero pezzo e le lavorazioni; il programma si può copiare o scaricare.', '[[gcode]] <b>Export G-code</b>: choose the controller, the work zero and the operations; the program can be copied or downloaded.'),
         ]),
         shot('export', [
