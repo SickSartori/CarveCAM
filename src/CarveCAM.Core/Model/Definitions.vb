@@ -27,6 +27,11 @@ Namespace Model
         Public Property Position As Double() = {0, 0, 0}
         Public Property Rotation As Double() = {0, 0, 0}
         Public Property Include As Boolean = True
+        ''' <summary>
+        ''' Triangoli nel sistema locale (9 valori per triangolo) per gli artefatti non parametrici, come il
+        ''' profilo estruso ("extrude"): li prepara il client con la stessa geometria che mostra.
+        ''' </summary>
+        Public Property Mesh As Single()
     End Class
 
     ''' <summary>Piano di lavoro: origine e assi (U,V nel piano, N normale = asse utensile).</summary>

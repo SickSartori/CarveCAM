@@ -7,7 +7,7 @@ import { ICONS } from './icons.js';
 import { contextMenu } from './ui-menu.js';
 import { t, num } from './i18n.js';
 
-const KIND_LABEL = { box: 'Parallelepipedo', cylinder: 'Cilindro', cone: 'Tronco di cono', sphere: 'Sfera' };
+const KIND_LABEL = { box: 'Parallelepipedo', cylinder: 'Cilindro', cone: 'Tronco di cono', sphere: 'Sfera', extrude: 'Profilo estruso' };
 const ENT_LABEL = { polyline: 'Polilinea', rect: 'Rettangolo', circle: 'Cerchio', polygon: 'Poligono' };
 
 export class Tree {

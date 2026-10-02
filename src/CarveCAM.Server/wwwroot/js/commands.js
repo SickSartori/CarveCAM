@@ -6,7 +6,9 @@ import {
 } from './state.js';
 import { ICONS } from './icons.js';
 import { api, download } from './api.js';
-import { planeFrame, angleOfU, fmt, toWorld, entitySnapPoints, mirrorEntityV } from './geom.js';
+import { planeFrame, frameQuaternion, angleOfU, fmt, toWorld, entityLoop, entitySnapPoints, mirrorEntityV } from './geom.js';
+import { extrudeMesh, booleanMeshes, EXTRUDE_SIDES } from './solids.js';
+import { evalNum } from './ui-props.js';
 import { modal, confirmBox, toast, status, busy, busyText, idle, h } from './dialogs.js';
 import { SERVER_FORMATS, CLIENT_FORMATS, extOf, parseInBrowser, buildDisplayGeometry } from './importers.js';
 import { sampleMesh, sampleProject, SAMPLE_VERSION, SAMPLE_BOUNDS } from './sample.js';
@@ -27,6 +29,8 @@ const POST_MODE_KEY = 'carvecam.post.mode';   // ultimo controllo scelto nell'es
 const ORIGIN_KEY = 'carvecam.origin.v1';       // ultime scelte di "Sposta origine" (per browser)
 const REPOS_KEY = 'carvecam.reposition.v1';    // ultime scelte di "Riposiziona" (per browser)
 const SAMPLE_KEY = 'carvecam.sample.mesh';     // mesh della targa di esempio già caricata sul server
+const EXTRUDE_KEY = 'carvecam.extrude.v1';     // ultime scelte di "Estrudi profilo" (per browser)
+const BOOL_KEY = 'carvecam.boolean.v1';        // ultime scelte delle operazioni booleane (per browser)
 const AXES = ['X', 'Y', 'Z'];
 
 const loadPref = (key, def) => { try { return { ...def, ...JSON.parse(localStorage.getItem(key) || '{}') }; } catch { return { ...def }; } };
@@ -906,6 +910,132 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     status(t('{name} inserito: posizionalo con il manipolatore (G sposta, R ruota) o dalle proprietà', { name: t(d.base) }));
   };
 
+  // ================================================================ SOLIDI: profilo estruso e booleane
+  /**
+   * Estrude in linea retta, perpendicolare al piano, i contorni chiusi dello sketch selezionato (o delle entità
+   * selezionate): il solido è un artefatto "extrude" con il profilo copiato nel suo sistema locale (quello del
+   * piano), quindi resta valido anche se poi lo sketch cambia.
+   */
+  cmd.extrudeProfile = async () => {
+    if (modelBlocked()) return;
+    const src = operationSource();
+    const r = src && getSketch(src.sketchId);
+    if (!r) { toast(t('Seleziona prima uno sketch (o alcune sue entità) da estrudere'), 'warn'); return; }
+    const ents = src.entityIds ? r.sketch.entities.filter(e => src.entityIds.includes(e.id)) : r.sketch.entities;
+    const loops = ents.map(e => entityLoop(e)).filter(l => l.length >= 3).map(l => l.map(([x, y]) => [round4(x), round4(y)]));
+    if (!loops.length) { toast(t('Lo sketch "{name}" non contiene contorni chiusi', { name: r.sketch.name }), 'warn'); return; }
+    const pref = loadPref(EXTRUDE_KEY, { height: 10, side: 'down', stock: false });
+    const name = h('input', { value: `${t('Estrusione')} ${((App.project.counters || {})[t('Estrusione')] || 0) + 1}` });
+    const height = h('input', { class: 'num', inputmode: 'decimal', value: fmt(pref.height, 4) });
+    let side = EXTRUDE_SIDES.some(([v]) => v === pref.side) ? pref.side : 'down';
+    const sideSel = segmented(EXTRUDE_SIDES.map(([v, l]) => [v, t(l)]), side, v => { side = v; });
+    const asStock = h('input', { type: 'checkbox' });
+    asStock.checked = !!pref.stock;
+    const ok = await modal({
+      title: t('Estrudi profilo'),
+      body: h('div', {},
+        h('p', { class: 'p-note', style: { marginTop: 0 } }, t('{n} contorni di "{sketch}" ({plane}), estrusi perpendicolarmente al piano.', { n: loops.length, sketch: r.sketch.name, plane: r.plane.name })),
+        h('div', { class: 'form-row' }, h('label', {}, t('Nome')), name),
+        h('div', { class: 'form-row' }, h('label', {}, t('Altezza')), h('div', { class: 'form-field' }, height, h('span', { class: 'unit' }, 'mm'))),
+        h('div', { class: 'form-row' }, h('label', {}, t('Direzione')), sideSel),
+        h('div', { class: 'form-row' }, h('label', {}, t('Grezzo')), h('label', { class: 'opt-radio' }, asStock, t('Considera il solido come grezzo'))),
+        h('p', { class: 'p-note' }, t('Un contorno dentro un altro diventa un foro. Il solido è un artefatto: altezza e direzione si cambiano poi nelle sue proprietà.'))),
+      buttons: [{ label: t('Annulla'), value: false }, { label: t('Estrudi'), value: true, primary: true }],
+    });
+    if (!ok) return;
+    const hv = evalNum(height.value);
+    if (!(hv > 0)) { toast(t('Altezza non valida'), 'err'); return; }
+    savePref(EXTRUDE_KEY, { height: hv, side, stock: asStock.checked });
+    const f = planeFrame(r.plane);
+    const e = new THREE.Euler().setFromQuaternion(frameQuaternion(f), 'XYZ');
+    const id = uid('art');
+    mutate(p => {
+      p.counters = p.counters || {};
+      p.counters[t('Estrusione')] = (p.counters[t('Estrusione')] || 0) + 1;
+      p.artifacts.push({
+        id, name: name.value.trim() || `${t('Estrusione')} ${p.counters[t('Estrusione')]}`, kind: 'extrude',
+        profile: loops, height: round4(hv), side, size: [20, 20, 20], radius: 10, radius2: 5,
+        position: f.o.toArray().map(round4), rotation: [e.x, e.y, e.z].map(v => Math.round(THREE.MathUtils.radToDeg(v) * 1e6) / 1e6),
+        color: color('artifact'), visible: true, locked: false, stock: asStock.checked,
+      });
+    });
+    select({ type: 'artifact', id });
+    log.info('Profilo estruso', { sketch: r.sketch.name, loops: loops.length, height: hv, side });
+    status(t('Profilo estruso: {n} contorni, altezza {h} mm', { n: loops.length, h: fmt(hv, 3) }));
+  };
+
+  /**
+   * Operazione booleana tra i solidi selezionati (oggetti e artefatti): unione, sottrazione (il primo selezionato
+   * meno gli altri) o intersezione. Il risultato è un nuovo oggetto (mesh caricata sul server); i solidi di
+   * partenza si tolgono (o restano nascosti) e le lavorazioni che li avevano come ostacolo usano il risultato.
+   */
+  cmd.booleanSolids = async kind => {
+    if (modelBlocked()) return;
+    const items = App.selected.map(s => resolve(s)).filter(x => x && (x.type === 'object' || x.type === 'artifact'));
+    if (items.length < 2) { toast(t('Seleziona almeno due solidi (oggetti o artefatti) con Ctrl+clic'), 'warn'); return; }
+    const title = { union: t('Unione'), subtract: t('Sottrazione'), intersect: t('Intersezione') }[kind];
+    const pref = loadPref(BOOL_KEY, { keep: false });
+    const keep = h('input', { type: 'checkbox' });
+    keep.checked = !!pref.keep;
+    const what = kind === 'subtract'
+      ? t('"{first}" meno {others}', { first: items[0].item.name, others: items.slice(1).map(x => `"${x.item.name}"`).join(', ') })
+      : items.map(x => `"${x.item.name}"`).join(', ');
+    const ok = await modal({
+      title,
+      body: h('div', {},
+        h('p', { style: { marginTop: 0 } }, what),
+        h('label', { class: 'opt-radio' }, keep, t('Conserva i solidi di partenza (nascosti)')),
+        h('p', { class: 'p-note' }, t('Il risultato è un nuovo oggetto. I solidi devono essere chiusi; i modelli molto grandi richiedono qualche secondo.'))),
+      buttons: [{ label: t('Annulla'), value: false }, { label: title, value: true, primary: true }],
+    });
+    if (!ok) return;
+    savePref(BOOL_KEY, { keep: keep.checked });
+    busy(t('Operazione booleana: {op}…', { op: title.toLowerCase() }));
+    let info, geo;
+    try {
+      const geos = items.map(x => {
+        const obj = sync.objectFor(x.type, x.item.id);
+        if (!obj?.geometry) throw new Error(t('"{name}" non è ancora pronto nella vista', { name: x.item.name }));
+        obj.updateMatrixWorld(true);
+        return obj.geometry.clone().applyMatrix4(obj.matrixWorld);
+      });
+      const positions = await booleanMeshes(geos, kind);
+      if (positions.length < 9) { toast(t('Il risultato è vuoto: i solidi non hanno volume in comune'), 'warn'); return; }
+      busyText(t('Invio al server del risultato…'));
+      info = await api.uploadMesh(title, positions);
+      geo = await buildDisplayGeometry(await api.getMesh(info.id));
+    } catch (e) {
+      log.error('Operazione booleana non riuscita', e);
+      toast(t('Operazione booleana non riuscita: {msg}', { msg: e.message }), 'err', 6000);
+      return;
+    } finally { idle(); }
+    App.runtime.meshGeo.set(info.id, geo);
+    const id = uid('obj');
+    const ids = new Set(items.map(x => x.item.id));
+    mutate(p => {
+      p.objects.push({
+        id, name: nextName(title), meshId: info.id, position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1],
+        color: color('object'), visible: true, locked: false, triangles: info.triangles,
+        size: info.max.map((v, i) => round4(v - info.min[i])), source: t('operazione booleana'),
+        stock: items.every(x => x.item.stock),
+      });
+      // le lavorazioni che avevano come ostacolo uno dei solidi di partenza considerano il risultato
+      for (const op of p.operations) {
+        if (!(op.obstacles || []).some(o => ids.has(o))) continue;
+        if (!keep.checked) op.obstacles = op.obstacles.filter(o => !ids.has(o));
+        op.obstacles.push(id);
+      }
+      if (keep.checked) for (const x of items) resolve({ type: x.type, id: x.item.id }).item.visible = false;
+      else {
+        p.objects = p.objects.filter(o => !ids.has(o.id));
+        p.artifacts = p.artifacts.filter(a => !ids.has(a.id));
+      }
+    });
+    select({ type: 'object', id });
+    log.info('Operazione booleana', { kind, items: items.map(x => x.item.name), triangles: info.triangles });
+    status(t('{op}: {tri} triangoli', { op: title, tri: num(info.triangles) }));
+  };
+
   // ================================================================ PIANI
   /** Modalità "aggiungi piano": finché non è attiva i comandi di creazione dei piani restano disabilitati. */
   cmd.startPlaneMode = () => {
@@ -1438,18 +1568,19 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   cmd.setupLibrary = () => openSetupLibrary();
   cmd.options = () => openOptions({ vp });
 
-  /** Artefatto e oggetto per il server. */
-  const artifactReq = x => ({
+  /** Artefatto per il server; send: con i triangoli dei profili estrusi (per il confronto basta la loro definizione). */
+  const artifactReq = (x, send) => ({
     id: x.id, name: x.name, kind: x.kind, size: x.size, radius: x.radius, radius2: x.radius2, height: x.height,
     position: x.position, rotation: x.rotation, include: true,
+    ...(x.kind === 'extrude' ? (send ? { mesh: extrudeMesh(x) } : { profile: x.profile, side: x.side }) : {}),
   });
   const objectReq = x => ({ meshId: x.meshId, name: x.name, position: x.position, rotation: x.rotation, scale: x.scale, include: true });
 
   /**
    * Richiesta di calcolo. Con il grezzo: la prima lavorazione riceve i solidi del grezzo, le successive il percorso
-   * della precedente (il server parte dal grezzo che ha lasciato).
+   * della precedente (il server parte dal grezzo che ha lasciato). send: richiesta da inviare (non per il confronto).
    */
-  function buildRequest(op) {
+  function buildRequest(op, send = false) {
     const sk = getSketch(op.sketchId);
     if (!sk) throw new Error(t('"{name}": selezionare uno sketch di contorno', { name: op.name }));
     let ents = sk.sketch.entities;
@@ -1480,8 +1611,8 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
         cx: e.cx, cy: e.cy, r: e.r, sides: e.sides, rot: e.rot,
       })),
       objects: App.project.objects.filter(x => obst.has(x.id) && x.meshId && !x.stock).map(objectReq),
-      artifacts: App.project.artifacts.filter(x => obst.has(x.id) && !x.stock).map(artifactReq),
-      ...stockOf(op),
+      artifacts: App.project.artifacts.filter(x => obst.has(x.id) && !x.stock).map(x => artifactReq(x, send)),
+      ...stockOf(op, send),
     };
   }
 
@@ -1512,13 +1643,13 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   };
 
   async function computeOne(op, signal) {
-    const req = buildRequest(op);
+    const req = buildRequest(op, true);
     const t0 = performance.now();
     log.info(`Calcolo "${op.name}"`, { kind: op.kind, strategy: op.strategy, tool: req.operation.tool, stepover: req.operation.stepover, stepdown: req.operation.stepdown, boundary: req.boundary.length, objects: req.objects.length, artifacts: req.artifacts.length });
     const res = await api.compute(req, signal);
     const tp = await api.getToolpath(res.toolpathId);
     App.runtime.toolpaths.set(op.id, {
-      toolpathId: res.toolpathId, hash: requestHash(req), stats: res.stats, warnings: res.warnings || [],
+      toolpathId: res.toolpathId, hash: requestHash(buildRequest(op)), stats: res.stats, warnings: res.warnings || [],
       positions: tp.positions, types: tp.types, hasStock: !!res.hasStock,
     });
     log.info(`Calcolo "${op.name}" concluso in ${Math.round(performance.now() - t0)} ms`, { points: res.stats?.pointCount, warnings: res.warnings?.length || 0, maxGouge: res.stats?.maxGouge });

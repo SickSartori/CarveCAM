@@ -31,6 +31,7 @@ export function createActions({ cmd, vp, sketch }) {
     enabled: () => sketch.active,
   });
   const opSource = () => !!operationSource();
+  const solidsSelected = () => App.selected.filter(s => s.type === 'object' || s.type === 'artifact').length;
 
   const list = [
     // ---- file
@@ -73,6 +74,17 @@ export function createActions({ cmd, vp, sketch }) {
     { id: 'art.cone', label: 'Tronco di cono', icon: 'cone', tone: 'model', run: () => cmd.addArtifact('cone'), enabled: modelOk, whyOff: modelWhy, hint: 'Inserisci un tronco di cono' },
     { id: 'art.sphere', label: 'Sfera', icon: 'sphere', tone: 'model', run: () => cmd.addArtifact('sphere'), enabled: modelOk, whyOff: modelWhy, hint: 'Inserisci una sfera' },
     { id: 'art.box', label: 'Parallelepipedo', icon: 'box', tone: 'model', run: () => cmd.addArtifact('box'), enabled: modelOk, whyOff: modelWhy, hint: 'Inserisci un parallelepipedo' },
+    // ---- solidi: profilo estruso e operazioni booleane
+    { id: 'model.extrude', label: 'Estrudi profilo…', short: 'Estrudi', icon: 'extrude', tone: 'model', run: cmd.extrudeProfile,
+      enabled: () => modelOk() && opSource(), whyOff: () => modelWhy() || t('Seleziona prima uno sketch (o alcune sue entità) da estrudere'),
+      hint: 'Estrude in linea retta, perpendicolare al piano, i contorni dello sketch o delle entità selezionate: il solido diventa un artefatto' },
+    ...[['union', 'Unione', 'boolUnion', 'Un solo solido con il volume di tutti i solidi selezionati'],
+      ['subtract', 'Sottrazione', 'boolSubtract', 'Il primo solido selezionato meno gli altri'],
+      ['intersect', 'Intersezione', 'boolIntersect', 'Solo il volume comune a tutti i solidi selezionati']].map(([k, label, icon, hint]) => ({
+      id: `bool.${k}`, label: `${label}…`, icon, tone: 'model', run: () => cmd.booleanSolids(k), hint,
+      enabled: () => modelOk() && solidsSelected() >= 2,
+      whyOff: () => modelWhy() || t('Seleziona almeno due solidi (oggetti o artefatti) con Ctrl+clic'),
+    })),
     // ---- piani
     { id: 'plane.add', label: 'Aggiungi piano', short: 'Aggiungi piano', icon: 'planeAdd', tone: 'plane', run: cmd.togglePlaneMode,
       checked: () => App.planeMode, enabled: () => !sketch.active,
@@ -188,7 +200,8 @@ export function createActions({ cmd, vp, sketch }) {
 export const MENUS = [
   { label: 'File', items: ['file.home', '-', 'file.new', 'file.open', 'file.save', 'file.saveAs', 'file.rename', '-', { recent: true }, '-', 'file.import', '-', 'file.gcode', 'file.cl', '-', 'file.recovery', 'file.demo'] },
   { label: 'Modifica', items: ['edit.undo', 'edit.redo', '-', 'edit.duplicate', 'edit.delete', 'edit.lock', '-', 'edit.origin', '-', { head: 'Manipolatore' }, 'gizmo.move', 'gizmo.rotate', 'gizmo.snap', 'gizmo.local'] },
-  { label: 'Inserisci', items: [{ head: 'Artefatti' }, 'art.cylinder', 'art.cone', 'art.sphere', 'art.box', '-', { head: 'Punti di origine' }, 'origin.pick', 'origin.coords', '-', 'file.import'] },
+  { label: 'Inserisci', items: [{ head: 'Artefatti' }, 'art.cylinder', 'art.cone', 'art.sphere', 'art.box', 'model.extrude', '-', { head: 'Punti di origine' }, 'origin.pick', 'origin.coords', '-', 'file.import'] },
+  { label: 'Booleane', items: [{ head: 'Operazioni tra i solidi selezionati' }, 'bool.union', 'bool.subtract', 'bool.intersect'] },
   { label: 'Origini', items: [{ head: 'Punti di origine (zero pezzo del G-code)' }, 'origin.pick', 'origin.coords', '-', 'edit.origin'] },
   { label: 'Piani', items: ['plane.add', '-', { head: 'Piani standard' }, ...['xy+', 'xy-', 'xz-', 'xz+', 'yz+', 'yz-'].map(p => `plane.${p}`), '-', 'plane.face', 'plane.3pt', 'plane.view', '-', 'plane.flip'] },
   { label: 'Sketch', items: ['sketch.new', 'sketch.edit', 'sketch.finish', '-', { head: 'Strumenti di disegno' }, 'tool.select', 'tool.polyline', 'tool.rect', 'tool.circle', 'tool.polygon', '-', 'tool.profile'] },
@@ -209,7 +222,7 @@ for (const m of MENUS) {
  */
 export const TOOLBAR = [
   { caption: 'Progetto', items: ['file.new', 'file.open', 'file.save', '|', 'edit.undo', 'edit.redo'] },
-  { caption: 'Modello', stage: 'model', items: [{ id: 'file.import', label: true }, 'art.cylinder', 'art.cone', 'art.sphere', 'art.box', '|', 'edit.origin'] },
+  { caption: 'Modello', stage: 'model', items: [{ id: 'file.import', label: true }, 'art.cylinder', 'art.cone', 'art.sphere', 'art.box', 'model.extrude', '|', 'edit.origin'] },
   { caption: 'Piani', stage: 'planes', items: [{ id: 'plane.add', label: true }, 'plane.preset', 'plane.face', 'plane.3pt', 'plane.view'] },
   { caption: 'Sketch', stage: 'sketch', items: ['sketch.new', '|', 'tool.select', 'tool.polyline', 'tool.rect', 'tool.circle', 'tool.polygon', 'tool.profile'] },
   { caption: 'Lavorazioni', stage: 'ops', items: [{ id: 'op.pocket', label: true }, { id: 'op.finish', label: true }] },

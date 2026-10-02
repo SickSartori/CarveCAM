@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { App, activePlaneId } from './state.js';
 import { planeFrame, frameQuaternion, entityLoop } from './geom.js';
 import { settings, color, onSettings } from './settings.js';
+import { extrudeGeometry, extrudeKeyPoints } from './solids.js';
 
 const D2R = Math.PI / 180;
 /** Grezzo: semitrasparente, il pezzo dentro resta visibile; non scrive la profondità (non nasconde nulla). */
@@ -121,7 +122,7 @@ export class SceneSync {
     const k = this.key('artifact', a.id);
     seen.add(k);
     const col = a.locked ? color('locked') : a.stock ? color('stock') : (a.color || color('artifact'));
-    const sig = JSON.stringify([a.kind, a.size, a.radius, a.radius2, a.height, col, !!a.stock, App.view.wireframe, this.ver]);
+    const sig = JSON.stringify([a.kind, a.size, a.radius, a.radius2, a.height, a.side, a.profile, col, !!a.stock, App.view.wireframe, this.ver]);
     let n = this.nodes.get(k);
     if (!n || n.sig !== sig) {
       const geo = artifactGeometry(a);
@@ -362,6 +363,9 @@ export function artifactGeometry(a) {
     case 'sphere':
       g = new THREE.SphereGeometry(a.radius, 64, 32);
       break;
+    case 'extrude':
+      g = extrudeGeometry(a);
+      break;
     default:
       g = new THREE.BoxGeometry(10, 10, 10);
   }
@@ -384,6 +388,8 @@ export function artifactKeyPoints(a) {
   } else if (a.kind === 'sphere') {
     const r = a.radius;
     pts.push([r, 0, 0], [-r, 0, 0], [0, r, 0], [0, -r, 0], [0, 0, r], [0, 0, -r]);
+  } else if (a.kind === 'extrude') {
+    pts.push(...extrudeKeyPoints(a));
   }
   return pts;
 }

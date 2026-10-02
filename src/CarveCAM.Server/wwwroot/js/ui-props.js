@@ -5,6 +5,7 @@ import { h, modal } from './dialogs.js';
 import { fmt, planeFrame } from './geom.js';
 import { paramHelp, REL_PARAMS, BASE_LABEL, effParam, baseValue } from './oplib.js';
 import { getTools } from './library.js';
+import { EXTRUDE_SIDES } from './solids.js';
 import { t, num } from './i18n.js';
 
 const KIND_LABEL = { box: 'Parallelepipedo', cylinder: 'Cilindro', cone: 'Tronco di cono', sphere: 'Sfera' };
@@ -217,13 +218,20 @@ export class Props {
         { key: 'height', label: 'Altezza', type: 'num', unit: 'mm', min: 0.001, spin: 1 },
       ],
       sphere: [{ key: 'radius', label: 'Raggio', type: 'num', unit: 'mm', min: 0.001, spin: 1 }],
+      extrude: [
+        { key: 'height', label: 'Altezza', type: 'num', unit: 'mm', min: 0.001, spin: 1 },
+        { key: 'side', label: 'Direzione', type: 'select', options: EXTRUDE_SIDES },
+        { label: 'Profilo', type: 'info', value: it => t('{n} contorni', { n: (it.profile || []).length }) },
+      ],
     }[a.kind] || [];
+    const extrude = a.kind === 'extrude';
     return [
-      { sec: KIND_LABEL[a.kind] || 'Artefatto', tone: 'model' },
+      { sec: extrude ? 'Profilo estruso' : KIND_LABEL[a.kind] || 'Artefatto', tone: 'model' },
       { key: 'name', label: 'Nome', type: 'text' },
-      { key: 'kind', label: 'Tipo', type: 'select', options: Object.entries(KIND_LABEL) },
+      extrude ? null : { key: 'kind', label: 'Tipo', type: 'select', options: Object.entries(KIND_LABEL) },
       ...dims,
-      { note: a.kind === 'box' || a.kind === 'sphere' ? 'Centrato nella propria posizione.' : 'Asse lungo Z locale, centrato nella propria posizione (raggio inferiore verso -Z).' },
+      { note: extrude ? 'Profilo nel piano XY locale (quello dello sketch di partenza), estruso lungo Z locale (la normale del piano).'
+        : a.kind === 'box' || a.kind === 'sphere' ? 'Centrato nella propria posizione.' : 'Asse lungo Z locale, centrato nella propria posizione (raggio inferiore verso -Z).' },
       ...this._lockFields('artifact', a),
       ...this._stockFields(a),
       { sec: 'Posizionamento', tone: 'model' },
