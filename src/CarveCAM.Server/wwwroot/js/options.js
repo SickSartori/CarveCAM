@@ -90,7 +90,8 @@ export async function openOptions({ vp } = {}) {
         row('Frecce della normale', ...range(work.sizes, 'normalArrow', 0.3, 3, 0.05, v => `${Math.round(v * 100)} %`)),
         row('Mirino dello sketch', ...range(work.sizes, 'cursor', 4, 40, 1, v => `${v} px`)),
         row('Pallini del riferimento', ...range(work.sizes, 'pivotDot', 6, 24, 1, v => `${v} px`)),
-        h('p', { class: 'p-note' }, t('Le dimensioni del manipolatore e dei pallini sono costanti sullo schermo; le frecce della normale sono proporzionali al piano.')));
+        row('Nomi di origini e piani', ...range(work.sizes, 'label', 8, 28, 1, v => `${v} px`)),
+        h('p', { class: 'p-note' }, t('Le dimensioni del manipolatore, dei pallini e dei nomi sono costanti sullo schermo; le frecce della normale sono proporzionali al piano.')));
     },
     lang() {
       const sel = h('select', {}, LANGS.map(([v, l]) => h('option', { value: v }, l)));

@@ -340,7 +340,8 @@ Verificare sempre il programma con il simulatore della propria macchina prima de
 ## Opzioni, lingua, sicurezza e diagnostica
 
 - **Strumenti › Opzioni:** colori (sfondo, griglia, oggetti, bloccati, selezione, piani, sketch, percorsi…),
-  dimensioni di manipolatore, frecce della normale, mirino e pallini, **lingua** (italiano, inglese),
+  dimensioni di manipolatore, frecce della normale, mirino, pallini e **nomi di origini e piani** (stessa
+  altezza del testo in pixel, costante sullo schermo anche nella vista ortogonale), **lingua** (italiano, inglese),
   parametri della **griglia**, **avvio** (schermata iniziale, vista iniziale con orientamento e zoom attuali) e
   **tema chiaro o scuro**. Le opzioni sono salvate nel browser e si **esportano/importano** in un file `.json`.
   I testi dell'interfaccia sono in italiano e fanno da chiave per le traduzioni in `wwwroot/js/i18n-en.js`.

@@ -23,6 +23,7 @@ export const DEFAULTS = {
     normalArrow: 1,     // scala delle frecce della normale dei piani
     cursor: 14,         // mezza larghezza del mirino dello sketch (px)
     pivotDot: 11,       // diametro dei pallini per il riferimento del manipolatore (px)
+    label: 12,          // altezza del testo dei nomi di origini e piani (px)
   },
   grid: {
     visible: true,

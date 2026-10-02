@@ -186,7 +186,7 @@ export class SceneSync {
       }
       // nome del piano accanto all'angolo (-U, +V), a dimensione costante sullo schermo
       if (pl.name) {
-        const label = makeTextSprite(pl.name, selPlane ? color('entitySel') : '#' + new THREE.Color(col).lerp(new THREE.Color(0xffffff), 0.45).getHexString(), true);
+        const label = makeTextSprite(pl.name, selPlane ? color('entitySel') : '#' + new THREE.Color(col).lerp(new THREE.Color(0xffffff), 0.45).getHexString());
         label.position.set(-h, h, 0);
         label.center.set(0, -0.15);
         label.material.opacity = active || selPlane ? 0.95 : 0.7;
@@ -246,7 +246,6 @@ export class SceneSync {
       g.add(hit);
       const label = makeTextSprite(og.name, sel ? color('entitySel') : '#e8eef5');
       label.position.set(len * 0.25, len * 0.25, len * 0.9);
-      label.scale.multiplyScalar(len * 0.07);
       label.raycast = () => {};
       g.add(label);
       n = this._replace(k, this.vp.groups.planes, g, sig, { hit });
@@ -315,9 +314,13 @@ export class SceneSync {
   }
 }
 
-/** Etichetta di testo sempre rivolta alla camera (larghezza proporzionale al testo, altezza 1). */
-/** Etichetta di testo; screen: dimensione costante sullo schermo (altezza in frazione della vista). */
-function makeTextSprite(text, col, screen = false) {
+const _labelSize = new THREE.Vector2();
+
+/**
+ * Nome (origini, piani) sempre rivolto alla camera e di dimensione costante sullo schermo, anche nella vista
+ * ortogonale: il testo è alto quanto scelto nelle opzioni (Frecce e cursori › Nomi di origini e piani).
+ */
+function makeTextSprite(text, col) {
   const px = 48;
   const cv = document.createElement('canvas');
   const ctx = cv.getContext('2d');
@@ -334,11 +337,20 @@ function makeTextSprite(text, col, screen = false) {
   ctx.fillText(text, 8, cv.height / 2);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, sizeAttenuation: !screen }));
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, sizeAttenuation: false }));
   sp.center.set(0, 0.5);
-  const k = screen ? 0.026 : 1;
-  sp.scale.set(cv.width / cv.height * k, k, 1);
+  sp.frustumCulled = false;
   sp.renderOrder = 8;
+  // scala per avere il testo alto settings.sizes.label px: altezza a schermo = scala · P[1][1] · metà vista
+  const aspect = cv.width / cv.height;
+  sp.onBeforeRender = (renderer, scene, camera) => {
+    const hPx = (Number(settings.sizes.label) || 12) * cv.height / px;
+    const k = (2 * hPx) / (renderer.getSize(_labelSize).y * camera.projectionMatrix.elements[5]);
+    if (Math.abs(sp.scale.y - k) > k * 1e-6) {
+      sp.scale.set(aspect * k, k, 1);
+      sp.updateMatrixWorld();
+    }
+  };
   return sp;
 }
 

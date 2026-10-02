@@ -361,7 +361,6 @@ export const EN = {
   "lavorazioni": "operations",
   "Lavorazioni": "Operations",
   "Lavoro": "Cutting",
-  "Le dimensioni del manipolatore e dei pallini sono costanti sullo schermo; le frecce della normale sono proporzionali al piano.": "Gizmo and dot sizes are constant on screen; the normal arrows are proportional to the plane.",
   "Le entità chiuse definiscono l'area di contenimento della lavorazione. Un contorno contenuto in un altro diventa un'isola esclusa. Per lavorare solo alcune entità selezionale con Ctrl+clic e crea la lavorazione.":
     "Closed entities define the boundary of the operation. An outline inside another one becomes an excluded island. To machine only some entities, select them with Ctrl+click and create the operation.",
   "limiti": "limits",
@@ -1330,4 +1329,7 @@ export const EN = {
   "Svuotatura concentrica · fresa Ø{d} mm": "Concentric pocketing · Ø{d} mm cutter",
   "passata {k}/{n}": "pass {k}/{n}",
   "contorno": "contour",
+  // nomi di origini e piani
+  "Nomi di origini e piani": "Names of origins and planes",
+  "Le dimensioni del manipolatore, dei pallini e dei nomi sono costanti sullo schermo; le frecce della normale sono proporzionali al piano.": "The sizes of the gizmo, of the dots and of the names are constant on screen; the normal arrows are proportional to the plane.",
 };
