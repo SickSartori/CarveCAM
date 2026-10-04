@@ -98,7 +98,8 @@ samples/blocco-L.stp                        STEP di prova (blocco a L con gradin
   Calcolo e uscita; una spia sotto ogni fase indica se è completata (verde) o in corso (gialla). I comandi non
   utilizzabili nel contesto corrente sono spenti (il suggerimento dice perché): durante la creazione di un piano
   e con un piano selezionato sono spenti i comandi *Modello*; durante il disegno di uno sketch anche quelli
-  delle *Lavorazioni*.
+  delle *Lavorazioni*. Il gruppo *Modifica* raccoglie i comandi di modifica; quando la finestra è stretta si
+  riduce a un solo pulsante con menu, prima che la barra nasconda il gruppo *Vista*.
 - **Caricamento:** all'avvio e durante calcoli, aperture e importazioni compare il logo animato (la fresa scava
   la passata interna e poi la "C"), con la fase in corso e, dopo 2 s, il tempo trascorso; con il movimento
   ridotto attivo nel sistema il logo resta fermo e pulsa.
@@ -140,6 +141,34 @@ samples/blocco-L.stp                        STEP di prova (blocco a L con gradin
   sui piazzamenti GRBL, con le istruzioni di azzeramento nei commenti).
 - Nelle scelte di punti nella vista (piano da 3 punti, origini) il cursore **si aggancia ai vertici visibili**
   di solidi, sketch e piani vicini, indicati da un pallino arancione.
+
+### Comandi di modifica
+
+Sposta, Ruota, Copia, Scala smart, Serie rettangolare e Serie polare (gruppo *Modifica* della barra, menu
+*Modifica*, tasto destro, **Maiusc+M / R / C / S / A / P**) agiscono sulla selezione: le **entità di uno sketch**
+(quelle selezionate, oppure tutte con lo sketch selezionato o in modifica), che si trasformano nel piano, oppure
+gli **elementi 3D** (oggetti, artefatti, piani con i loro sketch, punti di origine). Un pannello in basso nella
+vista indica il passo da fare e raccoglie i valori scritti; l'anteprima segue il puntatore e i punti si agganciano
+ai vertici (nello sketch anche alla griglia). **Invio** applica, **Backspace** torna al passo precedente, **Esc**
+annulla; ogni modifica è un passo di annullamento.
+
+- **Sposta:** punto base e punto di arrivo, oppure ΔX ΔY ΔZ (ΔU ΔV nello sketch) scritti, oppure la distanza
+  nella direzione del cursore; **Maiusc** vincola lo spostamento all'asse principale.
+- **Ruota:** centro, direzione di partenza e nuova direzione, oppure l'angolo scritto (senza centro: il centro
+  della selezione). Gli elementi 3D ruotano attorno a Z, X o Y; **Maiusc** procede a passi di 15°. Un rettangolo
+  ruotato di un angolo che non è multiplo di 90° diventa una polilinea.
+- **Copia:** come Sposta, ma lascia l'originale; i clic successivi aggiungono altre copie dallo stesso punto base
+  e *Copie in fila* ripete lo spostamento più volte.
+- **Scala smart:** clic su un **segmento** dello sketch, un **bordo** di un solido o due punti: è il
+  riferimento. Si scrive la **misura finale** che deve avere e il fattore di scala si calcola da solo (si può
+  scrivere anche il fattore). Resta fermo l'estremo del riferimento più vicino al clic (il primo punto, il centro
+  per il diametro di un cerchio) oppure il centro della selezione. Scala uniforme: per gli oggetti cambia la
+  scala, per gli artefatti le misure, per i piani il lato e i loro sketch.
+- **Serie rettangolare:** colonne, righe (e livelli per il 3D) con il passo, proposto dall'ingombro.
+- **Serie polare:** centro, numero di elementi, angolo totale (360° li distribuisce sul giro intero), copie
+  ruotate oppure solo spostate.
+
+Gli elementi bloccati non si spostano, ruotano o scalano; si possono copiare. Copie e serie restano selezionate.
 
 ### Elementi bloccati
 

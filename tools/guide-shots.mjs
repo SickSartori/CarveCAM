@@ -157,7 +157,7 @@ async function shoot(lang, sampleMesh) {
 
     // 2. barra strumenti con i gruppi
     m = await page.run(`const g = k => __rect('.tb-group[data-group="' + k + '"]');
-      return { clip: __rect('#toolbar'), marks: { 1: g('project'), 2: g('model'), 3: g('planes'), 4: g('sketch'), 5: g('ops'), 6: g('output'), 7: g('view') } };`);
+      return { clip: __rect('#toolbar'), marks: { 1: g('project'), 2: g('model'), 3: g('planes'), 4: g('sketch'), 5: g('modify'), 6: g('ops'), 7: g('output'), 8: g('view') } };`);
     await save('toolbar', m);
 
     // 3. proprietà della sgrossatura (finestra più alta per vedere più gruppi)
@@ -189,9 +189,26 @@ async function shoot(lang, sampleMesh) {
       const box = [Math.min(...xs) - 10, Math.min(...ys) - 10, Math.max(...xs) - Math.min(...xs) + 20, Math.max(...ys) - Math.min(...ys) + 20];
       return { 1: __rect('#sketch-bar'), 2: box, 3: __rect('#sk-done') };`);
     await save('sketch', { marks: m });
-    await page.run(`carvecam.cmd.finishSketch(); carvecam.App.view.toolpaths = true; __st.emit('view'); await __wait(400);`);
 
-    // 6. esportazione del G-code
+    // 6. Scala smart sul rettangolo della scritta: clic sul lato inferiore e nuova misura, con l'anteprima
+    m = await page.run(`const p = carvecam.App.project.planes[0], sk = p.sketches[0], e = sk.entities[1], z = p.origin[2];
+      carvecam.cmd.modify('scale'); await __wait(300);
+      const vr = carvecam.vp.el.getBoundingClientRect(), cv = carvecam.vp.renderer.domElement;
+      const at = (x, y) => { const s = carvecam.vp.toScreen(new __THREE.Vector3(x, y, z)); return { clientX: vr.x + s.x, clientY: vr.y + s.y }; };
+      const q = at(e.x1 + (e.x2 - e.x1) * 0.3, e.y1);
+      const pe = (type, b) => cv.dispatchEvent(new PointerEvent(type, { ...q, button: 0, buttons: b, bubbles: true, pointerId: 1 }));
+      pe('pointermove', 0); await __wait(250); pe('pointerdown', 1); pe('pointerup', 0); await __wait(300);
+      const len = Math.abs(e.x2 - e.x1), inp = carvecam.modify.inputs.len;
+      inp.value = String(Math.round(len * 1.25)); inp.dispatchEvent(new Event('input')); await __wait(500);
+      const k = Number(inp.value) / len, sc = (x, y) => [e.x1 + (x - e.x1) * k, e.y1 + (y - e.y1) * k];
+      const pts = [[e.x1, e.y1], [e.x2, e.y2], sc(e.x1, e.y1), sc(e.x2, e.y2)].map(([x, y]) => at(x, y));
+      const xs = pts.map(r => r.clientX), ys = pts.map(r => r.clientY);
+      const box = [Math.min(...xs) - 12, Math.min(...ys) - 12, Math.max(...xs) - Math.min(...xs) + 24, Math.max(...ys) - Math.min(...ys) + 24];
+      return { 1: __rect('.xf-step'), 2: __rect('.xf-row'), 3: box };`);
+    await save('modify', { marks: m });
+    await page.run(`carvecam.modify.cancel(); carvecam.cmd.finishSketch(); carvecam.App.view.toolpaths = true; __st.emit('view'); await __wait(400);`);
+
+    // 7. esportazione del G-code
     m = await page.run(`__st.select(null); carvecam.cmd.exportGcode(); await __wait(600);
       const md = document.querySelector('#modal-root .modal'), rows = [...md.querySelectorAll('.form-row')].filter(r => !r.hidden);
       const labels = [...md.querySelectorAll('.modal-b > div > label')];
@@ -199,7 +216,7 @@ async function shoot(lang, sampleMesh) {
     await save('export', m);
     await page.run(`document.querySelector('#modal-root .modal-f .btn').click(); await __wait(300);`);
 
-    // 7. magazzino utensili con l'anteprima 3D di una fresa conica
+    // 8. magazzino utensili con l'anteprima 3D di una fresa conica
     m = await page.run(`carvecam.cmd.toolLibrary(); await __wait(900);
       const row = [...document.querySelectorAll('.lib-list tbody tr')].find(r => /conica sferica/i.test(r.textContent));
       row?.click(); await __wait(1500);
@@ -207,7 +224,7 @@ async function shoot(lang, sampleMesh) {
     await save('toollib', m);
     await page.run(`document.querySelector('#modal-root .modal-f .btn').click(); await __wait(300);`);
 
-    // 8. grezzo: blocco poco più grande della targa, considerato grezzo; simulazione con l'erosione
+    // 9. grezzo: blocco poco più grande della targa, considerato grezzo; simulazione con l'erosione
     await page.run(`const st = __st;
       st.mutate(p => { p.artifacts.push({ id: 'art_guide_stock', name: '${lang === 'en' ? 'Stock block' : 'Blocco grezzo'}', kind: 'box', size: [124, 68, 13], radius: 10, radius2: 5, height: 20,
         position: [0, 0, 6.5], rotation: [0, 0, 0], color: '#ffb547', visible: true, locked: false }); });
