@@ -1222,6 +1222,9 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     snapMarker.material.color.set(r.snapped ? 0xff8a3d : 0xffffff);
   }
 
+  /** Punto sotto il puntatore con aggancio ai vertici (comandi di modifica): { point, snapped, hit } o null. */
+  cmd.snapPoint = ev => pickPoint(ev);
+
   /** Movimento del mouse in una modalità di scelta punti: evidenzia il vertice agganciabile. */
   cmd.pickHover = ev => {
     if (!App.pickMode || !SNAP_KINDS.includes(App.pickMode.kind)) { showSnap(null); return null; }
@@ -1243,6 +1246,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
 
   cmd.cancelPick = () => {
     if (App.pickMode?.kind === 'pivot') { gizmo.cancelPivotPick(); return; }
+    if (App.pickMode?.kind === 'modify') { cmd.modifyCancel?.(); return; }
     App.pickMode = null;
     showSnap(null);
     vp.el.classList.remove('picking');
@@ -2070,6 +2074,8 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       const locked = multi ? movableSelected().every(x => x.item.locked) : !!r?.item.locked;
       return { label: locked ? t('Sblocca') : t('Blocca'), kbd: 'Ctrl+L', action: () => cmd.toggleLock(multi ? null : sel) };
     };
+    // comandi di modifica (Sposta, Ruota, Copia, Scala smart, serie) per entità, sketch ed elementi 3D
+    const modifyItems = () => [...(cmd.modifyItems?.() || []), { sep: true }];
     if (multi) {
       const items = [];
       const solids = App.selected.filter(s => s.type === 'object' || s.type === 'artifact');
@@ -2079,6 +2085,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       }
       if (movableSelected().length) items.push(lockItem(), { sep: true });
       if (operationSource() && !sketch.active) items.push({ label: t('Nuova svuotatura'), action: () => cmd.newOperation('pocket') }, { label: t('Nuova finitura'), action: () => cmd.newOperation('finish') }, { sep: true });
+      if (!App.selected.some(s => s.type === 'operation')) items.push(...modifyItems());
       return [...items, ...common];
     }
     const locked = !!r?.item.locked;
@@ -2091,21 +2098,21 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
           { label: t('Riposiziona…'), enabled: () => !locked && !sketch.active && !App.planeMode, action: () => cmd.reposition(sel) },
           { label: t('Appoggia su Z=0'), enabled: () => !locked, action: () => cmd.dropToFloor(sel) },
           { label: t('Centra in XY'), enabled: () => !locked, action: () => cmd.centerXY(sel) },
-          { label: t('Mostra / nascondi'), action: () => cmd.toggleVisible(sel.type, sel.id) }, { sep: true }, ...common];
+          { label: t('Mostra / nascondi'), action: () => cmd.toggleVisible(sel.type, sel.id) }, { sep: true }, ...modifyItems(), ...common];
       case 'origin':
         return [lockItem(), { label: t('Rinomina'), kbd: 'F2', action: () => document.querySelector('#props [data-key="name"]')?.focus() },
           { label: t('Mostra / nascondi'), action: () => cmd.toggleVisible(sel.type, sel.id) },
-          { label: t('Esporta G-code con questo zero…'), action: () => cmd.exportGcode(null, sel.id) }, { sep: true }, ...common];
+          { label: t('Esporta G-code con questo zero…'), action: () => cmd.exportGcode(null, sel.id) }, { sep: true }, ...modifyItems(), ...common];
       case 'plane':
         return [{ label: t('Nuovo sketch'), action: () => cmd.newSketch(sel.id) }, { label: t('Vista normale al piano'), action: () => cmd.viewNormal(sel.id) },
-          { label: t('Inverti normale'), enabled: () => !locked, action: () => cmd.flipNormal(sel.id) }, lockItem(), { sep: true }, ...common];
+          { label: t('Inverti normale'), enabled: () => !locked, action: () => cmd.flipNormal(sel.id) }, lockItem(), { sep: true }, ...modifyItems(), ...common];
       case 'sketch':
         return [{ label: t('Modifica sketch'), action: () => cmd.editSketch(sel.id) },
           { label: t('Nuova svuotatura'), enabled: noSketch, action: () => cmd.newOperation('pocket', sel.id) },
-          { label: t('Nuova finitura'), enabled: noSketch, action: () => cmd.newOperation('finish', sel.id) }, { sep: true }, ...common];
+          { label: t('Nuova finitura'), enabled: noSketch, action: () => cmd.newOperation('finish', sel.id) }, { sep: true }, ...modifyItems(), ...common];
       case 'entity':
         return [{ label: t('Nuova svuotatura'), enabled: noSketch, action: () => cmd.newOperation('pocket') },
-          { label: t('Nuova finitura'), enabled: noSketch, action: () => cmd.newOperation('finish') }, { sep: true }, ...common];
+          { label: t('Nuova finitura'), enabled: noSketch, action: () => cmd.newOperation('finish') }, { sep: true }, ...modifyItems(), ...common];
       case 'operation':
         return [{ label: t('Calcola'), kbd: 'F9', enabled: noSketch, action: () => cmd.compute(sel.id) }, { label: t('Simula'), enabled: noSketch, action: () => cmd.simulate(sel.id) },
           { label: t('Esporta G-code…'), action: () => cmd.exportGcode([sel.id]) }, { label: t('Salva come setup…'), action: () => cmd.saveAsSetup(sel.id) },

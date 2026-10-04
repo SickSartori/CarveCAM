@@ -33,12 +33,35 @@ function dotTex() {
 }
 
 /** Matrice mondo di un elemento del progetto (dai dati, non dalla scena). */
-function itemMatrix(type, item) {
+export function itemMatrix(type, item) {
   if (type === 'plane') return frameMatrix(planeFrame(item));
   if (type === 'origin') return new THREE.Matrix4().makeTranslation(new THREE.Vector3().fromArray(item.position));
   const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(item.rotation[0] * D2R, item.rotation[1] * D2R, item.rotation[2] * D2R, 'XYZ'));
   const s = type === 'object' && item.scale ? new THREE.Vector3().fromArray(item.scale) : new THREE.Vector3(1, 1, 1);
   return new THREE.Matrix4().compose(new THREE.Vector3().fromArray(item.position), q, s);
+}
+
+/**
+ * Posizione e orientamento di un elemento dalla matrice mondo M (piani: origine, normale e rotazione nel piano;
+ * punti di origine: solo la posizione). La scala non si tocca: la gestisce chi la cambia.
+ */
+export function applyItemMatrix(type, item, M) {
+  const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  M.decompose(p, q, s);
+  if (type === 'plane') {
+    const m = new THREE.Matrix4().makeRotationFromQuaternion(q);
+    const u = new THREE.Vector3().setFromMatrixColumn(m, 0);
+    const n = new THREE.Vector3().setFromMatrixColumn(m, 2);
+    item.origin = p.toArray().map(rnd);
+    item.normal = n.toArray().map(v => Math.round(v * 1e6) / 1e6);
+    item.angle = rnd(angleOfU(n, u));
+  } else if (type === 'origin') {
+    item.position = p.toArray().map(rnd);   // un punto: conta solo la posizione
+  } else {
+    const e = new THREE.Euler().setFromQuaternion(q, 'XYZ');
+    item.position = p.toArray().map(rnd);
+    item.rotation = [e.x, e.y, e.z].map(v => rnd(v * R2D));
+  }
 }
 
 export class GizmoController {
@@ -190,24 +213,7 @@ export class GizmoController {
     if (!d) return;
     this.pivot.updateMatrixWorld(true);
     const delta = this.pivot.matrixWorld.clone().multiply(d.inv);
-    const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
-    for (const x of d.items) {
-      delta.clone().multiply(x.m).decompose(p, q, s);
-      if (x.type === 'plane') {
-        const m = new THREE.Matrix4().makeRotationFromQuaternion(q);
-        const u = new THREE.Vector3().setFromMatrixColumn(m, 0);
-        const n = new THREE.Vector3().setFromMatrixColumn(m, 2);
-        x.item.origin = p.toArray().map(rnd);
-        x.item.normal = n.toArray().map(v => Math.round(v * 1e6) / 1e6);
-        x.item.angle = rnd(angleOfU(n, u));
-      } else if (x.type === 'origin') {
-        x.item.position = p.toArray().map(rnd);   // un punto: conta solo la posizione
-      } else {
-        const e = new THREE.Euler().setFromQuaternion(q, 'XYZ');
-        x.item.position = p.toArray().map(rnd);
-        x.item.rotation = [e.x, e.y, e.z].map(v => rnd(v * R2D));
-      }
-    }
+    for (const x of d.items) applyItemMatrix(x.type, x.item, delta.clone().multiply(x.m));
     this.sync.sync();
     emit('transform');
   }

@@ -1,7 +1,10 @@
 // Barra strumenti ordinata come il flusso di lavoro CAM, con spia di stato per ogni fase.
 import { h } from './dialogs.js';
 import { TB } from './icons.js';
+import { contextMenu } from './ui-menu.js';
 import { t } from './i18n.js';
+
+const CARET = '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4 5 6.5 7.5 4"/></svg>';
 
 export class Toolbar {
   /**
@@ -27,12 +30,13 @@ export class Toolbar {
 
   /**
    * Adatta la barra alla larghezza disponibile: livelli di compattazione crescenti (fit-1 spazi ridotti,
-   * fit-2 senza testi sui pulsanti, fit-3 senza testo sul pulsante principale, fit-4 senza il gruppo Vista,
-   * i cui comandi restano nei menu) finché tutti i gruppi entrano.
+   * fit-2 senza testi sui pulsanti, fit-collapse gruppi comprimibili in un solo pulsante con menu, fit-3 senza
+   * testo sul pulsante principale, fit-tight pulsanti e margini più stretti, fit-4 senza il gruppo Vista, i cui
+   * comandi restano nei menu) finché tutti i gruppi entrano.
    */
   fit() {
     const el = this.el;
-    const levels = ['fit-1', 'fit-2', 'fit-3', 'fit-4'];
+    const levels = ['fit-1', 'fit-2', 'fit-collapse', 'fit-3', 'fit-tight', 'fit-4'];
     el.classList.remove(...levels);
     for (const c of levels) {
       if (el.scrollWidth <= el.clientWidth + 1) break;
@@ -45,6 +49,7 @@ export class Toolbar {
     this.buttons = [];
     this.selects = [];
     this.leds = [];
+    this.mores = [];
     for (const g of this.groups) {
       if (g.end) this.el.append(h('div', { class: 'tb-spacer' }));
       const row = h('div', { class: 'tb-row' });
@@ -66,6 +71,7 @@ export class Toolbar {
         row.append(b);
         this.buttons.push({ b, a });
       }
+      if (g.collapse) row.append(this._more(g));
       const cap = h('div', { class: 'tb-cap' }, h('span', {}, g.caption));
       let led = null;
       if (g.stage) {
@@ -74,11 +80,35 @@ export class Toolbar {
         this.leds.push({ led, cap, stage: g.stage, caption: g.caption });
       }
       // data-group: fase (o "project", "view") per la guida, che indica i gruppi nell'interfaccia
-      this.el.append(h('div', { class: `tb-group${g.stage ? ' stage' : ''}${g.end ? ' view-group' : ''}`, role: 'group', 'aria-label': g.caption,
-        'data-group': g.stage || (g.end ? 'view' : 'project') }, row, cap));
+      this.el.append(h('div', { class: `tb-group${g.stage ? ' stage' : ''}${g.end ? ' view-group' : ''}${g.collapse ? ' collapsible' : ''}`, role: 'group', 'aria-label': g.caption,
+        'data-group': g.group || g.stage || (g.end ? 'view' : 'project') }, row, cap));
     }
     this.update();
     this.fit();
+  }
+
+  /**
+   * Pulsante che sostituisce i comandi di un gruppo comprimibile quando la barra è stretta (fit-collapse): apre
+   * un menu con gli stessi comandi e mostra l'icona di quello attivo.
+   */
+  _more(g) {
+    const ids = g.items.filter(x => x !== '|').map(x => (typeof x === 'string' ? x : x.id));
+    const info = { label: g.collapse.label, hint: g.collapse.hint };
+    const ico = h('span', { class: 'tb-ico', html: TB[g.collapse.icon] || '' });
+    const b = h('button', { class: 'tb-btn tb-more', type: 'button', 'aria-label': info.label, 'aria-haspopup': 'menu' }, ico, h('span', { class: 'tb-caret', html: CARET }));
+    b.addEventListener('click', () => {
+      this._hideTip();
+      const rc = b.getBoundingClientRect();
+      contextMenu({ clientX: rc.left, clientY: rc.bottom + 4 }, ids.map(id => this.actions.get(id)).filter(Boolean).map(a => ({
+        label: a.label, icon: a.icon, kbd: a.kbd, enabled: () => this.actions.isEnabled(a), action: () => this.actions.run(a),
+      })));
+    });
+    b.addEventListener('mouseenter', () => this._showTip(b, info, false));
+    b.addEventListener('mouseleave', () => this._hideTip());
+    b.addEventListener('focus', () => this._showTip(b, info, false));
+    b.addEventListener('blur', () => this._hideTip());
+    this.mores.push({ b, ico, ids, icon: g.collapse.icon });
+    return b;
   }
 
   /** Elenco a discesa: la prima voce è il titolo, scegliendo un'opzione si esegue l'azione. */
@@ -107,6 +137,13 @@ export class Toolbar {
       if (on === null) b.removeAttribute('aria-pressed');
       else b.setAttribute('aria-pressed', String(on));
       b.classList.toggle('on', !!on);
+    }
+    for (const m of this.mores) {
+      const on = m.ids.map(id => this.actions.get(id)).find(a => a?.checked && this.actions.isChecked(a));
+      m.b.classList.toggle('on', !!on);
+      m.b.setAttribute('aria-pressed', String(!!on));
+      const icon = on?.icon || m.icon;
+      if (m.shown !== icon) { m.ico.innerHTML = TB[icon] || ''; m.shown = icon; }
     }
     for (const { s, a, wrap } of this.selects) {
       const en = this.actions.isEnabled(a);

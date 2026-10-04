@@ -1,6 +1,7 @@
 // Registro unico delle azioni: menu, barra strumenti e ricerca comandi usano le stesse definizioni.
 import { App, resolve, resolveAll, canUndo, canRedo, MOVABLE, operationSource } from './state.js';
 import { PLANE_PRESETS } from './commands.js';
+import { MODIFY_COMMANDS } from './modify.js';
 import { t } from './i18n.js';
 import { log } from './log.js';
 
@@ -59,6 +60,11 @@ export function createActions({ cmd, vp, sketch }) {
       hint: 'Un elemento bloccato non si può spostare né ruotare' },
     { id: 'edit.origin', label: 'Sposta origine…', short: 'Origine', icon: 'origin', tone: 'model', run: () => cmd.moveOrigin(), enabled: modelOk, whyOff: modelWhy,
       hint: 'Nuova origine dal minimo, medio o massimo dell\'ingombro dei solidi, per ogni asse, più un offset: tutto il progetto viene traslato (anche gli elementi bloccati)' },
+    // ---- comandi di modifica (entità degli sketch ed elementi 3D)
+    ...MODIFY_COMMANDS.map(([k, label, icon, key, hint]) => ({
+      id: `xf.${k}`, label, icon, kbd: `Shift+${key}`, hint, run: () => cmd.modify(k),
+      enabled: () => !cmd.modifyWhy(k), whyOff: () => cmd.modifyWhy(k), checked: () => cmd.modifyKind() === k,
+    })),
     { id: 'gizmo.move', label: 'Manipolatore: sposta', short: 'Sposta', icon: 'move', kbd: 'G', run: () => cmd.setGizmo('translate'), checked: () => App.view.gizmo !== 'rotate',
       hint: 'Clic sul centro del manipolatore per scegliere un nuovo punto di riferimento' },
     { id: 'gizmo.rotate', label: 'Manipolatore: ruota', short: 'Ruota', icon: 'rotate', kbd: 'R', run: () => cmd.setGizmo('rotate'), checked: () => App.view.gizmo === 'rotate' },
@@ -199,7 +205,7 @@ export function createActions({ cmd, vp, sketch }) {
 /** Menu a tendina: id azione, '-' separatore, { head } intestazione, { recent: true } progetti recenti. */
 export const MENUS = [
   { label: 'File', items: ['file.home', '-', 'file.new', 'file.open', 'file.save', 'file.saveAs', 'file.rename', '-', { recent: true }, '-', 'file.import', '-', 'file.gcode', 'file.cl', '-', 'file.recovery', 'file.demo'] },
-  { label: 'Modifica', items: ['edit.undo', 'edit.redo', '-', 'edit.duplicate', 'edit.delete', 'edit.lock', '-', 'edit.origin', '-', { head: 'Manipolatore' }, 'gizmo.move', 'gizmo.rotate', 'gizmo.snap', 'gizmo.local'] },
+  { label: 'Modifica', items: ['edit.undo', 'edit.redo', '-', 'edit.duplicate', 'edit.delete', 'edit.lock', '-', { head: 'Trasforma la selezione' }, ...MODIFY_COMMANDS.map(c => `xf.${c[0]}`), '-', 'edit.origin', '-', { head: 'Manipolatore' }, 'gizmo.move', 'gizmo.rotate', 'gizmo.snap', 'gizmo.local'] },
   { label: 'Inserisci', items: [{ head: 'Artefatti' }, 'art.cylinder', 'art.cone', 'art.sphere', 'art.box', 'model.extrude', '-', { head: 'Punti di origine' }, 'origin.pick', 'origin.coords', '-', 'file.import'] },
   { label: 'Booleane', items: [{ head: 'Operazioni tra i solidi selezionati' }, 'bool.union', 'bool.subtract', 'bool.intersect'] },
   { label: 'Origini', items: [{ head: 'Punti di origine (zero pezzo del G-code)' }, 'origin.pick', 'origin.coords', '-', 'edit.origin'] },
@@ -225,8 +231,13 @@ export const TOOLBAR = [
   { caption: 'Modello', stage: 'model', items: [{ id: 'file.import', label: true }, 'art.cylinder', 'art.cone', 'art.sphere', 'art.box', 'model.extrude', '|', 'edit.origin'] },
   { caption: 'Piani', stage: 'planes', items: [{ id: 'plane.add', label: true }, 'plane.preset', 'plane.face', 'plane.3pt', 'plane.view'] },
   { caption: 'Sketch', stage: 'sketch', items: ['sketch.new', '|', 'tool.select', 'tool.polyline', 'tool.rect', 'tool.circle', 'tool.polygon', 'tool.profile'] },
+  { caption: 'Modifica', group: 'modify', items: MODIFY_COMMANDS.map(c => `xf.${c[0]}`),
+    collapse: { icon: 'xfMove', label: 'Modifica la selezione', hint: 'Sposta, ruota, copia, scala smart, serie rettangolare e polare' } },
   { caption: 'Lavorazioni', stage: 'ops', items: [{ id: 'op.pocket', label: true }, { id: 'op.finish', label: true }] },
   { caption: 'Calcolo e uscita', stage: 'output', items: [{ id: 'op.computeAll', label: true }, { id: 'op.simulateAll', label: true }, { id: 'file.gcode', label: true }] },
   { caption: 'Vista', end: true, items: ['gizmo.move', 'gizmo.rotate', 'edit.lock', '|', 'view.grid', 'view.paths', 'view.rapids', '|', 'view.fit'] },
 ];
-for (const g of TOOLBAR) g.caption = t(g.caption);
+for (const g of TOOLBAR) {
+  g.caption = t(g.caption);
+  if (g.collapse) Object.assign(g.collapse, { label: t(g.collapse.label), hint: t(g.collapse.hint) });
+}

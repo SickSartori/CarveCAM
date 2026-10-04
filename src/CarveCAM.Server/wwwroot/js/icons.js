@@ -90,6 +90,16 @@ export const TB = {
   simulate: t('<circle cx="10" cy="10" r="7.5"/><path d="M8.3 6.8v6.4l5-3.2z"/>'),
   gcode: t('<path d="M5 2.5h7l3.5 3.5v11.5H5z"/><path d="M12 2.5V6h3.5"/><path d="M12.2 10.2a2.7 2.7 0 1 0 .3 3.3H10"/>'),
   cldata: t('<path d="M5 2.5h7l3.5 3.5v11.5H5z"/><path d="M12 2.5V6h3.5"/><path d="M7.5 10h5M7.5 12.5h5M7.5 15h3"/>'),
+  // comandi di modifica: forma di partenza tratteggiata, risultato a tratto pieno
+  xfMove: t('<rect x="2.5" y="10.5" width="6" height="6" rx=".5" stroke-dasharray="1.6 1.5"/><rect x="11.5" y="3.5" width="6" height="6" rx=".5"/><path d="M6 9.2 10.2 6.4"/><path d="M8 5.9l2.4.4-.6 2.3"/>'),
+  xfRotate: t('<rect x="2.5" y="11" width="6" height="6" rx=".5" stroke-dasharray="1.6 1.5"/><rect x="11.3" y="3.7" width="5.6" height="5.6" rx=".5" transform="rotate(35 14.1 6.5)"/><path d="M4.4 8.6C4.8 5.6 6.4 4 9.2 3.6"/><path d="M7.5 2.3l1.9 1.3-1.2 1.9"/>'),
+  xfCopy: t('<rect x="2.5" y="9.5" width="7" height="7" rx=".5"/><rect x="10.5" y="3.5" width="7" height="7" rx=".5"/><path d="M5.5 2.5v4M3.5 4.5h4"/>'),
+  xfScale: t('<path d="M2.5 7V2.5h15v15H13" stroke-dasharray="1.8 1.6"/><rect x="2.5" y="10" width="7.5" height="7.5" rx=".5"/><path d="M8 12 14.5 5.5M11 5.5h3.5V9"/>'),
+  xfArrayRect: t('<rect x="2.5" y="4" width="4" height="4" rx=".4"/><rect x="8" y="4" width="4" height="4" rx=".4"/><rect x="13.5" y="4" width="4" height="4" rx=".4"/><rect x="2.5" y="12" width="4" height="4" rx=".4"/><rect x="8" y="12" width="4" height="4" rx=".4"/><rect x="13.5" y="12" width="4" height="4" rx=".4"/>'),
+  xfArrayPolar: t('<circle cx="10" cy="10" r="1" fill="currentColor" stroke="none"/>' + [0, 60, 120, 180, 240, 300].map(a => {
+    const x = (10 + 6.6 * Math.cos(a * Math.PI / 180)).toFixed(2), y = (10 + 6.6 * Math.sin(a * Math.PI / 180)).toFixed(2);
+    return `<circle cx="${x}" cy="${y}" r="1.8"/>`;
+  }).join('')),
   move: t('<path d="M10 2.5v15M2.5 10h15"/><path d="M8 4.5l2-2 2 2M8 15.5l2 2 2-2M4.5 8l-2 2 2 2M15.5 8l2 2-2 2"/>'),
   rotate: t('<path d="M16 10a6 6 0 1 1-2.1-4.6"/><path d="M14.5 2.3l-.6 3.1 3.1.6"/>'),
   noGizmo: t('<path d="M10 2.5v15M2.5 10h15" stroke-dasharray="2 2"/><path d="M4 4l12 12"/>'),

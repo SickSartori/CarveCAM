@@ -14,6 +14,7 @@ import { SketchMode } from './sketch.js';
 import { Simulator } from './simulation.js';
 import { GizmoController } from './gizmo.js';
 import { createCommands } from './commands.js';
+import { ModifyTool } from './modify.js';
 import { MenuBar } from './ui-menu.js';
 import { Toolbar } from './ui-toolbar.js';
 import { CommandPalette } from './ui-palette.js';
@@ -41,7 +42,14 @@ const sketch = new SketchMode(vp, sync);
 const sim = new Simulator(vp, sync);
 const gizmo = new GizmoController({ vp, sync, isBlocked: () => sketch.active || sim.active });
 const cmd = createCommands({ vp, sync, sketch, sim, gizmo });
-window.carvecam = { App, vp, sync, cmd, viewCube, gizmo, sim, log }; // accesso da console per diagnostica
+// comandi di modifica (Sposta, Ruota, Copia, Scala smart, serie): ricevono i clic nella vista mentre sono attivi
+const modify = new ModifyTool({ vp, sync, sketch, sim, cmd });
+cmd.modify = kind => modify.start(kind);
+cmd.modifyWhy = kind => modify.why(kind);
+cmd.modifyKind = () => modify.kind;
+cmd.modifyCancel = () => modify.cancel();
+cmd.modifyItems = () => modify.contextItems();
+window.carvecam = { App, vp, sync, cmd, viewCube, gizmo, sim, modify, log }; // accesso da console per diagnostica
 App.project = newProject(); // progetto vuoto finché non viene ripristinato/aperto (vedi start)
 
 // ------------------------------------------------------------------ intestazione: menu, barra strumenti, ricerca comandi
@@ -234,6 +242,7 @@ function snapHover() {
   if (r) coordsEl.textContent = `X ${fmt(r.point.x, 3)}  Y ${fmt(r.point.y, 3)}  Z ${fmt(r.point.z, 3)}${r.snapped ? `  [${t('vertice')}]` : ''}`;
 }
 vp.handlers.move = ev => {
+  if (modify.active) { modify.move(ev); return; }
   if (App.pickMode?.kind === 'pivot') { gizmo.pivotMove(ev); return; }
   if (sketch.active) { sketch.onMove(ev); return; }
   if (App.pickMode) {
@@ -247,9 +256,14 @@ vp.handlers.move = ev => {
   const p = vp.rayPlane(ev, f);
   coordsEl.textContent = p ? `X ${fmt(p.x, 2)}  Y ${fmt(p.y, 2)}  (Z=0)` : '';
 };
-vp.handlers.leave = () => { vp.el.classList.remove('hover-plane'); if (sketch.active) sketch.onLeave(); };
+vp.handlers.leave = () => {
+  vp.el.classList.remove('hover-plane');
+  if (modify.active) modify.leave();
+  else if (sketch.active) sketch.onLeave();
+};
 vp.handlers.click = ev => {
   if (gizmo.consumeClick()) return;
+  if (modify.active) { modify.click(ev); return; }
   if (App.pickMode?.kind === 'pivot') { gizmo.pivotClick(ev); return; }
   if (sketch.active) { sketch.onClick(ev); return; }
   if (App.pickMode) { cmd.handlePick(ev); return; }
@@ -267,6 +281,7 @@ vp.handlers.click = ev => {
   select(it);
 };
 vp.handlers.dblclick = ev => {
+  if (modify.active) return;
   if (sketch.active) { sketch.onDblClick(ev); return; }
   if (App.pickMode) return;
   const it = hitItem(ev);
@@ -317,6 +332,7 @@ vpEl.addEventListener('drop', e => {
 });
 
 // ------------------------------------------------------------------ tastiera
+const MODIFY_KEYS = { m: 'xf.move', r: 'xf.rotate', c: 'xf.copy', s: 'xf.scale', a: 'xf.arrayRect', p: 'xf.arrayPolar' };
 document.addEventListener('keydown', e => {
   if (document.querySelector('#modal-root .backdrop') || palette.isOpen) return;
   const tag = e.target.tagName;
@@ -343,10 +359,20 @@ document.addEventListener('keydown', e => {
   if (ctrl && k === 'd') return key('duplicate', () => cmd.duplicateSelected());
   if (ctrl && k === 'l') return key('lock', () => cmd.toggleLock());
   if (ctrl || e.altKey) return;
-  if (sketch.active && sketch.onKey(e)) { e.preventDefault(); return; }
+  // comando di modifica in corso: Esc annulla, Invio applica, Backspace torna al passo precedente
+  if (modify.active) {
+    if (e.key === 'Escape') return key('modify.cancel', () => modify.cancel());
+    if (e.key === 'Enter') return key('modify.apply', () => modify.applyNow());
+    if (e.key === 'Backspace') return key('modify.back', () => modify.back());
+  }
+  // Maiusc+lettera: comandi di modifica (anche dentro lo sketch, dove le lettere scelgono gli strumenti)
+  const xf = e.shiftKey && MODIFY_KEYS[k];
+  if (xf) return key(xf, () => actions.run(xf));
+  // durante un comando di modifica restano valide le scorciatoie della vista, non gli strumenti dello sketch
+  if (!modify.active && sketch.active && sketch.onKey(e)) { e.preventDefault(); return; }
   if (sim.active && e.key === ' ') { e.preventDefault(); sim.toggle(); return; }
   switch (e.key) {
-    case 'Delete': cmd.deleteSelected(); break;
+    case 'Delete': if (!modify.active) cmd.deleteSelected(); break;
     case 'Escape':
       if (App.pickMode) cmd.cancelPick();
       else if (App.planeMode) cmd.endPlaneMode();

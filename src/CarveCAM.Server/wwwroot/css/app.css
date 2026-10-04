@@ -258,7 +258,8 @@ kbd {
 .pal-row.disabled .pal-ico { opacity: .4; }
 .pal-empty { padding: 18px 12px; color: var(--text-faint); }
 
-/* barra strumenti adattiva: se i gruppi non entrano nella larghezza, ui-toolbar.js applica le classi fit-1…fit-4 */
+/* barra strumenti adattiva: se i gruppi non entrano nella larghezza, ui-toolbar.js applica le classi fit-1…fit-4
+   (con fit-collapse e fit-tight intermedi) */
 #toolbar.fit-1 .tb-group { padding: 0 5px; }
 #toolbar.fit-1 .tb-sep { margin: 0 2px; }
 #toolbar.fit-1 .tb-btn { min-width: 29px; padding: 0 4px; }
@@ -267,8 +268,17 @@ kbd {
 #toolbar.fit-2 .tb-btn.labeled:not(.primary) .tb-lbl { display: none; }
 #toolbar.fit-2 .tb-btn.labeled:not(.primary) { padding: 0 4px; background: none; }
 #toolbar.fit-2 .tb-select { max-width: 86px; }
+/* fit-collapse: i comandi di un gruppo comprimibile (Modifica) in un solo pulsante con menu */
+.tb-btn.tb-more { display: none; gap: 1px; padding: 0 3px 0 6px; }
+.tb-more .tb-caret svg { width: 10px; height: 10px; display: block; }
+#toolbar.fit-collapse .tb-group.collapsible .tb-btn:not(.tb-more) { display: none; }
+#toolbar.fit-collapse .tb-group.collapsible .tb-btn.tb-more { display: inline-flex; }
 #toolbar.fit-3 .tb-btn.primary .tb-lbl { display: none; }
 #toolbar.fit-3 .tb-btn.primary { padding: 0 6px; }
+#toolbar.fit-tight .tb-group { padding: 0 3px; }
+#toolbar.fit-tight .tb-sep { margin: 0 1px; }
+#toolbar.fit-tight .tb-btn { min-width: 26px; padding: 0 3px; }
+#toolbar.fit-tight .tb-btn.tb-more { padding: 0 1px 0 3px; }
 #toolbar.fit-4 .tb-group.view-group { display: none; }
 @media (max-width: 1380px) {
   .cmd-search { width: auto; }
@@ -503,6 +513,45 @@ kbd {
 .sim-bar .seg-btn { height: 24px; border-radius: 0; background: none; border: 0; border-right: 1px solid var(--border); }
 .sim-bar .seg-btn:last-child { border-right: 0; }
 .sim-bar .seg-btn[aria-checked="true"] { background: var(--accent); color: #fff; }
+/* comandi di modifica (Sposta, Ruota, Copia, Scala smart, serie): passo da fare e valori da scrivere */
+#viewport.modifying canvas, #viewport.sketching.modifying canvas { cursor: crosshair; }
+.xf-bar {
+  left: 50%; bottom: 14px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px);
+  display: flex; flex-direction: column; gap: 6px; padding: 7px 10px 8px;
+  background: var(--overlay); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow); backdrop-filter: blur(4px);
+}
+.xf-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.xf-head b { font-weight: 600; white-space: nowrap; }
+.xf-ico { display: grid; place-items: center; color: var(--accent); }
+.xf-ico svg { width: 18px; height: 18px; }
+.xf-what { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.xf-step { color: var(--text); line-height: 1.4; }
+.xf-step b { color: var(--accent); font-weight: 600; }
+.xf-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.xf-grp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.xf-grp + .xf-grp { padding-left: 14px; border-left: 1px solid var(--border); }
+.xf-f { display: inline-flex; align-items: center; gap: 5px; color: var(--text-dim); white-space: nowrap; }
+.xf-f input.num {
+  width: 74px; height: 24px; padding: 0 6px; text-align: right; color: var(--text);
+  background: var(--bg); border: 1px solid var(--border); border-radius: 4px; font-variant-numeric: tabular-nums;
+}
+.xf-f input.num:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.xf-f input.bad { border-color: var(--danger); }
+.xf-u { color: var(--text-faint); min-width: 1.4em; }
+.xf-out { color: var(--text); min-width: 72px; }
+.xf-check { cursor: pointer; color: var(--text); }
+.xf-check input { accent-color: var(--accent); }
+.xf-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; background: var(--bg); }
+.xf-seg button { height: 22px; padding: 0 9px; border: 0; border-right: 1px solid var(--border); background: none; color: var(--text); cursor: pointer; }
+.xf-seg button:last-child { border-right: 0; }
+.xf-seg button:hover { background: var(--panel-3); }
+.xf-seg button[aria-checked="true"] { background: var(--accent); color: #fff; }
+.xf-btns { display: flex; gap: 4px; margin-left: auto; }
+.xf-btns button { height: 26px; padding: 0 12px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel-3); color: var(--text); cursor: pointer; }
+.xf-btns button:hover { border-color: var(--border-strong); }
+.xf-btns button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.xf-btns button.primary:hover { background: var(--accent-hover); }
+.xf-btns button:disabled { opacity: .45; cursor: default; }
 /* coordinate TCP durante la simulazione */
 .tcp-box {
   top: 10px; left: 10px; min-width: 150px; padding: 6px 10px 7px;
