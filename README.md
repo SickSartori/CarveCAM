@@ -144,19 +144,29 @@ samples/blocco-L.stp                        STEP di prova (blocco a L con gradin
 
 ### Comandi di modifica
 
-Sposta, Ruota, Copia, Scala smart, Serie rettangolare e Serie polare (gruppo *Modifica* della barra, menu
-*Modifica*, tasto destro, **Maiusc+M / R / C / S / A / P**) agiscono sulla selezione: le **entità di uno sketch**
+Sposta, Ruota, Copia, Allinea a, Scala smart, Serie rettangolare e Serie polare (gruppo *Modifica* della barra,
+menu *Modifica*, tasto destro, **Maiusc+M / R / C / L / S / A / P**) agiscono sulla selezione: le **entità di uno sketch**
 (quelle selezionate, oppure tutte con lo sketch selezionato o in modifica), che si trasformano nel piano, oppure
 gli **elementi 3D** (oggetti, artefatti, piani con i loro sketch, punti di origine). Un pannello in basso nella
 vista indica il passo da fare e raccoglie i valori scritti; l'anteprima segue il puntatore e i punti si agganciano
-ai vertici (nello sketch anche alla griglia). **Invio** applica, **Backspace** torna al passo precedente, **Esc**
-annulla; ogni modifica è un passo di annullamento.
+ai vertici (nello sketch anche alla griglia): il pallino del cursore diventa arancione e più grande sul vertice
+agganciato (dimensione nelle *Opzioni › Frecce e cursori › Pallini del riferimento*). **Invio** applica,
+**Backspace** torna al passo precedente, **Esc** annulla; ogni modifica è un passo di annullamento.
 
-- **Sposta:** punto base e punto di arrivo, oppure ΔX ΔY ΔZ (ΔU ΔV nello sketch) scritti, oppure la distanza
-  nella direzione del cursore; **Maiusc** vincola lo spostamento all'asse principale.
+- **Sposta:** punto base e punto di arrivo, oppure ΔX ΔY ΔZ (ΔU ΔV nello sketch) scritti, la distanza nella
+  direzione del cursore o le **coordinate assolute di arrivo** del punto base (senza punto base: del centro della
+  selezione); **Maiusc** vincola lo spostamento all'asse principale.
 - **Ruota:** centro, direzione di partenza e nuova direzione, oppure l'angolo scritto (senza centro: il centro
-  della selezione). Gli elementi 3D ruotano attorno a Z, X o Y; **Maiusc** procede a passi di 15°. Un rettangolo
-  ruotato di un angolo che non è multiplo di 90° diventa una polilinea.
+  della selezione). Gli elementi 3D ruotano attorno a Z, X, Y oppure a un **asse per due punti** cliccati (il verso
+  va dal primo al secondo). La direzione di partenza può essere un **bordo** o un segmento: si porta col mouse
+  sulla nuova direzione, la si rende **parallela a un altro bordo** con un clic, oppure si scrive la **direzione
+  finale** (angolo assoluto: attorno a Z da X, attorno a X da Y, attorno a Y da Z; nello sketch da U). Un bordo
+  non ha verso: la rotazione scelta è la più piccola. **Maiusc** porta la direzione finale a multipli di 15°. Un
+  rettangolo ruotato di un angolo che non è multiplo di 90° diventa una polilinea.
+- **Allinea a:** 2 punti (3 per il 3D) sul pezzo da spostare, poi altrettanti sul riferimento: il pezzo si sposta
+  e ruota perché il primo punto combaci con il primo, la direzione verso il secondo punto con quella del
+  riferimento e, nel 3D, il piano dei tre punti con quello dei tre del riferimento. Con *Scala* anche la distanza
+  tra i primi due punti diventa quella del riferimento.
 - **Copia:** come Sposta, ma lascia l'originale; i clic successivi aggiungono altre copie dallo stesso punto base
   e *Copie in fila* ripete lo spostamento più volte.
 - **Scala smart:** clic su un **segmento** dello sketch, un **bordo** di un solido o due punti: è il
@@ -165,10 +175,11 @@ annulla; ogni modifica è un passo di annullamento.
   per il diametro di un cerchio) oppure il centro della selezione. Scala uniforme: per gli oggetti cambia la
   scala, per gli artefatti le misure, per i piani il lato e i loro sketch.
 - **Serie rettangolare:** colonne, righe (e livelli per il 3D) con il passo, proposto dall'ingombro.
-- **Serie polare:** centro, numero di elementi, angolo totale (360° li distribuisce sul giro intero), copie
-  ruotate oppure solo spostate.
+- **Serie polare:** centro (cliccato o con le coordinate scritte), numero di elementi, angolo totale (360° li
+  distribuisce sul giro intero), copie ruotate oppure solo spostate.
 
-Gli elementi bloccati non si spostano, ruotano o scalano; si possono copiare. Copie e serie restano selezionate.
+Gli elementi bloccati non si spostano, ruotano, allineano o scalano; si possono copiare. Copie e serie restano
+selezionate.
 
 ### Elementi bloccati
 
