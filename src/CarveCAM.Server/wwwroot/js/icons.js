@@ -94,6 +94,7 @@ export const TB = {
   xfMove: t('<rect x="2.5" y="10.5" width="6" height="6" rx=".5" stroke-dasharray="1.6 1.5"/><rect x="11.5" y="3.5" width="6" height="6" rx=".5"/><path d="M6 9.2 10.2 6.4"/><path d="M8 5.9l2.4.4-.6 2.3"/>'),
   xfRotate: t('<rect x="2.5" y="11" width="6" height="6" rx=".5" stroke-dasharray="1.6 1.5"/><rect x="11.3" y="3.7" width="5.6" height="5.6" rx=".5" transform="rotate(35 14.1 6.5)"/><path d="M4.4 8.6C4.8 5.6 6.4 4 9.2 3.6"/><path d="M7.5 2.3l1.9 1.3-1.2 1.9"/>'),
   xfCopy: t('<rect x="2.5" y="9.5" width="7" height="7" rx=".5"/><rect x="10.5" y="3.5" width="7" height="7" rx=".5"/><path d="M5.5 2.5v4M3.5 4.5h4"/>'),
+  xfAlign: t('<path d="M3.5 9.5 9 3" stroke-dasharray="1.6 1.5"/><path d="M3 16.5h14"/><path d="M12.2 4.4c2.9 1 4.4 3.4 4.3 6.6"/><path d="M14.6 9.6l1.9 1.9 1.7-2.1"/>' + dot(3.5, 9.5) + dot(9, 3) + dot(3, 16.5) + dot(17, 16.5)),
   xfScale: t('<path d="M2.5 7V2.5h15v15H13" stroke-dasharray="1.8 1.6"/><rect x="2.5" y="10" width="7.5" height="7.5" rx=".5"/><path d="M8 12 14.5 5.5M11 5.5h3.5V9"/>'),
   xfArrayRect: t('<rect x="2.5" y="4" width="4" height="4" rx=".4"/><rect x="8" y="4" width="4" height="4" rx=".4"/><rect x="13.5" y="4" width="4" height="4" rx=".4"/><rect x="2.5" y="12" width="4" height="4" rx=".4"/><rect x="8" y="12" width="4" height="4" rx=".4"/><rect x="13.5" y="12" width="4" height="4" rx=".4"/>'),
   xfArrayPolar: t('<circle cx="10" cy="10" r="1" fill="currentColor" stroke="none"/>' + [0, 60, 120, 180, 240, 300].map(a => {

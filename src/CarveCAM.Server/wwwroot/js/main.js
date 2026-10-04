@@ -332,7 +332,7 @@ vpEl.addEventListener('drop', e => {
 });
 
 // ------------------------------------------------------------------ tastiera
-const MODIFY_KEYS = { m: 'xf.move', r: 'xf.rotate', c: 'xf.copy', s: 'xf.scale', a: 'xf.arrayRect', p: 'xf.arrayPolar' };
+const MODIFY_KEYS = { m: 'xf.move', r: 'xf.rotate', c: 'xf.copy', l: 'xf.align', s: 'xf.scale', a: 'xf.arrayRect', p: 'xf.arrayPolar' };
 document.addEventListener('keydown', e => {
   if (document.querySelector('#modal-root .backdrop') || palette.isOpen) return;
   const tag = e.target.tagName;

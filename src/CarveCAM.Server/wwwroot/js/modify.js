@@ -1,13 +1,14 @@
-// Comandi di modifica della selezione: Sposta, Ruota, Copia, Scala smart, Serie rettangolare e Serie polare.
-// Valgono per le entità di uno sketch (nel sistema del piano, U e V) e per gli elementi 3D (oggetti, artefatti,
-// piani con i loro sketch, punti di origine). Un pannello in basso nella vista indica il passo da fare e raccoglie
-// i valori scritti; l'anteprima segue il puntatore, con l'aggancio ai punti come negli altri comandi.
+// Comandi di modifica della selezione: Sposta, Ruota, Copia, Allinea a, Scala smart, Serie rettangolare e Serie
+// polare. Valgono per le entità di uno sketch (nel sistema del piano, U e V) e per gli elementi 3D (oggetti,
+// artefatti, piani con i loro sketch, punti di origine). Un pannello in basso nella vista indica il passo da fare e
+// raccoglie i valori scritti; l'anteprima segue il puntatore, con l'aggancio ai punti come negli altri comandi.
 import * as THREE from 'three';
 import { App, emit, on, mutate, resolve, resolveAll, getSketch, getPlane, selectMany, uid, MOVABLE } from './state.js';
 import { planeFrame, frameMatrix, toLocal, entityLoop, entitySnapPoints, distPointSeg, fmt } from './geom.js';
 import { itemMatrix, applyItemMatrix } from './gizmo.js';
 import { preciseBox } from './commands.js';
 import { evalNum } from './ui-props.js';
+import { settings } from './settings.js';
 import { h, status, toast } from './dialogs.js';
 import { TB } from './icons.js';
 import { t } from './i18n.js';
@@ -19,24 +20,34 @@ const r6 = v => { const r = Math.round(v * 1e6) / 1e6; return Object.is(r, -0) ?
 const r4 = v => { const r = Math.round(v * 1e4) / 1e4; return Object.is(r, -0) ? 0 : r; };
 const MAX_NEW = 2000;      // elementi creati al massimo da una copia o da una serie
 const MAX_PREVIEW = 400;   // trasformazioni mostrate al massimo nell'anteprima
-const EDGE_PX = 8;         // distanza (pixel) per prendere un segmento o un bordo come riferimento della scala
+const EDGE_PX = 8;         // distanza (pixel) per prendere un segmento o un bordo come riferimento
 const PREF_KEY = 'carvecam.modify.v1';
-const COL = { preview: 0x7cf2ff, mark: 0xff8a3d, cursor: 0xffffff, fixed: 0xffe066 };
+const COL = { preview: 0x7cf2ff, mark: 0xff8a3d, cursor: 0xffffff, fixed: 0xffe066, axis: 0x4f9dff };
 const AXIS = { z: new THREE.Vector3(0, 0, 1), x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0) };
-const DELTA = ['dx', 'dy', 'dz'];
+const DELTA = ['dx', 'dy', 'dz'];   // spostamento
+const ABS = ['ax', 'ay', 'az'];     // punto di arrivo (coordinate assolute)
+const CTR = ['cx', 'cy', 'cz'];     // centro della serie polare
+/** Campi scritti che comandano al posto del mouse: campo → valore di op.typed. */
+const TYPED = {
+  dx: 'delta', dy: 'delta', dz: 'delta', ax: 'abs', ay: 'abs', az: 'abs', dist: 'dist', angle: 'angle', dir: 'dir',
+  len: 'len', factor: 'factor', cx: 'center', cy: 'center', cz: 'center',
+};
 
 /** Comandi: chiave, nome, icona, tasto (con Maiusc), spiegazione. */
 export const MODIFY_COMMANDS = [
-  ['move', 'Sposta', 'xfMove', 'M', 'Sposta la selezione da un punto base a un punto di arrivo (con aggancio ai punti), oppure di uno spostamento scritto'],
-  ['rotate', 'Ruota', 'xfRotate', 'R', 'Ruota la selezione attorno a un centro: l\'angolo si indica con due direzioni nella vista o si scrive'],
+  ['move', 'Sposta', 'xfMove', 'M', 'Sposta la selezione da un punto base a un punto di arrivo (con aggancio ai punti), oppure di uno spostamento o fino a coordinate scritte'],
+  ['rotate', 'Ruota', 'xfRotate', 'R', 'Ruota la selezione attorno a un centro o a un asse per due punti: l\'angolo si indica con due direzioni o due bordi nella vista, oppure si scrive'],
   ['copy', 'Copia', 'xfCopy', 'C', 'Copia la selezione da un punto base ai punti indicati, una o più volte, anche più copie in fila'],
+  ['align', 'Allinea a', 'xfAlign', 'L', 'Indica 2 punti (3 per il 3D) sul pezzo da spostare e altrettanti sul riferimento: il pezzo si sposta e ruota facendo combaciare il primo punto e allineando gli altri'],
   ['scale', 'Scala smart', 'xfScale', 'S', 'Indica un riferimento (due punti, un segmento o un bordo) e scrivi la misura che deve avere: il fattore di scala si calcola da solo'],
   ['arrayRect', 'Serie rettangolare', 'xfArrayRect', 'A', 'Copie della selezione disposte in colonne e righe (e livelli per gli elementi 3D)'],
-  ['arrayPolar', 'Serie polare', 'xfArrayPolar', 'P', 'Copie della selezione disposte in cerchio attorno a un centro'],
+  ['arrayPolar', 'Serie polare', 'xfArrayPolar', 'P', 'Copie della selezione disposte in cerchio attorno a un centro, indicato nella vista o scritto'],
 ];
 
 const loadPref = () => { try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}; } catch { return {}; } };
 const savePref = v => { try { localStorage.setItem(PREF_KEY, JSON.stringify(v)); } catch { /* storage non disponibile */ } };
+/** Diametro (pixel) dei pallini: dall'opzione "Pallini del riferimento", per il punto agganciato più del doppio. */
+const dotPx = f => Math.round(Math.max(6, Number(settings.sizes?.pivotDot) || 11) * f);
 
 // ------------------------------------------------------------------ trasformazioni dei dati
 /**
@@ -110,12 +121,37 @@ function cloneItem(p, type, item, name) {
   return c;
 }
 
-/** Angolo (gradi, con segno attorno ad axis) tra le direzioni c→a e c→b, proiettate sul piano perpendicolare all'asse. */
-function signedAngle(axis, c, a, b) {
-  const proj = p => { const d = p.clone().sub(c); return d.addScaledVector(axis, -d.dot(axis)); };
-  const u = proj(a), w = proj(b);
+// ------------------------------------------------------------------ angoli
+/** Componente di v perpendicolare all'asse. */
+const flat = (v, axis) => v.clone().addScaledVector(axis, -v.dot(axis));
+
+/** Angolo (gradi, con segno attorno all'asse) tra le direzioni u e w, proiettate sul piano perpendicolare all'asse. */
+function angleAbout(axis, u0, w0) {
+  const u = flat(u0, axis), w = flat(w0, axis);
   if (u.lengthSq() < 1e-12 || w.lengthSq() < 1e-12) return null;
   return Math.atan2(axis.dot(u.clone().cross(w)), u.dot(w)) * R2D;
+}
+
+/**
+ * Direzione da cui si misurano gli angoli attorno all'asse: attorno a Z l'asse X, attorno a X l'asse Y, attorno a
+ * Y l'asse Z (come la regola della mano destra); per un asse qualsiasi la proiezione di X (o di Y).
+ */
+function zeroDir(axis) {
+  const [ax, ay, az] = [Math.abs(axis.x), Math.abs(axis.y), Math.abs(axis.z)];
+  const ref = az > 0.99 ? AXIS.x : ax > 0.99 ? AXIS.y : ay > 0.99 ? AXIS.z : AXIS.x;
+  const z = flat(ref, axis);
+  return (z.lengthSq() > 1e-6 ? z : flat(AXIS.y, axis)).normalize();
+}
+
+/** Angolo assoluto di una direzione attorno all'asse (gradi). */
+const absAngle = (axis, dir) => angleAbout(axis, zeroDir(axis), dir);
+
+/** Angolo in (-180, 180]; per una linea (bordo, senza verso) in (-90, 90]. */
+function wrapAngle(a, line = false) {
+  const p = line ? 180 : 360;
+  let r = ((a % p) + p) % p;
+  if (r > p / 2) r -= p;
+  return Math.abs(r) < 1e-12 ? 0 : r;
 }
 
 /** Spostamento lungo l'asse principale (Maiusc). */
@@ -123,6 +159,42 @@ function axisLock(d) {
   const a = [Math.abs(d.x), Math.abs(d.y), Math.abs(d.z)];
   const i = a.indexOf(Math.max(...a));
   return new THREE.Vector3(i === 0 ? d.x : 0, i === 1 ? d.y : 0, i === 2 ? d.z : 0);
+}
+
+// ------------------------------------------------------------------ Allinea a
+/** Sistema ortonormale da tre punti: origine a, asse X verso b, piano XY per c (null se allineati). */
+function frame3(a, b, c) {
+  const x = b.clone().sub(a);
+  if (x.lengthSq() < 1e-12) return null;
+  x.normalize();
+  const z = x.clone().cross(c.clone().sub(a));
+  if (z.lengthSq() < 1e-10) return null;
+  z.normalize();
+  const y = z.clone().cross(x);
+  return new THREE.Matrix4().makeBasis(x, y, z).setPosition(a);
+}
+
+/**
+ * Trasformazione che porta i punti src sui punti dst: il primo combacia, il secondo dà la direzione, il terzo (3D)
+ * la rotazione attorno a quella direzione. Con scale la distanza tra i primi due punti diventa quella del riferimento.
+ * Con meno punti di destinazione (anteprima) solo traslazione, poi direzione. d2: nel piano (rotazione attorno a Z).
+ */
+function alignMatrix(src, dst, d2, scale) {
+  const T = p => new THREE.Matrix4().makeTranslation(p.x, p.y, p.z);
+  const [s1, s2, s3] = src, [t1, t2, t3] = dst;
+  if (!t2) return T(t1.clone().sub(s1));
+  const ds = s2.clone().sub(s1), dt = t2.clone().sub(t1);
+  if (ds.lengthSq() < 1e-12 || dt.lengthSq() < 1e-12) return null;
+  const k = scale ? dt.length() / ds.length() : 1;
+  const S = new THREE.Matrix4().makeScale(k, k, k);
+  if (d2) {
+    const R = new THREE.Matrix4().makeRotationZ(Math.atan2(dt.y, dt.x) - Math.atan2(ds.y, ds.x));
+    return T(t1).multiply(R).multiply(S).multiply(T(s1.clone().negate()));
+  }
+  const fs = s3 && frame3(s1, s2, s3), ft = t3 && frame3(t1, t2, t3);
+  if (fs && ft) return ft.multiply(S).multiply(fs.invert());
+  const q = new THREE.Quaternion().setFromUnitVectors(ds.normalize(), dt.normalize());
+  return T(t1).multiply(new THREE.Matrix4().makeRotationFromQuaternion(q)).multiply(S).multiply(T(s1.clone().negate()));
 }
 
 /**
@@ -139,14 +211,14 @@ function collectTargets() {
     return ents.length ? { mode: '2d', planeId: r.plane.id, sketchId: r.sketch.id, ents } : { err: empty };
   }
   const all = resolveAll();
-  const flat = all.filter(x => x.type === 'entity' || x.type === 'sketch');
+  const flatSel = all.filter(x => x.type === 'entity' || x.type === 'sketch');
   const solid = all.filter(x => MOVABLE.includes(x.type));
-  if (flat.length) {
-    const ids = new Set(flat.map(x => (x.type === 'sketch' ? x.item.id : x.sketch.id)));
-    if (ids.size > 1 || flat.length !== all.length) return { err: t('Seleziona solo entità di uno stesso sketch, oppure solo elementi 3D') };
-    const sk = flat[0].type === 'sketch' ? flat[0].item : flat[0].sketch;
-    const ents = flat.some(x => x.type === 'sketch') ? sk.entities.map(e => e.id) : flat.map(x => x.item.id);
-    return ents.length ? { mode: '2d', planeId: flat[0].plane.id, sketchId: sk.id, ents } : { err: empty };
+  if (flatSel.length) {
+    const ids = new Set(flatSel.map(x => (x.type === 'sketch' ? x.item.id : x.sketch.id)));
+    if (ids.size > 1 || flatSel.length !== all.length) return { err: t('Seleziona solo entità di uno stesso sketch, oppure solo elementi 3D') };
+    const sk = flatSel[0].type === 'sketch' ? flatSel[0].item : flatSel[0].sketch;
+    const ents = flatSel.some(x => x.type === 'sketch') ? sk.entities.map(e => e.id) : flatSel.map(x => x.item.id);
+    return ents.length ? { mode: '2d', planeId: flatSel[0].plane.id, sketchId: sk.id, ents } : { err: empty };
   }
   if (!solid.length || solid.length !== all.length) {
     return { err: t('Seleziona prima cosa modificare: entità di uno sketch, oppure oggetti, artefatti, piani e origini') };
@@ -158,13 +230,13 @@ let dotTexture = null;
 function dotTex() {
   if (dotTexture) return dotTexture;
   const c = document.createElement('canvas');
-  c.width = c.height = 32;
+  c.width = c.height = 64;
   const g = c.getContext('2d');
   g.beginPath();
-  g.arc(16, 16, 12, 0, Math.PI * 2);
+  g.arc(32, 32, 26, 0, Math.PI * 2);
   g.fillStyle = '#ffffff';
   g.fill();
-  g.lineWidth = 4;
+  g.lineWidth = 7;
   g.strokeStyle = 'rgba(0,0,0,0.6)';
   g.stroke();
   dotTexture = new THREE.CanvasTexture(c);
@@ -180,12 +252,15 @@ export class ModifyTool {
     this.group = new THREE.Group();
     this.group.matrixAutoUpdate = false;
     vp.scene.add(this.group);
+    const line = (color, opacity = 1) => new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity });
     this.mat = {
       ghost: new THREE.MeshBasicMaterial({ color: COL.preview, transparent: true, opacity: 0.22, depthWrite: false }),
       ghostEdge: new THREE.LineBasicMaterial({ color: COL.preview, transparent: true, opacity: 0.85 }),
-      preview: new THREE.LineBasicMaterial({ color: COL.preview, depthTest: false, transparent: true }),
-      guide: new THREE.LineBasicMaterial({ color: COL.cursor, depthTest: false, transparent: true, opacity: 0.7 }),
-      ref: new THREE.LineBasicMaterial({ color: COL.mark, depthTest: false, transparent: true }),
+      preview: line(COL.preview),
+      guide: line(COL.cursor, 0.7),
+      ref: line(COL.mark),
+      target: line(COL.fixed),
+      axis: line(COL.axis, 0.9),
     };
     this.panel = h('div', { class: 'overlay xf-bar', role: 'group' });
     this.panel.hidden = true;
@@ -208,7 +283,7 @@ export class ModifyTool {
     if (App.pickMode && App.pickMode !== this.pm) return t('Concludi o annulla (Esc) prima la scelta del punto');
     const tg = collectTargets();
     if (tg.err) return tg.err;
-    if (['move', 'rotate', 'scale'].includes(kind) && tg.mode === '3d' && tg.items.some(x => resolve(x)?.item.locked)) {
+    if (['move', 'rotate', 'scale', 'align'].includes(kind) && tg.mode === '3d' && tg.items.some(x => resolve(x)?.item.locked)) {
       return t('La selezione contiene elementi bloccati: sbloccali (Ctrl+L) per modificarli');
     }
     return null;
@@ -223,16 +298,17 @@ export class ModifyTool {
     if (this.sim.active) this.sim.stop();
     const pref = loadPref();
     const o = {
-      kind, ...collectTargets(), pts: {}, cursor: null, edge: null, ref: null, typed: null, shift: false, created: [], info: {},
-      step: { move: 'base', copy: 'base', rotate: 'center', scale: 'ref1', arrayRect: 'params', arrayPolar: 'center' }[kind],
-      vals: {},
+      kind, ...collectTargets(), pts: {}, src: [], dst: [], cursor: null, edge: null, tedge: null, ref: null, rdir: null, axisDir: null,
+      typed: null, shift: false, created: [], info: {}, vals: {},
     };
     this.op = o;
     this._context();
-    const v = o.vals;
+    const v = o.vals, d3 = o.mode === '3d';
     if (kind === 'copy') v.n = 1;
-    if (kind === 'rotate' || kind === 'arrayPolar') v.axis = AXIS[pref.axis] ? pref.axis : 'z';
+    if (kind === 'rotate') v.axis = (AXIS[pref.axis] || (pref.axis === 'pts' && d3)) ? pref.axis : 'z';
+    if (kind === 'arrayPolar') v.axis = AXIS[pref.polarAxis] ? pref.polarAxis : 'z';
     if (kind === 'scale') v.fixed = pref.fixed === 'center' ? 'center' : 'ref';
+    if (kind === 'align') v.scale = !!pref.alignScale;
     if (kind === 'arrayRect') {
       // passo proposto: ingombro della selezione più un quarto, arrotondato al decimo
       const size = o.box.isEmpty() ? new THREE.Vector3() : o.box.getSize(new THREE.Vector3());
@@ -240,6 +316,10 @@ export class ModifyTool {
       Object.assign(v, { nx: pref.nx || 3, ny: pref.ny || 1, nz: pref.nz || 1, sx: gap(size.x), sy: gap(size.y), sz: gap(size.z) });
     }
     if (kind === 'arrayPolar') Object.assign(v, { n: pref.n || 6, total: pref.total ?? 360, rot: pref.rot !== false });
+    o.step = {
+      move: 'base', copy: 'base', rotate: v.axis === 'pts' && d3 ? 'axis1' : 'center', align: 'src', scale: 'ref1',
+      arrayRect: 'params', arrayPolar: 'center',
+    }[kind];
     this.pm = { kind: 'modify' };
     App.pickMode = this.pm;
     this.vp.transform.detach();
@@ -348,17 +428,24 @@ export class ModifyTool {
     const o = this.op, d2 = o.mode === '2d';
     const A = d2 ? ['U', 'V'] : ['X', 'Y', 'Z'];
     const num = (key, label, unit, extra = {}) => ({ key, label, unit, ...extra });
-    const axis = d2 ? [] : [{ key: 'axis', label: t('Asse'), seg: [['z', 'Z'], ['x', 'X'], ['y', 'Y']] }];
+    const axes = [['z', 'Z'], ['x', 'X'], ['y', 'Y']];
     switch (o.kind) {
       case 'move':
       case 'copy':
         return [
           [num('dist', t('Distanza'), 'mm')],
           A.map((a, i) => num(DELTA[i], `Δ${a}`, 'mm')),
+          [{ head: t('Arrivo') }, ...A.map((a, i) => num(ABS[i], a, 'mm'))],
           o.kind === 'copy' ? [num('n', t('Copie in fila'), '', { int: true, min: 1 })] : [],
         ];
       case 'rotate':
-        return [[num('angle', t('Angolo'), '°')], axis];
+        return [
+          [num('angle', t('Angolo'), '°')],
+          [{ key: 'cur', text: true, label: t('Riferimento') }, num('dir', t('Direzione finale'), '°')],
+          d2 ? [] : [{ key: 'axis', label: t('Asse'), seg: [...axes, ['pts', t('2 punti')]] }],
+        ];
+      case 'align':
+        return [[{ key: 'scale', check: t('Scala: fai combaciare anche i secondi punti') }]];
       case 'scale':
         return [
           [{ key: 'ref', text: true, label: t('Riferimento') }, num('len', t('Nuova misura'), 'mm'), num('factor', t('Fattore'), '×')],
@@ -371,7 +458,12 @@ export class ModifyTool {
           d2 ? [] : [num('nz', t('Livelli'), '', { int: true, min: 1 }), num('sz', t('passo {a}', { a: 'Z' }), 'mm')],
         ];
       case 'arrayPolar':
-        return [[num('n', t('Elementi'), '', { int: true, min: 2 }), num('total', t('Angolo totale'), '°')], [{ key: 'rot', check: t('Ruota le copie') }], axis];
+        return [
+          [num('n', t('Elementi'), '', { int: true, min: 2 }), num('total', t('Angolo totale'), '°')],
+          [{ head: t('Centro') }, ...A.map((a, i) => num(CTR[i], a, 'mm'))],
+          [{ key: 'rot', check: t('Ruota le copie') }],
+          d2 ? [] : [{ key: 'axis', label: t('Asse'), seg: axes }],
+        ];
     }
     return [];
   }
@@ -380,6 +472,7 @@ export class ModifyTool {
     const o = this.op;
     const [, label, icon] = MODIFY_COMMANDS.find(c => c[0] === o.kind);
     this.inputs = {};
+    this.segs = {};
     this.stepEl = h('div', { class: 'xf-step', 'aria-live': 'polite' });
     const what = o.mode === '2d'
       ? t('{n} entità di "{sketch}"', { n: o.ents.length, sketch: getSketch(o.sketchId).sketch.name })
@@ -399,11 +492,19 @@ export class ModifyTool {
 
   _field(f) {
     const o = this.op;
+    if (f.head) return h('span', { class: 'xf-gh' }, f.head);
     if (f.seg) {
       const el = h('span', { class: 'xf-seg', role: 'radiogroup', 'aria-label': f.label });
       const set = val => { for (const b of el.children) b.setAttribute('aria-checked', String(b.dataset.v === val)); };
       for (const [val, lab] of f.seg) {
-        el.append(h('button', { type: 'button', role: 'radio', 'data-v': val, onclick: () => { o.vals[f.key] = val; set(val); this._prefs(); this._render(); } }, lab));
+        el.append(h('button', { type: 'button', role: 'radio', 'data-v': val, onclick: () => {
+          if (o.vals[f.key] === val) return;
+          o.vals[f.key] = val;
+          set(val);
+          this._seg(f.key, val);
+          this._prefs();
+          this._render();
+        } }, lab));
       }
       set(o.vals[f.key]);
       return h('span', { class: 'xf-f' }, h('span', { class: 'xf-l' }, f.label), el);
@@ -429,6 +530,17 @@ export class ModifyTool {
     return h('label', { class: 'xf-f' }, h('span', { class: 'xf-l' }, f.label), inp, f.unit ? h('span', { class: 'xf-u' }, f.unit) : null);
   }
 
+  /** Scelta in un gruppo di pulsanti: l'asse di Ruota ricomincia dai punti da indicare. */
+  _seg(key, val) {
+    const o = this.op;
+    if (o.kind !== 'rotate' || key !== 'axis') return;
+    delete o.pts.center;
+    delete o.pts.axis2;
+    o.axisDir = o.rdir = o.edge = o.tedge = null;
+    if (o.typed === 'dir') o.typed = null;
+    o.step = val === 'pts' ? 'axis1' : 'center';
+  }
+
   /** Valore scritto in un campo: comanda lui (finché il campo non si svuota) al posto di quello indicato col mouse. */
   _typed(f, inp) {
     const o = this.op;
@@ -439,14 +551,26 @@ export class ModifyTool {
     inp.classList.toggle('bad', bad);
     if (bad) return;
     o.vals[f.key] = v;
-    const src = { dx: 'delta', dy: 'delta', dz: 'delta', dist: 'dist', angle: 'angle', len: 'len', factor: 'factor' }[f.key];
-    if (src && v == null && o.typed === src) o.typed = null;
+    const src = TYPED[f.key];
+    if (src && v == null && o.typed === src && src !== 'center') o.typed = null;
     else if (src && v != null) {
-      // si comincia a scrivere uno spostamento: le altre componenti partono da zero
-      if (src === 'delta' && o.typed !== 'delta') {
-        for (const q of DELTA) if (q !== f.key && this.inputs[q]) { o.vals[q] = 0; this.inputs[q].value = '0'; }
+      // si comincia a scrivere un vettore: le altre componenti partono da "nessuno spostamento" (o dal centro attuale)
+      const group = { delta: DELTA, abs: ABS, center: CTR }[src];
+      if (group && o.typed !== src) {
+        const from = src === 'delta' ? new THREE.Vector3() : src === 'abs' ? o.pts.base || o.center : o.pts.center || new THREE.Vector3();
+        group.forEach((q, i) => {
+          if (q === f.key || !this.inputs[q]) return;
+          o.vals[q] = r4(from.getComponent(i));
+          this.inputs[q].value = fmt(o.vals[q], 4);
+          this.inputs[q].classList.remove('bad');
+        });
       }
       o.typed = src;
+    }
+    if (src === 'center') {
+      // centro della serie polare scritto: vale come cliccato
+      o.pts.center = new THREE.Vector3(o.vals.cx || 0, o.vals.cy || 0, o.mode === '2d' ? 0 : o.vals.cz || 0);
+      o.step = 'params';
     }
     this._prefs();
     this._render();
@@ -467,27 +591,38 @@ export class ModifyTool {
     const { kind, vals: v } = this.op;
     const p = loadPref();
     if (kind === 'arrayRect') Object.assign(p, { nx: v.nx, ny: v.ny, nz: v.nz });
-    if (kind === 'arrayPolar') Object.assign(p, { n: v.n, total: v.total, rot: v.rot, axis: v.axis });
+    if (kind === 'arrayPolar') Object.assign(p, { n: v.n, total: v.total, rot: v.rot, polarAxis: v.axis });
     if (kind === 'rotate') p.axis = v.axis;
     if (kind === 'scale') p.fixed = v.fixed;
+    if (kind === 'align') p.alignScale = !!v.scale;
     savePref(p);
   }
 
   _stepText() {
     const o = this.op;
+    const end = o.kind === 'copy' ? t('<b>Esc</b> termina') : t('<b>Esc</b> annulla');
+    if (o.kind === 'align') {
+      const n = o.mode === '2d' ? 2 : 3;
+      const txt = o.src.length < n
+        ? t('Clic sul <b>punto {i} di {n}</b> del <b>pezzo da spostare</b>', { i: o.src.length + 1, n })
+        : t('Clic sul <b>punto {i} di {n}</b> del <b>riferimento</b>, corrispondente a quello del pezzo', { i: o.dst.length + 1, n });
+      return `${txt} · ${t('<b>Backspace</b> toglie l\'ultimo')} · ${end}`;
+    }
     const S = {
       move: {
-        base: 'Clic sul <b>punto base</b>, oppure scrivi lo spostamento e premi <b>Invio</b>',
-        dest: 'Clic sul <b>punto di arrivo</b>, oppure scrivi la distanza (nella direzione del cursore) · <b>Maiusc</b> lungo un asse',
+        base: 'Clic sul <b>punto base</b>, oppure scrivi lo spostamento o il punto di arrivo e premi <b>Invio</b>',
+        dest: 'Clic sul <b>punto di arrivo</b>, oppure scrivi la distanza (nella direzione del cursore) o le coordinate di arrivo · <b>Maiusc</b> lungo un asse',
       },
       copy: {
-        base: 'Clic sul <b>punto base</b>, oppure scrivi lo spostamento e premi <b>Invio</b>',
-        dest: 'Clic dove mettere la <b>copia</b>, anche più volte, oppure scrivi la distanza · <b>Maiusc</b> lungo un asse',
+        base: 'Clic sul <b>punto base</b>, oppure scrivi lo spostamento o il punto di arrivo e premi <b>Invio</b>',
+        dest: 'Clic dove mettere la <b>copia</b>, anche più volte, oppure scrivi la distanza o le coordinate di arrivo · <b>Maiusc</b> lungo un asse',
       },
       rotate: {
         center: 'Clic sul <b>centro di rotazione</b>, oppure scrivi l\'angolo e premi <b>Invio</b> (centro della selezione)',
-        ref: 'Clic sul punto che indica la <b>direzione di partenza</b>, oppure scrivi l\'angolo',
-        target: 'Clic sulla <b>nuova direzione</b>, oppure scrivi l\'angolo · <b>Maiusc</b> a passi di 15°',
+        axis1: 'Clic sul <b>primo punto dell\'asse</b> di rotazione',
+        axis2: 'Clic sul <b>secondo punto dell\'asse</b>: il verso va dal primo al secondo',
+        ref: 'Clic sul punto che indica la <b>direzione di partenza</b> o su un <b>bordo</b> da allineare, oppure scrivi l\'angolo',
+        target: 'Clic sulla <b>nuova direzione</b> o su un <b>bordo</b> a cui renderlo parallelo, oppure scrivi l\'angolo o la direzione finale · <b>Maiusc</b> a passi di 15°',
       },
       scale: {
         ref1: 'Clic su un <b>segmento</b> o un <b>bordo</b>, oppure sul <b>primo punto</b> del riferimento',
@@ -496,11 +631,10 @@ export class ModifyTool {
       },
       arrayRect: { params: 'Imposta <b>numero</b> e <b>passo</b> delle copie, con l\'anteprima nella vista · <b>Invio</b> applica' },
       arrayPolar: {
-        center: 'Clic sul <b>centro</b> della serie',
+        center: 'Clic sul <b>centro</b> della serie, oppure scrivine le coordinate',
         params: 'Imposta il <b>numero</b> di elementi e l\'<b>angolo totale</b> · <b>Invio</b> applica · clic per un altro centro',
       },
     };
-    const end = o.kind === 'copy' ? t('<b>Esc</b> termina') : t('<b>Esc</b> annulla');
     return `${t(S[o.kind][o.step])} · ${end}`;
   }
 
@@ -508,28 +642,41 @@ export class ModifyTool {
   _needs() {
     const o = this.op;
     switch (o.kind) {
-      case 'move': case 'copy': return t('Indica il punto base e il punto di arrivo, oppure scrivi lo spostamento');
-      case 'rotate': return t('Indica le due direzioni nella vista, oppure scrivi l\'angolo');
+      case 'move': case 'copy': return t('Indica il punto base e il punto di arrivo, oppure scrivi lo spostamento o le coordinate di arrivo');
+      case 'rotate':
+        return o.mode === '3d' && o.vals.axis === 'pts' && !o.axisDir
+          ? t('Indica i due punti dell\'asse di rotazione') : t('Indica le due direzioni nella vista, oppure scrivi l\'angolo');
+      case 'align': return t('Indica {n} punti sul pezzo da spostare e {n} sul riferimento', { n: o.mode === '2d' ? 2 : 3 });
       case 'scale': return o.ref ? t('Scrivi la nuova misura del riferimento (o il fattore di scala)') : t('Indica il riferimento (due punti, un segmento o un bordo), oppure scrivi il fattore di scala');
       case 'arrayRect': return t('La serie deve avere almeno due elementi: aumenta colonne, righe o livelli');
-      case 'arrayPolar': return o.pts.center ? t('Controlla il numero di elementi e l\'angolo totale') : t('Clic sul centro della serie');
+      case 'arrayPolar': return o.pts.center ? t('Controlla il numero di elementi e l\'angolo totale') : t('Clic sul centro della serie, oppure scrivine le coordinate');
     }
     return '';
   }
 
   // ---------------------------------------------------------------- calcolo
+  /** Asse di rotazione nel sistema di lavoro (null se va ancora indicato con due punti). */
+  _axis() {
+    const o = this.op;
+    if (o.mode === '2d') return AXIS.z;
+    if (o.kind === 'rotate' && o.vals.axis === 'pts') return o.axisDir;
+    return AXIS[o.vals.axis] || AXIS.z;
+  }
+
   /** Trasformazioni da applicare (nel sistema del piano per le entità, nel mondo per il 3D); aggiorna i campi calcolati. */
   _compute() {
     const o = this.op, v = o.vals, d2 = o.mode === '2d';
     const T = p => new THREE.Matrix4().makeTranslation(p.x, p.y, p.z);
     const about = (c, M) => T(c).multiply(M).multiply(T(c.clone().negate()));
-    const axis = d2 ? AXIS.z : AXIS[v.axis] || AXIS.z;
+    const vec = (keys, from) => new THREE.Vector3(...keys.map((q, i) => (d2 && i === 2 ? 0 : v[q] ?? from.getComponent(i))));
     o.info = {};
     switch (o.kind) {
       case 'move':
       case 'copy': {
+        const base = o.pts.base || o.center;
         let d = null;
-        if (o.typed === 'delta') d = new THREE.Vector3(v.dx || 0, v.dy || 0, d2 ? 0 : v.dz || 0);
+        if (o.typed === 'delta') d = vec(DELTA, new THREE.Vector3());
+        else if (o.typed === 'abs') d = vec(ABS, base).sub(base);
         else if (o.pts.base && o.cursor) {
           d = o.cursor.p.clone().sub(o.pts.base);
           if (o.shift) d = axisLock(d);
@@ -537,6 +684,7 @@ export class ModifyTool {
         }
         if (d) {
           if (o.typed !== 'delta') DELTA.forEach((q, i) => this._show(q, d.getComponent(i)));
+          if (o.typed !== 'abs') ABS.forEach((q, i) => this._show(q, base.getComponent(i) + d.getComponent(i)));
           if (o.typed !== 'dist') this._show('dist', d.length());
         }
         if (!d || d.lengthSq() < 1e-12) return [];
@@ -545,17 +693,40 @@ export class ModifyTool {
         return Array.from({ length: n }, (_, i) => T(d.clone().multiplyScalar(i + 1)));
       }
       case 'rotate': {
-        const c = o.pts.center || o.center;
+        const axis = this._axis();
+        const c = o.pts.center || (axis && !(o.mode === '3d' && v.axis === 'pts') ? o.center : null);
+        const line = !!(o.rdir?.line || o.tedge);
+        const cur = axis && o.rdir ? absAngle(axis, o.rdir.dir) : null;
+        this._show('cur', cur == null ? '–' : `${fmt(wrapAngle(cur, o.rdir.line), 2)}°`);
+        if (this.inputs.dir) this.inputs.dir.disabled = cur == null;
+        if (!axis || !c) return [];
         let a = null;
         if (o.typed === 'angle') a = v.angle;
-        else if (o.pts.center && o.pts.ref && o.cursor) {
-          a = signedAngle(axis, c, o.pts.ref, o.cursor.p);
-          if (a != null && o.shift) a = Math.round(a / 15) * 15;
-          if (a != null) this._show('angle', a);
+        else if (o.typed === 'dir' && cur != null && v.dir != null) a = wrapAngle(v.dir - cur, o.rdir.line);
+        else if (o.rdir && o.step === 'target' && (o.tedge || o.cursor)) {
+          const to = o.tedge ? o.tedge.b.clone().sub(o.tedge.a) : o.cursor.p.clone().sub(c);
+          a = angleAbout(axis, o.rdir.dir, to);
+          if (a != null && line) a = wrapAngle(a, true);
+          // Maiusc: la direzione finale a multipli di 15°
+          if (a != null && o.shift && cur != null) a = wrapAngle(Math.round((cur + a) / 15) * 15 - cur, line);
         }
+        if (a != null && o.typed !== 'angle') this._show('angle', a);
+        if (a != null && cur != null && o.typed !== 'dir') this._show('dir', wrapAngle(cur + a, o.rdir.line));
         if (a == null || Math.abs(a) < 1e-9) return [];
         o.info.a = a;
+        o.info.c = c;
         return [about(c, new THREE.Matrix4().makeRotationAxis(axis, a * D2R))];
+      }
+      case 'align': {
+        const n = d2 ? 2 : 3;
+        if (o.src.length < n) return [];
+        const dst = [...o.dst];
+        if (dst.length < n && o.cursor) dst.push(o.cursor.p);   // anteprima con il punto sotto il cursore
+        if (!dst.length) return [];
+        const M = alignMatrix(o.src, dst, d2, v.scale);
+        if (!M) return [];
+        o.info.k = v.scale && dst.length > 1 ? dst[1].distanceTo(dst[0]) / o.src[1].distanceTo(o.src[0]) : 1;
+        return [M];
       }
       case 'scale': {
         const ref = o.ref?.len;
@@ -584,8 +755,10 @@ export class ModifyTool {
       }
       case 'arrayPolar': {
         const c = o.pts.center;
+        if (c && o.typed !== 'center') CTR.forEach((q, i) => this._show(q, c.getComponent(i)));
         const n = Math.max(2, v.n || 2), tot = v.total ?? 360;
         if (!c || Math.abs(tot) < 1e-9) return [];
+        const axis = this._axis();
         // giro completo: l'ultimo elemento non si sovrappone al primo
         const step = Math.abs(Math.abs(tot) - 360) < 1e-9 ? tot / n : tot / (n - 1);
         const out = [];
@@ -604,6 +777,7 @@ export class ModifyTool {
   applyNow() {
     const o = this.op;
     if (!o) return;
+    if (o.kind === 'align' && o.dst.length < (o.mode === '2d' ? 2 : 3)) { toast(this._needs(), 'warn', 2800); return; }
     const Ms = this._compute();
     if (!Ms.length) { toast(this._needs(), 'warn', 2800); return; }
     const copies = ['copy', 'arrayRect', 'arrayPolar'].includes(o.kind);
@@ -646,7 +820,7 @@ export class ModifyTool {
       o.created.push(...created);
       selectMany(o.created);
       o.typed = null;
-      for (const q of ['dist', ...DELTA]) { delete o.vals[q]; if (this.inputs[q]) this.inputs[q].value = ''; }
+      for (const q of ['dist', ...DELTA, ...ABS]) { delete o.vals[q]; if (this.inputs[q]) this.inputs[q].value = ''; }
       status(t('{n} copie create: clic per altre copie, Esc per finire (Ctrl+Z annulla)', { n: o.created.length }));
       this._render();
       return;
@@ -654,6 +828,7 @@ export class ModifyTool {
     const msg = {
       move: () => t('Spostamento di {d} mm applicato (Ctrl+Z annulla)', { d: [info.d.x, info.d.y, ...(o.mode === '2d' ? [] : [info.d.z])].map(x => fmt(x, 3)).join('; ') }),
       rotate: () => t('Rotazione di {a}° applicata (Ctrl+Z annulla)', { a: fmt(info.a, 3) }),
+      align: () => (Math.abs(info.k - 1) > 1e-9 ? t('Allineamento applicato, scala ×{k} (Ctrl+Z annulla)', { k: fmt(info.k, 6) }) : t('Allineamento applicato (Ctrl+Z annulla)')),
       scale: () => t('Scala ×{k} applicata (Ctrl+Z annulla)', { k: fmt(info.k, 6) }),
       arrayRect: () => t('Serie rettangolare: {n} copie create (Ctrl+Z annulla)', { n: created.length }),
       arrayPolar: () => t('Serie polare: {n} copie create (Ctrl+Z annulla)', { n: created.length }),
@@ -668,16 +843,31 @@ export class ModifyTool {
   back(toRef = false) {
     const o = this.op;
     if (!o) return;
-    const prev = {
-      move: { dest: 'base' }, copy: { dest: 'base' }, rotate: { target: 'ref', ref: 'center' },
-      scale: { ref2: 'ref1', value: 'ref1' }, arrayPolar: { params: 'center' },
-    }[o.kind]?.[o.step];
-    if (o.kind === 'scale' && toRef) { o.ref = null; delete o.pts.r1; o.step = 'ref1'; } else if (prev) {
-      const drop = { base: 'base', ref: 'ref', center: 'center', ref1: 'r1' }[prev];
-      delete o.pts[drop];
-      if (prev === 'ref1') o.ref = null;
-      if (prev === 'center') delete o.pts.ref;
-      o.step = prev;
+    switch (o.kind) {
+      case 'move':
+      case 'copy':
+        if (o.step === 'dest') { delete o.pts.base; o.step = 'base'; }
+        break;
+      case 'rotate':
+        if (o.step === 'target') { o.rdir = o.tedge = null; o.step = 'ref'; } else if (o.step === 'ref') {
+          if (o.mode === '3d' && o.vals.axis === 'pts') { delete o.pts.axis2; o.axisDir = null; o.step = 'axis2'; } else { delete o.pts.center; o.step = 'center'; }
+        } else if (o.step === 'axis2') { delete o.pts.center; o.step = 'axis1'; }
+        if (o.typed === 'dir' && !o.rdir) o.typed = null;
+        break;
+      case 'align':
+        if (o.dst.length) o.dst.pop(); else o.src.pop();
+        o.step = o.src.length < (o.mode === '2d' ? 2 : 3) ? 'src' : 'dst';
+        break;
+      case 'scale':
+        if (toRef || o.step !== 'ref1') { o.ref = null; delete o.pts.r1; o.step = 'ref1'; }
+        break;
+      case 'arrayPolar':
+        if (o.step === 'params') {
+          delete o.pts.center;
+          o.step = 'center';
+          if (o.typed === 'center') { o.typed = null; for (const q of CTR) { delete o.vals[q]; if (this.inputs[q]) this.inputs[q].value = ''; } }
+        }
+        break;
     }
     this._render();
   }
@@ -695,16 +885,27 @@ export class ModifyTool {
       const e = this._ev;
       o.shift = e.shiftKey;
       o.cursor = this._pick(e);
-      o.edge = o.kind === 'scale' && o.step === 'ref1' ? this._edgeAt(e, o.cursor) : null;
+      this._hoverEdges(e);
       this._coords(o.cursor);
       this._render();
     });
   }
 
+  /** Segmenti e bordi sotto il puntatore: riferimento della scala, direzione di partenza e di arrivo della rotazione. */
+  _hoverEdges(ev) {
+    const o = this.op;
+    o.edge = o.kind === 'scale' && o.step === 'ref1' ? this._edgeAt(ev, o.cursor, true)
+      : o.kind === 'rotate' && o.step === 'ref' ? this._edgeAt(ev, o.cursor, false) : null;
+    o.tedge = o.kind === 'rotate' && o.step === 'target' ? this._edgeAt(ev, o.cursor, false) : null;
+    // un bordo parallelo all'asse non dà una direzione nella rotazione
+    const axis = o.kind === 'rotate' ? this._axis() : null;
+    if (axis && o.tedge && flat(o.tedge.b.clone().sub(o.tedge.a), axis).lengthSq() < 1e-10) o.tedge = null;
+  }
+
   leave() {
     if (!this.op) return;
     this.op.cursor = null;
-    this.op.edge = null;
+    this.op.edge = this.op.tedge = null;
     this._render();
   }
 
@@ -730,19 +931,21 @@ export class ModifyTool {
         }
         break;
       case 'rotate':
-        if (o.step === 'center') { o.pts.center = p; o.step = 'ref'; } else if (o.step === 'ref') {
-          if (p.distanceTo(o.pts.center) < 1e-6) { toast(t('Il punto coincide con il centro: scegline un altro'), 'warn'); return; }
-          o.pts.ref = p;
-          o.step = 'target';
-        } else {
-          if (o.typed === 'angle') o.typed = null;
-          this.applyNow();
-          return;
-        }
+        if (!this._rotateClick(ev, r, p)) return;
         break;
+      case 'align': {
+        const n = o.mode === '2d' ? 2 : 3;
+        const list = o.src.length < n ? o.src : o.dst;
+        if (list.some(q => q.distanceTo(p) < 1e-6)) { toast(t('Il punto coincide con uno già indicato: scegline un altro'), 'warn'); return; }
+        if (list.length === 2 && !frame3(list[0], list[1], p)) { toast(t('Il terzo punto è allineato con i primi due: scegline un altro'), 'warn'); return; }
+        list.push(p);
+        o.step = o.src.length < n ? 'src' : 'dst';
+        if (o.dst.length === n) { this.applyNow(); return; }
+        break;
+      }
       case 'scale':
         if (o.step === 'ref1') {
-          const edge = this._edgeAt(ev, r);
+          const edge = this._edgeAt(ev, r, true);
           if (edge) { o.ref = edge; this._toValue(); } else { o.pts.r1 = p; o.step = 'ref2'; }
         } else if (o.step === 'ref2') {
           const len = p.distanceTo(o.pts.r1);
@@ -755,12 +958,45 @@ export class ModifyTool {
       case 'arrayPolar':
         o.pts.center = p;
         o.step = 'params';
+        if (o.typed === 'center') o.typed = null;
         break;
       case 'arrayRect':
         status(t('Imposta numero e passo delle copie nel pannello, poi Invio'));
         break;
     }
     this._render();
+  }
+
+  /** Clic durante Ruota: asse, centro, direzione di partenza (punto o bordo), nuova direzione. false se fermato. */
+  _rotateClick(ev, r, p) {
+    const o = this.op;
+    if (o.step === 'axis1') { o.pts.center = p; o.step = 'axis2'; return true; }
+    if (o.step === 'axis2') {
+      const d = p.clone().sub(o.pts.center);
+      if (d.length() < 1e-6) { toast(t('I due punti coincidono: scegline un altro'), 'warn'); return false; }
+      o.pts.axis2 = p;
+      o.axisDir = d.normalize();
+      o.step = 'ref';
+      return true;
+    }
+    if (o.step === 'center') { o.pts.center = p; o.step = 'ref'; return true; }
+    const axis = this._axis(), c = o.pts.center;
+    if (o.step === 'ref') {
+      const edge = this._edgeAt(ev, r, false);
+      const rd = edge ? { dir: edge.b.clone().sub(edge.a), line: true, a: edge.a, b: edge.b } : { dir: p.clone().sub(c), line: false, a: c.clone(), b: p };
+      if (flat(rd.dir, axis).lengthSq() < 1e-10) {
+        toast(edge ? t('Il bordo è parallelo all\'asse di rotazione: scegline un altro') : t('Il punto è sull\'asse di rotazione: scegline un altro'), 'warn');
+        return false;
+      }
+      o.rdir = rd;
+      o.step = 'target';
+      return true;
+    }
+    // nuova direzione: punto o bordo cliccato
+    if (o.typed === 'angle' || o.typed === 'dir') o.typed = null;
+    this._hoverEdges(ev);
+    this.applyNow();
+    return false;
   }
 
   /** Riferimento della scala scelto: si scrive la nuova misura (il campo propone quella attuale). */
@@ -780,6 +1016,7 @@ export class ModifyTool {
   /** Punto sotto il puntatore, con aggancio: { p (sistema di lavoro), snapped, grid, px, hit, raw }. */
   _pick(ev) {
     const o = this.op;
+    const picked = [...Object.values(o.pts), ...o.src, ...o.dst].filter(Boolean);
     if (o.mode === '2d') {
       const wp = this.vp.rayPlane(ev, o.frame);
       if (!wp) return null;
@@ -787,8 +1024,7 @@ export class ModifyTool {
       const px = this.vp.pixelSize(wp);
       const raw = new THREE.Vector3(l.x, l.y, 0);
       let best = null, bd = px * 9;
-      const cands = [...o.snaps, ...Object.values(o.pts).filter(Boolean).map(q => [q.x, q.y])];
-      for (const c of cands) {
+      for (const c of [...o.snaps, ...picked.map(q => [q.x, q.y])]) {
         const d = Math.hypot(c[0] - l.x, c[1] - l.y);
         if (d < bd) { bd = d; best = c; }
       }
@@ -801,21 +1037,21 @@ export class ModifyTool {
     }
     const r = this.cmd.snapPoint(ev);
     if (r) return { p: r.point.clone(), snapped: r.snapped, hit: r.hit, px: this.vp.pixelSize(r.point) };
-    // fuori dai solidi: piano orizzontale alla quota del primo punto (per Ruota e Serie polare: perpendicolare all'asse)
-    const rot = (o.kind === 'rotate' || o.kind === 'arrayPolar') && o.pts.center;
-    const anchor = o.pts.center || o.pts.base || o.pts.r1 || new THREE.Vector3(o.center.x, o.center.y, o.box.isEmpty() ? 0 : o.box.min.z);
-    let n = rot ? AXIS[o.vals.axis] || AXIS.z : AXIS.z;
+    // fuori dai solidi: piano orizzontale alla quota dell'ultimo punto (per Ruota e Serie polare: perpendicolare all'asse)
+    const axis = (o.kind === 'rotate' || o.kind === 'arrayPolar') && o.pts.center && o.step !== 'axis2' ? this._axis() : null;
+    const anchor = picked[picked.length - 1] || new THREE.Vector3(o.center.x, o.center.y, o.box.isEmpty() ? 0 : o.box.min.z);
+    let n = axis || AXIS.z;
     const dir = this.vp.camera.getWorldDirection(new THREE.Vector3());
     if (Math.abs(dir.dot(n)) < 0.15) n = dir.negate();
-    const p = this.vp.rayPlane(ev, { o: anchor, n });
+    const p = this.vp.rayPlane(ev, { o: o.pts.center && axis ? o.pts.center : anchor, n });
     return p ? { p, px: this.vp.pixelSize(p) } : null;
   }
 
   /**
-   * Segmento o bordo sotto il puntatore (riferimento della Scala smart): { a, b, len, circle }. Il punto fisso a è
-   * l'estremo più vicino al clic; di un cerchio dello sketch si prende il diametro, con il centro fermo.
+   * Segmento o bordo sotto il puntatore: { a, b, len, circle }. a è l'estremo più vicino al clic; di un cerchio
+   * dello sketch (solo con circles, per la scala) si prende il diametro, con il centro come a.
    */
-  _edgeAt(ev, r) {
+  _edgeAt(ev, r, circles) {
     const o = this.op;
     if (!r || r.snapped) return null;
     if (o.mode === '2d') {
@@ -823,6 +1059,7 @@ export class ModifyTool {
       let best = null, bd = r.px * EDGE_PX;
       for (const e of o.flat) {
         if (e.kind === 'circle') {
+          if (!circles) continue;
           const d = Math.abs(Math.hypot(q.x - e.cx, q.y - e.cy) - e.r);
           if (d < bd) { bd = d; best = { a: new THREE.Vector3(e.cx, e.cy, 0), b: new THREE.Vector3(e.cx + e.r, e.cy, 0), len: 2 * e.r, circle: true }; }
           continue;
@@ -906,7 +1143,7 @@ export class ModifyTool {
     else this._preview3(shown);
     this._marks();
     this.stepEl.innerHTML = this._stepText();
-    this.applyBtn.disabled = !Ms.length;
+    this.applyBtn.disabled = !Ms.length || (o.kind === 'align' && o.dst.length < (d2 ? 2 : 3));
   }
 
   _line(points, mat, closed = false) {
@@ -989,33 +1226,45 @@ export class ModifyTool {
         this.group.add(g);
       }
     }
-    this._points(dots, COL.preview, 9);
+    this._points(dots, COL.preview, dotPx(1));
   }
 
-  /** Punti scelti, cursore, linee guida e riferimento della scala. */
+  /** Punti scelti, cursore, linee guida, assi e riferimenti. */
   _marks() {
     const o = this.op, c = o.cursor, info = o.info;
     const z = o.mode === '2d' ? 0.06 : 0;
     const L = p => new THREE.Vector3(p.x, p.y, p.z + z);
+    const seg = (a, b, mat) => this._line([L(a), L(b)], mat);
     const marks = [], fixed = [];
     switch (o.kind) {
       case 'move':
       case 'copy':
         if (o.pts.base) {
           marks.push(o.pts.base);
-          if (info.d && o.typed !== 'delta') this._line([L(o.pts.base), L(o.pts.base.clone().add(info.d))], this.mat.guide);
+          if (info.d && o.typed !== 'delta') seg(o.pts.base, o.pts.base.clone().add(info.d), this.mat.guide);
         }
         break;
       case 'rotate': {
-        const ctr = o.pts.center || o.center;
-        (o.pts.center ? marks : fixed).push(ctr);
-        if (o.pts.ref) this._line([L(ctr), L(o.pts.ref)], this.mat.ref);
-        if (o.step === 'target' && c) this._line([L(ctr), L(c.p)], this.mat.guide);
-        if (o.pts.ref && info.a) {
+        const axis = this._axis();
+        const ctr = o.pts.center || (o.mode === '3d' && o.vals.axis === 'pts' ? null : o.center);
+        if (ctr) (o.pts.center ? marks : fixed).push(ctr);
+        if (o.pts.axis2) marks.push(o.pts.axis2);
+        if (o.step === 'axis2' && c) seg(o.pts.center, c.p, this.mat.axis);
+        // asse di rotazione (3D): linea che attraversa il centro
+        if (o.mode === '3d' && axis && o.pts.center) {
+          const half = Math.max(10, o.box.isEmpty() ? 20 : o.box.getSize(new THREE.Vector3()).length() * 0.6);
+          seg(o.pts.center.clone().addScaledVector(axis, -half), o.pts.center.clone().addScaledVector(axis, half), this.mat.axis);
+        }
+        if (o.edge) seg(o.edge.a, o.edge.b, this.mat.ref);
+        if (o.rdir) seg(o.rdir.a, o.rdir.b, this.mat.ref);
+        if (o.tedge) seg(o.tedge.a, o.tedge.b, this.mat.target);
+        else if (o.step === 'target' && c && ctr) seg(ctr, c.p, this.mat.guide);
+        if (o.rdir && info.a && ctr && axis) {
           // arco della rotazione, dalla direzione di partenza
-          const axis = o.mode === '2d' ? AXIS.z : AXIS[o.vals.axis] || AXIS.z;
-          const u = o.pts.ref.clone().sub(ctr);
-          u.addScaledVector(axis, -u.dot(axis));
+          const mid = o.rdir.line ? o.rdir.a.clone().add(o.rdir.b).multiplyScalar(0.5) : o.rdir.b;
+          let rad = flat(mid.clone().sub(ctr), axis).length();
+          if (rad < 1e-3) rad = Math.max(5, o.box.isEmpty() ? 10 : o.box.getSize(new THREE.Vector3()).length() / 3);
+          const u = flat(o.rdir.dir, axis).setLength(rad);
           const steps = Math.max(8, Math.ceil(Math.abs(info.a) / 4));
           const arc = [];
           for (let i = 0; i <= steps; i++) arc.push(L(ctr.clone().add(u.clone().applyAxisAngle(axis, info.a * D2R * i / steps))));
@@ -1023,14 +1272,29 @@ export class ModifyTool {
         }
         break;
       }
+      case 'align': {
+        marks.push(...o.src);
+        fixed.push(...o.dst);
+        if (o.src.length > 1) this._line(o.src.map(L), this.mat.ref);
+        if (o.dst.length > 1) this._line(o.dst.map(L), this.mat.target);
+        o.dst.forEach((q, i) => seg(o.src[i], q, this.mat.guide));
+        if (c) {
+          const n = o.mode === '2d' ? 2 : 3;
+          if (o.src.length < n) { if (o.src.length) seg(o.src[o.src.length - 1], c.p, this.mat.ref); } else {
+            if (o.dst.length) seg(o.dst[o.dst.length - 1], c.p, this.mat.target);
+            seg(o.src[o.dst.length], c.p, this.mat.guide);
+          }
+        }
+        break;
+      }
       case 'scale':
-        if (o.step === 'ref1' && o.edge) { this._line([L(o.edge.a), L(o.edge.b)], this.mat.ref); fixed.push(o.edge.a); }
+        if (o.step === 'ref1' && o.edge) { seg(o.edge.a, o.edge.b, this.mat.ref); fixed.push(o.edge.a); }
         if (o.pts.r1) {
           marks.push(o.pts.r1);
-          if (c) this._line([L(o.pts.r1), L(c.p)], this.mat.guide);
+          if (c) seg(o.pts.r1, c.p, this.mat.guide);
         }
         if (o.ref) {
-          this._line([L(o.ref.a), L(o.ref.b)], this.mat.ref);
+          seg(o.ref.a, o.ref.b, this.mat.ref);
           marks.push(o.ref.b);
           fixed.push(info.fixed || (o.vals.fixed === 'center' ? o.center : o.ref.a));
         }
@@ -1039,9 +1303,10 @@ export class ModifyTool {
         if (o.pts.center) marks.push(o.pts.center);
         break;
     }
-    this._points(fixed.map(L), COL.fixed, 11);
-    this._points(marks.map(L), COL.mark, 10);
-    if (c && o.kind !== 'arrayRect') this._points([L(c.p)], c.snapped ? COL.mark : COL.cursor, c.snapped ? 12 : 8);
+    this._points(fixed.map(L), COL.fixed, dotPx(1.5));
+    this._points(marks.map(L), COL.mark, dotPx(1.5));
+    // punto sotto il cursore: arancione e più grande quando si aggancia a un vertice
+    if (c && o.kind !== 'arrayRect') this._points([L(c.p)], c.snapped ? COL.mark : COL.cursor, c.snapped ? dotPx(2.2) : dotPx(1.3));
   }
 
   /** Voci del menu del tasto destro. */
