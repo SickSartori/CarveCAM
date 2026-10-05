@@ -357,10 +357,41 @@ Le unità sono millimetri: se il modello è in altre unità usare la scala nelle
 
 ## G-code
 
+Il G-code si scrive per una **macchina del magazzino macchine** (*Strumenti › Magazzino macchine*, anche dal
+pulsante nell'esportazione), salvato sul server in `App_Data/library/machines.json` ed esportabile insieme a
+utensili e setup. Le macchine predefinite sono GRBL 1.1 / grblHAL / FluidNC, Fanuc/ISO 3+2 (G68.2), Fanuc/ISO 3 assi
+in coordinate mondo, LinuxCNC, Mach3/Mach4 e un controllo generico solo G1; ognuna si duplica e si modifica, con
+l'**anteprima del G-code** su un percorso di prova (elica, cerchio, raccordi, finitura curva). Per ogni macchina:
+
+- **Generale:** piani inclinati (pausa `M0` con le istruzioni, `G68.2`, coordinate mondo), ordine di
+  avvicinamento, corse degli assi e avanzamento massimo (avvisi nell'esportazione, avanzamenti ridotti), estensione
+  del file. *Valori di partenza* applica le impostazioni di una macchina predefinita.
+- **Sintassi:** parole di movimento (G0 G1 G2 G3), nomi degli assi e di I J K R F, decimali di coordinate, archi e
+  avanzamento, formato dei numeri (`10`, `10.`, `10.000`), assi invertiti, spazi, sintassi modale, numeri di riga
+  (lettera, inizio, passo), commenti tra parentesi o dopo `;` (o nessuno), maiuscolo, lunghezza massima, fine riga.
+- **Archi e corde:** i percorsi sono polilinee; il post-processor riconosce gli **archi** nei punti (tolleranza,
+  raggio minimo e massimo, angolo massimo, piani XZ e YZ, eliche) e li scrive come `G2`/`G3` con il centro `I J`
+  incrementale, assoluto o il raggio `R` (verificando il centro che ne ricava il controllo dopo l'arrotondamento).
+  Con **solo G1** gli archi riconosciuti si rifanno a corde regolari con l'**errore di corda** e la lunghezza
+  **minima** e **massima** delle corde (0 = senza limite).
+- **Movimenti:** comandi di **movimento esatto** e **smooth** (es. `G61`, `G64 P{TOL}`, `G05.1 Q1`) per le
+  svuotature e per le finiture, con la tolleranza e le righe per tornare alla modalità normale a fine programma.
+- **Mandrino:** automatico (`M3`/`M4` con i giri, senso di rotazione) o manuale (pausa per accenderlo), comandi
+  di avvio e arresto, attesa dopo l'avvio (`G4 P{SEC}`, `G4 X{SEC}`, `G4 P{MS}`), giri minimi e massimi, arresto
+  a ogni lavorazione o solo ai cambi utensile.
+- **Refrigerazione e aspirazione:** a pioggia, nebulizzato, aria, con i loro comandi e quello predefinito
+  (nell'esportazione se ne sceglie un altro); aspirazione o ventola per tutto il programma o con il mandrino.
+- **Cambio utensile:** automatico, manuale (pausa) o nessuno, correttore lunghezza (`G43 H{T}`).
+- **Inizio e fine:** righe di inizio e fine programma e di inizio e fine lavorazione con i segnaposto `{S}`
+  `{T}` `{TOOL}` `{D}` `{F}` `{SEC}` `{MS}` `{TOL}` `{NAME}` `{PROG}` `{OP}` `{DATE}` `{TIME}`; una riga
+  `(testo)` o `; testo` è un commento, scritto nello stile della macchina.
+
+Le macchine predefinite riproducono i due controlli di partenza.
+
 **GRBL 1.1, grblHAL e FluidNC** (mini CNC, 3 assi):
 
-- Solo comandi supportati da GRBL: niente `%`, numeri di programma `O`, `M6`, `G43 H` o `G68.2`. Tutte le
-  righe, commenti compresi, restano entro gli 80 caratteri del buffer di GRBL.
+- Solo comandi supportati da GRBL: niente `%`, numeri di programma `O`, `M6`, `G43 H` o `G68.2`; archi `G2`/`G3`
+  con `I J`. Tutte le righe, commenti compresi, restano entro gli 80 caratteri del buffer di GRBL.
 - A ogni lavorazione: salita alla quota di sicurezza, poi `S# M3` con attesa `G4 P` (configurabile, GRBL non
   sa quando il mandrino è in velocità), poi posizionamento in XY.
 - **Cambio utensile:** `M5` + pausa `M0`, con l'utensile da montare e l'invito a riazzerare Z nei commenti.
