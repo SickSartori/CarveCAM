@@ -37,7 +37,7 @@ Public Class GrblPostTests
             Assert.EndsWith(")", l)
             Assert.DoesNotMatch("[()]", l.Substring(1, l.Length - 2))
         Next
-        Dim allowed As New HashSet(Of String) From {"G0", "G1", "G4", "G17", "G21", "G54", "G90", "G94", "M0", "M3", "M5", "M8", "M9", "M30"}
+        Dim allowed As New HashSet(Of String) From {"G0", "G1", "G2", "G3", "G4", "G17", "G21", "G54", "G90", "G94", "M0", "M3", "M5", "M8", "M9", "M30"}
         For Each l In Code(lines)
             For Each m As Match In Regex.Matches(l, "([A-Z])(-?[0-9.]+)")
                 Dim letter = m.Groups(1).Value
@@ -45,7 +45,7 @@ Public Class GrblPostTests
                     Dim word = letter & CInt(Double.Parse(m.Groups(2).Value, Globalization.CultureInfo.InvariantCulture))
                     Assert.True(allowed.Contains(word), $"comando non GRBL {word} in: {l}")
                 Else
-                    Assert.Contains(letter, {"X", "Y", "Z", "F", "S", "P"})
+                    Assert.Contains(letter, {"X", "Y", "Z", "I", "J", "F", "S", "P"})
                 End If
             Next
             Assert.Matches("^([A-Z]-?[0-9.]+)( [A-Z]-?[0-9.]+)*$", l)

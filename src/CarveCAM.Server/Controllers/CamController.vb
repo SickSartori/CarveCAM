@@ -23,6 +23,11 @@ Namespace Controllers
         Public Property Options As New PostOptions()
     End Class
 
+    Public Class MachinePreviewRequest
+        Public Property Machine As MachineDef
+        Public Property CoolantMode As String
+    End Class
+
     <ApiController>
     <Route("api/cam")>
     Public Class CamController
@@ -115,9 +120,31 @@ Namespace Controllers
                 Return NotFound(New With {.Error = "Percorso non disponibile, ricalcolare: " & missing})
             End If
             If list.Count = 0 Then Return BadRequest(New With {.Error = "Nessun percorso da esportare."})
-            Dim txt = PostProcessor.GCode(list, If(req.Options, New PostOptions()))
-            _log.LogInformation("G-code generato: {Count} percorsi, controllo {Mode}, {Chars} caratteri", list.Count, req.Options?.Mode, txt.Length)
-            Return File(Encoding.ASCII.GetBytes(txt), "text/plain", "carvecam.nc")
+            Dim opts = If(req.Options, New PostOptions())
+            Dim warn As New List(Of String)()
+            Dim txt = PostProcessor.GCode(list, opts, warn)
+            Dim machine = If(opts.Machine?.Name, opts.Mode)
+            _log.LogInformation("G-code generato: {Count} percorsi, macchina {Machine}, {Chars} caratteri, {Warnings} avvisi", list.Count, machine, txt.Length, warn.Count)
+            ' avvisi (corse, avanzamenti, giri) anche per l'interfaccia, oltre che nei commenti del programma
+            If warn.Count > 0 Then Response.Headers("X-CarveCAM-Warnings") = Uri.EscapeDataString(String.Join(vbLf, warn))
+            Dim ext = If(String.IsNullOrWhiteSpace(opts.Machine?.FileExtension), "nc", opts.Machine.FileExtension.Trim().TrimStart("."c))
+            Return File(Encoding.ASCII.GetBytes(txt), "text/plain", "carvecam." & ext)
+        End Function
+
+        ''' <summary>Macchine predefinite del magazzino (per crearlo la prima volta e come valori di partenza).</summary>
+        <HttpGet("machines/presets")>
+        Public Function MachinePresetList() As IActionResult
+            Return Ok(MachinePresets.All())
+        End Function
+
+        ''' <summary>G-code di prova (svuotatura con elica, cerchio e raccordi, finitura curva) con la macchina indicata.</summary>
+        <HttpPost("machines/preview")>
+        Public Function MachinePreview(<FromBody> req As MachinePreviewRequest) As IActionResult
+            If req?.Machine Is Nothing Then Return BadRequest(New With {.Error = "Macchina mancante."})
+            Dim warn As New List(Of String)()
+            Dim txt = PostProcessor.GCode(SamplePaths.Build(),
+                New PostOptions With {.Machine = req.Machine, .ProgramName = "Anteprima", .ProgramNumber = 1000, .CoolantMode = req.CoolantMode}, warn)
+            Return Ok(New With {.Text = txt, .Warnings = warn})
         End Function
 
         <HttpPost("cl")>

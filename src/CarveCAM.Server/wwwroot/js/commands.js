@@ -20,12 +20,14 @@ import {
 } from './library.js';
 import { pickProjectFile, writeProjectFile, addRecent, recentList, fileOfRecent, removeRecent } from './files.js';
 import { openOptions } from './options.js';
+import { getMachines, openMachineLibrary, machineSummary, usesProgramNumber, COOLANTS } from './machines.js';
 import { color, settings } from './settings.js';
 import { artifactKeyPoints } from './scene-sync.js';
 import { t, num, LOCALE } from './i18n.js';
 import { log } from './log.js';
 
-const POST_MODE_KEY = 'carvecam.post.mode';   // ultimo controllo scelto nell'esportazione G-code (per browser)
+const POST_MODE_KEY = 'carvecam.post.mode';   // controllo scelto nelle versioni precedenti (per browser)
+const MACHINE_KEY = 'carvecam.post.machine';   // ultima macchina scelta nell'esportazione G-code (per browser)
 const ORIGIN_KEY = 'carvecam.origin.v1';       // ultime scelte di "Sposta origine" (per browser)
 const REPOS_KEY = 'carvecam.reposition.v1';    // ultime scelte di "Riposiziona" (per browser)
 const SAMPLE_KEY = 'carvecam.sample.mesh';     // mesh della targa di esempio già caricata sul server
@@ -1570,6 +1572,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
   cmd.exportLibrary = () => exportLibrary();
   cmd.importLibrary = () => importLibrary();
   cmd.setupLibrary = () => openSetupLibrary();
+  cmd.machineLibrary = () => openMachineLibrary();
   cmd.options = () => openOptions({ vp });
 
   /** Artefatto per il server; send: con i triangoli dei profili estrusi (per il confronto basta la loro definizione). */
@@ -1811,11 +1814,31 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       c.checked = preset.has(op.id);
       return { op, c };
     });
-    const mode = h('select', {},
-      h('option', { value: 'grbl' }, t('GRBL 1.1 / grblHAL / FluidNC (mini CNC, 3 assi)')),
-      h('option', { value: 'g682' }, t('Fanuc/ISO 3+2 assi: piano inclinato G68.2')),
-      h('option', { value: 'world' }, t('Fanuc/ISO coordinate mondo XYZ (3 assi)')));
-    try { const m = localStorage.getItem(POST_MODE_KEY); if (m && [...mode.options].some(o => o.value === m)) mode.value = m; } catch { /* storage non disponibile */ }
+    // macchina del magazzino: quella del progetto, l'ultima scelta, oppure quella del controllo usato finora
+    let machines = [];
+    if (kind === 'gcode') {
+      try { machines = await getMachines(); } catch (e) { toast(t('Magazzino macchine non disponibile: {msg}', { msg: e.message }), 'err'); return; }
+      if (!machines.length) { toast(t('Il magazzino macchine è vuoto: aggiungi una macchina'), 'warn'); await openMachineLibrary(); machines = await getMachines(); if (!machines.length) return; }
+    }
+    const mode = h('select', {});
+    const fillMachines = () => {
+      const keep = mode.value;
+      mode.replaceChildren(...machines.map(m => h('option', { value: m.id }, t(m.name))));
+      if (keep && machines.some(m => m.id === keep)) mode.value = keep;
+    };
+    fillMachines();
+    {
+      let pref = App.project.machineId;
+      try { pref = pref || localStorage.getItem(MACHINE_KEY) || ({ grbl: 'grbl', g682: 'fanuc-g682', world: 'iso-world' }[localStorage.getItem(POST_MODE_KEY)] || ''); } catch { /* storage non disponibile */ }
+      if (pref && machines.some(m => m.id === pref)) mode.value = pref;
+    }
+    const machineOf = () => machines.find(m => m.id === mode.value) || machines[0];
+    const libBtn = h('button', { class: 'btn', type: 'button', style: { whiteSpace: 'nowrap', flex: '0 0 auto' }, onclick: async () => {
+      await openMachineLibrary();
+      machines = await getMachines();
+      fillMachines();
+      syncMode();
+    } }, t('Magazzino macchine…'));
     // zero pezzo: origine del progetto oppure uno dei punti di origine
     const origins = App.project.origins || [];
     const zero = h('select', {},
@@ -1824,32 +1847,32 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     const lastZero = originId || App.project.gcodeOrigin;
     zero.value = lastZero && origins.some(o => o.id === lastZero) ? lastZero : '';
     const prog = h('input', { value: '1000', style: { width: '90px' } });
-    const dwell = h('input', { value: '2', style: { width: '60px' } });
-    const cool = h('input', { type: 'checkbox' });
+    const cool = h('select', {});
     let coolTouched = false;
     cool.addEventListener('change', () => { coolTouched = true; });
     const hint = h('p', { style: { color: 'var(--text-faint)', margin: '2px 0 8px' } });
     const rowProg = h('div', { class: 'form-row' }, h('label', {}, t('Numero programma')), prog);
-    const rowDwell = h('div', { class: 'form-row' }, h('label', {}, t('Attesa avvio mandrino (s)')), dwell);
-    const syncMode = () => {
-      const grbl = mode.value === 'grbl';
-      rowProg.hidden = grbl;
-      rowDwell.hidden = !grbl;
-      if (!coolTouched) cool.checked = !grbl;   // le mini CNC di solito non hanno refrigerante
-      hint.textContent = grbl
-        ? t('Cambi utensile e piani inclinati diventano pause M0: le istruzioni per riposizionare il pezzo e azzerare sono nei commenti.')
-        : mode.value === 'g682' ? t('I piani inclinati usano G68.2 con coordinate nel sistema del piano.') : t('Tutte le coordinate nel sistema del progetto: orientare l\'utensile secondo l\'asse indicato.');
-    };
+    function syncMode() {
+      const m = machineOf();
+      if (!m) return;
+      rowProg.hidden = !usesProgramNumber(m);
+      // refrigerante: quello predefinito della macchina (se non lo si è già cambiato), con i suoi comandi
+      const cmdOf = c => ({ flood: m.coolantFlood, mist: m.coolantMist, air: m.coolantAir }[c] || []).join(' ');
+      const was = cool.value;
+      cool.replaceChildren(...COOLANTS.map(([v, l]) => h('option', { value: v }, cmdOf(v) ? `${t(l)} (${cmdOf(v)})` : t(l))));
+      cool.value = coolTouched && was ? was : (m.coolant || 'none');
+      hint.textContent = [machineSummary(m), m.notes ? t(m.notes) : ''].filter(Boolean).join('. ');
+    }
     mode.addEventListener('change', syncMode);
     syncMode();
     const body = h('div', {},
       kind === 'gcode' ? [
-        h('div', { class: 'form-row' }, h('label', {}, t('Controllo')), mode),
+        h('div', { class: 'form-row' }, h('label', {}, t('Macchina')), h('div', { class: 'form-field' }, mode, libBtn)),
         hint,
         h('div', { class: 'form-row' }, h('label', {}, t('Zero pezzo (origine)')), zero),
         origins.length ? null : h('p', { class: 'p-note', style: { margin: '0 0 6px' } }, t('Per usare un altro zero pezzo crea un punto con il menu Origini.')),
-        rowProg, rowDwell,
-        h('div', { class: 'form-row' }, h('label', {}, t('Refrigerante (M8/M9)')), h('div', {}, cool)),
+        rowProg,
+        h('div', { class: 'form-row' }, h('label', {}, t('Refrigerante')), cool),
       ] : h('p', {}, t('CL data in coordinate mondo con vettore asse utensile (GOTO/x,y,z,i,j,k).')),
       h('div', { class: 'p-sec', style: { padding: '6px 0' } }, t('Lavorazioni')),
       checks.map(({ op, c }) => h('label', { style: { display: 'flex', gap: '8px', alignItems: 'center', padding: '2px 0' } }, c, op.name,
@@ -1863,35 +1886,43 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     if (!selOps.length) { toast(t('Nessuna lavorazione selezionata'), 'warn'); return; }
     if (!(await ensureComputed(selOps))) return;
     const ids = selOps.map(o => App.runtime.toolpaths.get(o.id).toolpathId);
-    if (kind === 'gcode') try { localStorage.setItem(POST_MODE_KEY, mode.value); } catch { /* storage non disponibile */ }
-    const delay = parseFloat(String(dwell.value).replace(',', '.'));
+    const machine = kind === 'gcode' ? machineOf() : null;
     const zo = kind === 'gcode' ? getOrigin(zero.value) : null;
-    if (kind === 'gcode') App.project.gcodeOrigin = zo ? zo.id : '';
+    if (kind === 'gcode') {
+      try { localStorage.setItem(MACHINE_KEY, machine.id); } catch { /* storage non disponibile */ }
+      App.project.gcodeOrigin = zo ? zo.id : '';
+      App.project.machineId = machine.id;
+    }
     const options = {
       origin: zo ? zo.position : null, originName: zo ? zo.name : '',
-      mode: mode.value, programNumber: parseInt(prog.value, 10) || 1000, decimals: 3,
-      coolant: cool.checked, programName: App.project.name || 'CARVECAM',
-      spindleDelay: Number.isFinite(delay) ? Math.max(0, Math.min(60, delay)) : 2,
+      machine, coolantMode: kind === 'gcode' ? cool.value : null,
+      programNumber: parseInt(prog.value, 10) || 1000, decimals: 3, programName: App.project.name || 'CARVECAM',
     };
-    log.info(`Esportazione ${kind}`, { ops: selOps.map(o => o.name), mode: options.mode, origin: options.originName || 'progetto' });
-    let text;
+    log.info(`Esportazione ${kind}`, { ops: selOps.map(o => o.name), machine: machine?.name, origin: options.originName || 'progetto' });
+    let out;
+    const run = list => (kind === 'gcode' ? api.gcode(list, options) : api.cldata(list, options).then(text => ({ text, warnings: [] })));
     try {
-      text = kind === 'gcode' ? await api.gcode(ids, options) : await api.cldata(ids, options);
+      out = await run(ids);
     } catch (e) {
       // percorsi scaduti sul server (es. riavvio): ricalcola e riprova una volta
       if (!(await ensureComputed(selOps, true))) return;
       const ids2 = selOps.map(o => App.runtime.toolpaths.get(o.id).toolpathId);
       try {
-        text = kind === 'gcode' ? await api.gcode(ids2, options) : await api.cldata(ids2, options);
+        out = await run(ids2);
       } catch (e2) { log.error('Esportazione non riuscita', e2); toast(e2.message, 'err'); return; }
     }
-    const ext = kind === 'gcode' ? 'nc' : 'cls';
+    const { text, warnings } = out;
+    if (warnings.length) log.warn('Avvisi della macchina', { machine: machine?.name, warnings });
+    const ext = kind === 'gcode' ? String(machine?.fileExtension || 'nc').replace(/^\./, '').trim() || 'nc' : 'cls';
     const lines = text.split('\n');
     const pre = h('pre', {}, lines.length > 4000 ? lines.slice(0, 4000).join('\n') + `\n… (${t('{n} righe non mostrate', { n: lines.length - 4000 })})` : text);
     const copy = h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(text); toast(t('Copiato negli appunti'), 'ok'); } catch { toast(t('Copia non consentita dal browser'), 'warn'); } } }, t('Copia'));
+    const warnBox = warnings.length
+      ? h('div', { class: 'gc-warn' }, h('b', {}, t('Avvisi per "{name}"', { name: t(machine.name) })), h('ul', {}, warnings.map(x => h('li', {}, x))))
+      : null;
     const res = await modal({
-      title: `${kind === 'gcode' ? 'G-code' : 'CL data'} · ${t('{n} righe', { n: num(lines.length) })}`, wide: true,
-      body: h('div', {}, pre, h('div', { style: { marginTop: '8px' } }, copy)),
+      title: `${kind === 'gcode' ? `G-code · ${t(machine.name)}` : 'CL data'} · ${t('{n} righe', { n: num(lines.length) })}`, wide: true,
+      body: h('div', {}, warnBox, pre, h('div', { style: { marginTop: '8px' } }, copy)),
       buttons: [{ label: t('Chiudi'), value: false }, { label: t('Scarica .{ext}', { ext }), value: true, primary: true }],
     });
     if (res) download(text, `${safeName(App.project.name || 'carvecam')}.${ext}`, 'text/plain');

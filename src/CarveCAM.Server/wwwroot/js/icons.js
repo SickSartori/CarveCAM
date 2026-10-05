@@ -42,6 +42,7 @@ export const TB = {
   lock: t('<rect x="4.5" y="9" width="11" height="8.5" rx="1.5"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/>' + dot(10, 13.2)),
   origin: t('<path d="M3 17h14M3 17V3"/><path d="M3 17l5.5-5.5"/><circle cx="12.5" cy="7.5" r="2.5"/><path d="M12.5 3.5v1.5M12.5 10v1.5M8.5 7.5H10M15 7.5h1.5"/>'),
   planeAdd: t('<path d="M2 15 5.5 9h12.5L14.5 15z"/><path d="M14.5 2.5v5M12 5h5"/>'),
+  machine: t('<path d="M2.5 17.5h15"/><path d="M4 17.5V4.5h12v13"/><path d="M4 7.5h12"/><path d="M10 7.5v3.3"/><path d="M8.6 10.8h2.8l-.7 2.4h-1.4z" fill="currentColor" fill-opacity=".35"/><path d="M6.5 15.5h7"/>'),
   toolLib: t('<path d="M3 17.5h14"/><path d="M5 17.5V8M10 17.5V5M15 17.5V9.5"/><path d="M4 8h2M9 5h2M14 9.5h2"/><path d="M5 4.5v1M10 2.5v1M15 6v1.5" stroke-dasharray="1 1"/>'),
   refPoint: t('<circle cx="10" cy="10" r="2.2" fill="currentColor"/><path d="M10 10h7M10 10V3M10 10l-5 5"/><path d="M15.5 8.5 17 10l-1.5 1.5M8.5 4.5 10 3l1.5 1.5"/>'),
   blackbox: t('<rect x="3" y="5" width="14" height="11" rx="1.5" fill="currentColor" fill-opacity=".25"/><path d="M3 9h14M8 12.5h4"/><path d="M7 5V3.5h6V5"/>'),

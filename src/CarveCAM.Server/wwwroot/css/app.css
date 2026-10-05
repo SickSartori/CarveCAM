@@ -554,6 +554,33 @@ kbd {
 .xf-btns button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .xf-btns button.primary:hover { background: var(--accent-hover); }
 .xf-btns button:disabled { opacity: .45; cursor: default; }
+/* magazzino macchine: elenco stretto, impostazioni a schede e anteprima del G-code */
+.lib.lib-machines { grid-template-columns: 250px minmax(0, 1fr); }
+.lib-machines .lib-form { overflow: hidden; padding-right: 0; }
+.lib-machines .lib-tools:first-child { flex-wrap: wrap; }
+.lib-machines .lib-tools:first-child .lib-search { flex: 1 0 100%; }
+.lib-machines .lib-tools:first-child .btn { flex: 1; }
+.lib-machines .lib-list table { table-layout: fixed; }
+.lib-machines .lib-list th:last-child, .lib-machines .lib-list td:last-child { width: 62px; color: var(--text-dim); }
+.mc-pane .form-field > textarea { flex: 1 1 100%; width: 100%; }
+.mc-pane textarea.mc-notes { min-height: 54px; resize: vertical; font: inherit; line-height: 1.4; padding: 4px 7px; }
+.mc-form { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(250px, 1fr); gap: 12px; height: 100%; min-height: 0; }
+.mc-left, .mc-right { display: flex; flex-direction: column; min-height: 0; }
+.mc-tabs { flex-wrap: wrap; flex: 0 0 auto; }
+.mc-tabs .opt-tab { padding: 5px 8px; font-size: 12px; }
+.mc-pane { flex: 1; min-height: 0; overflow: auto; padding: 8px 4px 4px 0; }
+.mc-pane .form-row { grid-template-columns: 140px 1fr; }
+.mc-pane .form-field { flex-wrap: wrap; gap: 4px 6px; }
+.mc-pane .mc-note { margin: -1px 0 9px; font-size: 11.5px; }
+.mc-lines { width: 100%; min-height: 26px; font: 11.5px/1.45 var(--mono); resize: vertical; white-space: pre; overflow-x: auto; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; }
+.mc-sub { color: var(--text-faint); font-size: 11px; }
+.mc-check { display: inline-flex; align-items: center; gap: 5px; margin-right: 8px; }
+.mc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+.mc-count { color: var(--text-faint); font-size: 11px; }
+.mc-warn { color: var(--warn); font-size: 12px; margin-bottom: 6px; }
+.mc-code { flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 6px 8px; font: 11px/1.45 var(--mono); white-space: pre; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; }
+.gc-warn { margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--warn); border-radius: 5px; color: var(--text); background: rgba(255, 204, 77, .08); }
+.gc-warn ul { margin: 4px 0 0; padding-left: 18px; }
 /* coordinate TCP durante la simulazione */
 .tcp-box {
   top: 10px; left: 10px; min-width: 150px; padding: 6px 10px 7px;

@@ -107,8 +107,20 @@ export const api = {
     return { positions, types, count: n };
   },
 
+  /** G-code e avvisi della macchina (corse, avanzamenti, giri): { text, warnings }. */
   async gcode(toolpathIds, options) {
-    return (await postJson('/api/cam/gcode', { toolpathIds, options })).text();
+    const res = await postJson('/api/cam/gcode', { toolpathIds, options });
+    const w = res.headers.get('X-CarveCAM-Warnings');
+    return { text: await res.text(), warnings: w ? decodeURIComponent(w).split('\n').filter(Boolean) : [] };
+  },
+
+  // ---------------------------------------------------------------- magazzino macchine
+  async machinePresets() {
+    return (await check(await req('/api/cam/machines/presets'))).json();
+  },
+  /** G-code di prova con la macchina: { text, warnings }. */
+  async machinePreview(machine, coolantMode) {
+    return (await postJson('/api/cam/machines/preview', { machine, coolantMode })).json();
   },
 
   async cldata(toolpathIds, options) {
@@ -129,7 +141,7 @@ export const api = {
   },
 
   // ---------------------------------------------------------------- archivi: magazzino utensili e setup
-  /** Elenco dell'archivio (tools | setups), oppure null se non è mai stato creato. */
+  /** Elenco dell'archivio (tools | setups | machines), oppure null se non è mai stato creato. */
   async library(kind) {
     return (await check(await req(`/api/library/${kind}`))).json();
   },

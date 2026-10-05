@@ -8,8 +8,8 @@ Imports Microsoft.Extensions.Logging
 Namespace Controllers
 
     ''' <summary>
-    ''' Archivi dell'utente, condivisi da tutti i progetti: magazzino utensili (tools) e setup di lavorazione
-    ''' (setups). Ogni archivio è un array JSON di oggetti con un "id" in App_Data/library/{archivio}.json;
+    ''' Archivi dell'utente, condivisi da tutti i progetti: magazzino utensili (tools), setup di lavorazione
+    ''' (setups) e magazzino macchine (machines). Ogni archivio è un array JSON di oggetti con un "id" in App_Data/library/{archivio}.json;
     ''' il contenuto dei singoli elementi è gestito dall'interfaccia.
     ''' </summary>
     <ApiController>
@@ -17,7 +17,7 @@ Namespace Controllers
     Public Class LibraryController
         Inherits ControllerBase
 
-        Private Shared ReadOnly Kinds As String() = {"tools", "setups"}
+        Private Shared ReadOnly Kinds As String() = {"tools", "setups", "machines"}
         Private Shared ReadOnly Gate As New Object()
         Private Const MaxBytes As Integer = 8 * 1024 * 1024
         Private ReadOnly _dir As String

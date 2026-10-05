@@ -1,6 +1,6 @@
-// Archivi sul server: magazzino utensili e setup di lavorazione (parametri preferiti dell'utente).
-// Finestre di gestione e di scelta usate quando si aggiunge una lavorazione; esportazione e importazione
-// degli archivi; utensili salvati nel progetto e confronto con il magazzino all'apertura.
+// Archivi sul server: magazzino utensili, setup di lavorazione (parametri preferiti dell'utente) e magazzino
+// macchine (vedi machines.js). Finestre di gestione e di scelta usate quando si aggiunge una lavorazione;
+// esportazione e importazione degli archivi; utensili salvati nel progetto e confronto con il magazzino all'apertura.
 import { api, download } from './api.js';
 import { modal, h, toast, confirmBox } from './dialogs.js';
 import { t } from './i18n.js';
@@ -47,21 +47,28 @@ function defaultSetups() {
 }
 
 // ------------------------------------------------------------------ cache e persistenza
-const cache = { tools: null, setups: null };
+const cache = { tools: null, setups: null, machines: null };
 
-async function load(kind) {
+/** Archivio iniziale: utensili e setup predefiniti, macchine predefinite del server. */
+async function defaults(kind) {
+  if (kind === 'tools') return defaultTools();
+  if (kind === 'setups') return defaultSetups();
+  return api.machinePresets();
+}
+
+export async function load(kind) {
   if (cache[kind]) return cache[kind];
   let list = null;
   try { list = await api.library(kind); } catch (e) { log.warn(`Archivio ${kind} non disponibile`, e); }
   if (!Array.isArray(list)) {
-    list = kind === 'tools' ? defaultTools() : defaultSetups();
+    list = await defaults(kind);
     try { await api.saveLibrary(kind, list); } catch { /* server non raggiungibile: si userà la copia in memoria */ }
   }
   cache[kind] = list;
   return list;
 }
 
-async function save(kind, list) {
+export async function save(kind, list) {
   cache[kind] = list;
   await api.saveLibrary(kind, list);
   log.info(`Archivio ${kind} salvato`, { count: list.length });
@@ -208,11 +215,18 @@ function relEditor(params, key, onChange) {
 }
 
 // ------------------------------------------------------------------ elenco con modulo (gestione archivi)
+/** Prefisso degli id, nome del file esportato e nome degli elementi per archivio. */
+const KINDS = {
+  tools: { prefix: 'tl', file: 'carvecam-utensili.json', what: 'utensili' },
+  setups: { prefix: 'st', file: 'carvecam-setup.json', what: 'setup di lavorazione' },
+  machines: { prefix: 'mc', file: 'carvecam-macchine.json', what: 'macchine' },
+};
+
 /**
  * Finestra di gestione di un archivio: elenco a sinistra, modulo dell'elemento a destra.
- * cols: [{ label, get(item) }], form(item, onChange) -> Node, make() -> nuovo elemento.
+ * cols: [{ label, get(item) }], form(item, onChange) -> Node, make() -> nuovo elemento; cls: classe in più.
  */
-async function manager({ title, kind, cols, form, make, filter }) {
+export async function manager({ title, kind, cols, form, make, filter, cls = '' }) {
   const list = structuredClone(await load(kind));
   let sel = list[0]?.id || null;
   const tbody = h('tbody');
@@ -241,7 +255,7 @@ async function manager({ title, kind, cols, form, make, filter }) {
     const it = list.find(x => x.id === sel);
     if (!it) return;
     const c = structuredClone(it);
-    c.id = uid(kind === 'tools' ? 'tl' : 'st');
+    c.id = uid(KINDS[kind].prefix);
     c.name = `${it.name} (${t('copia')})`;
     if (kind === 'tools') c.number = Math.max(0, ...list.map(x => x.number || 0)) + 1;
     list.push(c); sel = c.id; redrawList(); redrawForm();
@@ -256,12 +270,12 @@ async function manager({ title, kind, cols, form, make, filter }) {
   };
   // esportazione dell'elenco mostrato (anche modifiche non ancora salvate) e importazione da file
   const exp = () => {
-    downloadLibrary({ [kind]: list }, kind === 'tools' ? 'carvecam-utensili.json' : 'carvecam-setup.json');
+    downloadLibrary({ [kind]: list }, KINDS[kind].file);
   };
   const imp = async () => {
     const data = await readLibraryFile();
     const items = data?.[kind];
-    if (!items) { if (data) toast(t('Il file non contiene {what}', { what: kind === 'tools' ? t('utensili') : t('setup di lavorazione') }), 'warn'); return; }
+    if (!items) { if (data) toast(t('Il file non contiene {what}', { what: t(KINDS[kind].what) }), 'warn'); return; }
     const mode = await askImportMode(items.length, kind);
     if (!mode) return;
     const res = mergeItems(list, items, kind, mode === 'replace');
@@ -269,7 +283,7 @@ async function manager({ title, kind, cols, form, make, filter }) {
     redrawList(); redrawForm();
     toast(t('{a} aggiunti, {u} aggiornati: premi Salva per conservarli', { a: res.added, u: res.updated }), 'ok', 4000);
   };
-  const body = h('div', { class: 'lib' },
+  const body = h('div', { class: `lib ${cls}`.trim() },
     h('div', { class: 'lib-left' },
       h('div', { class: 'lib-tools' }, search,
         h('button', { class: 'btn', type: 'button', onclick: add }, t('Nuovo')),
@@ -572,13 +586,14 @@ const TOOL_TYPE_IDS = TOOL_TYPES.map(x => x[0]);
 function downloadLibrary(data, fileName) {
   const file = { app: 'CarveCAM', kind: LIB_FILE_KIND, version: 1, saved: new Date().toISOString(), ...structuredClone(data) };
   download(JSON.stringify(file, null, 2), fileName, 'application/json');
-  log.info('Archivi esportati', { tools: data.tools?.length ?? 0, setups: data.setups?.length ?? 0 });
+  log.info('Archivi esportati', { tools: data.tools?.length ?? 0, setups: data.setups?.length ?? 0, machines: data.machines?.length ?? 0 });
 }
 
 const validTool = x => x && typeof x === 'object' && TOOL_TYPE_IDS.includes(x.type) && Number(x.diameter) > 0;
 const validSetup = x => x && typeof x === 'object' && (x.kind === 'pocket' || x.kind === 'finish') && x.params && typeof x.params === 'object';
+const validMachine = x => x && typeof x === 'object' && typeof x.name === 'string' && Array.isArray(x.header);
 
-/** Legge un file di archivi scelto dall'utente: { tools?, setups? } (solo elementi validi) o null. */
+/** Legge un file di archivi scelto dall'utente: { tools?, setups?, machines? } (solo elementi validi) o null. */
 function readLibraryFile() {
   return new Promise(resolve => {
     const inp = h('input', { type: 'file', accept: '.json,application/json' });
@@ -592,12 +607,13 @@ function readLibraryFile() {
         const out = {};
         if (Array.isArray(src.tools)) out.tools = src.tools.filter(validTool);
         if (Array.isArray(src.setups)) out.setups = src.setups.filter(validSetup);
-        if (!out.tools?.length && !out.setups?.length) throw new Error('vuoto');
-        log.info('File di archivi letto', { file: f.name, tools: out.tools?.length ?? 0, setups: out.setups?.length ?? 0 });
+        if (Array.isArray(src.machines)) out.machines = src.machines.filter(validMachine);
+        if (!out.tools?.length && !out.setups?.length && !out.machines?.length) throw new Error('vuoto');
+        log.info('File di archivi letto', { file: f.name, tools: out.tools?.length ?? 0, setups: out.setups?.length ?? 0, machines: out.machines?.length ?? 0 });
         resolve(out);
       } catch (e) {
         log.warn('File di archivi non valido', e);
-        toast(t('"{name}" non contiene utensili o setup di CarveCAM', { name: f.name }), 'err');
+        toast(t('"{name}" non contiene utensili, setup o macchine di CarveCAM', { name: f.name }), 'err');
         resolve(null);
       }
     });
@@ -608,7 +624,7 @@ function readLibraryFile() {
 async function askImportMode(n, what) {
   return modal({
     title: t('Importa'),
-    body: h('div', {}, h('p', { style: { marginTop: 0 } }, t('Il file contiene {n} {what}.', { n, what: what === 'tools' ? t('utensili') : what === 'setups' ? t('setup di lavorazione') : t('elementi') })),
+    body: h('div', {}, h('p', { style: { marginTop: 0 } }, t('Il file contiene {n} {what}.', { n, what: KINDS[what] ? t(KINDS[what].what) : t('elementi') })),
       h('p', { class: 'p-note', style: { margin: 0 } }, t('Aggiungi: gli elementi già presenti (stesso identificativo, o stesso numero e nome per gli utensili) vengono aggiornati, gli altri aggiunti. Sostituisci: l\'archivio attuale viene sostituito da quello del file.'))),
     buttons: [{ label: t('Annulla'), value: false }, { label: t('Sostituisci'), value: 'replace' }, { label: t('Aggiungi'), value: 'merge', primary: true }],
   });
@@ -621,9 +637,9 @@ function mergeItems(list, items, kind, replaceAll) {
   for (const src of items) {
     const it = structuredClone(src);
     const i = list.findIndex(x => (it.id && x.id === it.id)
-      || (kind === 'tools' ? x.number === it.number && x.name === it.name : x.name === it.name && x.kind === it.kind));
+      || (kind === 'tools' ? x.number === it.number && x.name === it.name : kind === 'machines' ? x.name === it.name : x.name === it.name && x.kind === it.kind));
     if (i >= 0) { list[i] = { ...list[i], ...it, id: list[i].id }; updated++; } else {
-      if (!it.id || list.some(x => x.id === it.id)) it.id = uid(kind === 'tools' ? 'tl' : 'st');
+      if (!it.id || list.some(x => x.id === it.id)) it.id = uid(KINDS[kind].prefix);
       list.push(it);
       added++;
     }
@@ -631,26 +647,27 @@ function mergeItems(list, items, kind, replaceAll) {
   return { added, updated };
 }
 
-/** Esporta magazzino utensili e setup in un unico file. */
+/** Esporta magazzino utensili, setup e magazzino macchine in un unico file. */
 export async function exportLibrary() {
-  downloadLibrary({ tools: await getTools(), setups: await getSetups() }, 'carvecam-magazzino-e-setup.json');
+  downloadLibrary({ tools: await getTools(), setups: await getSetups(), machines: await load('machines') }, 'carvecam-magazzino-e-setup.json');
 }
 
-/** Importa utensili e/o setup da un file (esportato da CarveCAM) e salva gli archivi. */
+/** Importa utensili, setup e/o macchine da un file (esportato da CarveCAM) e salva gli archivi. */
 export async function importLibrary() {
   const data = await readLibraryFile();
   if (!data) return;
-  const n = (data.tools?.length || 0) + (data.setups?.length || 0);
-  const mode = await askImportMode(n, data.tools && data.setups ? 'all' : data.tools ? 'tools' : 'setups');
+  const kinds = ['tools', 'setups', 'machines'].filter(k => data[k]?.length);
+  const n = kinds.reduce((s, k) => s + data[k].length, 0);
+  const mode = await askImportMode(n, kinds.length === 1 ? kinds[0] : 'all');
   if (!mode) return;
   const msg = [];
+  const label = { tools: 'Utensili', setups: 'Setup', machines: 'Macchine' };
   try {
-    for (const kind of ['tools', 'setups']) {
-      if (!data[kind]?.length) continue;
+    for (const kind of kinds) {
       const list = structuredClone(await load(kind));
       const r = mergeItems(list, data[kind], kind, mode === 'replace');
       await save(kind, list);
-      msg.push(t('{what}: {a} aggiunti, {u} aggiornati', { what: kind === 'tools' ? t('Utensili') : t('Setup'), a: r.added, u: r.updated }));
+      msg.push(t('{what}: {a} aggiunti, {u} aggiornati', { what: t(label[kind]), a: r.added, u: r.updated }));
     }
     toast(msg.join(' · '), 'ok', 5000);
   } catch (e) { toast(t('Salvataggio dell\'archivio non riuscito: {msg}', { msg: e.message }), 'err', 6000); }
