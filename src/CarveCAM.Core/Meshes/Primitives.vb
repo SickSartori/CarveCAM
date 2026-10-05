@@ -29,6 +29,11 @@ Namespace Meshes
                     AddFrustum(tris, def.Radius, def.Radius2, def.Height, SegmentsFor(Math.Max(def.Radius, def.Radius2), tolerance))
                 Case "sphere"
                     AddSphere(tris, def.Radius, SegmentsFor(def.Radius, tolerance))
+                Case "extrude"
+                    If def.Mesh Is Nothing OrElse def.Mesh.Length < 9 Then Throw New ArgumentException("Profilo estruso senza geometria: " & def.Name)
+                    For k = 0 To def.Mesh.Length - 3 Step 3
+                        tris.Add(New Vec3(def.Mesh(k), def.Mesh(k + 1), def.Mesh(k + 2)))
+                    Next
                 Case Else
                     Throw New ArgumentException("Tipo di artefatto sconosciuto: " & def.Kind)
             End Select

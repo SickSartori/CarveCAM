@@ -1,0 +1,8 @@
+<Project>
+
+  <!-- versione comune a tutti i progetti: mostrata in Aiuto › Informazioni e nel log, usata nel nome del pacchetto -->
+  <PropertyGroup>
+    <Version>0.3.0</Version>
+  </PropertyGroup>
+
+</Project>

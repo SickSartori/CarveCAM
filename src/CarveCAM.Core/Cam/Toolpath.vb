@@ -42,6 +42,8 @@ Namespace Cam
         ''' <summary>Massima penetrazione rilevata dalla verifica (mm), 0 = nessuna.</summary>
         Public Property MaxGouge As Double
         Public Property GougeSamples As Integer
+        ''' <summary>Quota Z mondo più bassa raggiunta dal tagliente (0 senza percorso).</summary>
+        Public Property MinZ As Double
     End Class
 
     ''' <summary>Percorso utensile calcolato per una lavorazione.</summary>
@@ -58,6 +60,9 @@ Namespace Cam
         Public Property Spindle As Double
         Public Property SafeW As Double
         Public Property Frame As PlaneFrame
+        ''' <summary>Grezzo prima della lavorazione (per la simulazione) e dopo (per la lavorazione successiva).</summary>
+        Public Property StockBefore As StockMap
+        Public Property StockAfter As StockMap
         Public ReadOnly Property Points As New List(Of CLPoint)()
         Public ReadOnly Property Warnings As New List(Of String)()
         Public Property Stats As New ToolpathStats()

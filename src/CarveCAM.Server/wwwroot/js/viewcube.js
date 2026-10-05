@@ -3,6 +3,7 @@
 // riceve il puntatore (così i controlli orbitali della scena non lo vedono).
 import * as THREE from 'three';
 import { h } from './dialogs.js';
+import { t } from './i18n.js';
 
 const FACES = [
   { n: [0, 0, 1], r: [1, 0, 0], u: [0, 1, 0], label: 'ALTO' },
@@ -12,7 +13,7 @@ const FACES = [
   { n: [1, 0, 0], r: [0, 1, 0], u: [0, 0, 1], label: 'DESTRA' },
   { n: [-1, 0, 0], r: [0, -1, 0], u: [0, 0, 1], label: 'SINISTRA' },
 ];
-const NAMES = { z: ['basso', 'alto'], y: ['fronte', 'retro'], x: ['sinistra', 'destra'] };
+const NAMES = { z: [t('basso'), t('alto')], y: [t('fronte'), t('retro')], x: [t('sinistra'), t('destra')] };
 const BAND = 0.34;   // larghezza della fascia di spigoli e vertici (il cubo va da -1 a 1)
 const COLOR = { face: 0x46505c, band: 0x39414b, hover: 0x3fa7ff, line: 0x6b7784, text: '#dfe5ec' };
 const FONT = '"IBM Plex Sans", "Segoe UI", system-ui, sans-serif';
@@ -24,7 +25,7 @@ function regionName(d) {
   if (d.z) parts.push(NAMES.z[d.z > 0 ? 1 : 0]);
   if (d.y) parts.push(NAMES.y[d.y > 0 ? 1 : 0]);
   if (d.x) parts.push(NAMES.x[d.x > 0 ? 1 : 0]);
-  const s = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}` : parts[0];
+  const s = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} ${t('e')} ${parts[parts.length - 1]}` : parts[0];
   return s[0].toUpperCase() + s.slice(1);
 }
 
@@ -81,7 +82,7 @@ export class ViewCube {
       mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(...f.r), new THREE.Vector3(...f.u), n));
       mesh.position.copy(n).multiplyScalar(1.004);
       mesh.raycast = () => {};
-      mesh.userData = { canvas, tex, text: f.label };
+      mesh.userData = { canvas, tex, text: t(f.label) };
       this.scene.add(mesh);
       return mesh;
     });
@@ -184,13 +185,13 @@ export class ViewCube {
   }
 
   _tip(name) {
-    const t = this.tip;
-    if (!t) return;
-    if (!name) { t.hidden = true; return; }
-    t.replaceChildren(h('div', { class: 'tt-row' }, h('b', {}, `Vista: ${name}`)), h('div', { class: 'tt-hint' }, 'Trascina il cubo per ruotare'));
-    t.hidden = false;
+    const tip = this.tip;
+    if (!tip) return;
+    if (!name) { tip.hidden = true; return; }
+    tip.replaceChildren(h('div', { class: 'tt-row' }, h('b', {}, t('Vista: {name}', { name }))), h('div', { class: 'tt-hint' }, t('Trascina il cubo per ruotare')));
+    tip.hidden = false;
     const rc = this.hit.getBoundingClientRect();
-    t.style.left = `${Math.max(6, rc.left - t.offsetWidth - 8)}px`;
-    t.style.top = `${rc.top + rc.height / 2 - t.offsetHeight / 2}px`;
+    tip.style.left = `${Math.max(6, rc.left - tip.offsetWidth - 8)}px`;
+    tip.style.top = `${rc.top + rc.height / 2 - tip.offsetHeight / 2}px`;
   }
 }

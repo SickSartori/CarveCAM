@@ -1,6 +1,8 @@
+Imports System.Diagnostics
 Imports System.Text
 Imports System.Threading
 Imports Microsoft.AspNetCore.Mvc
+Imports Microsoft.Extensions.Logging
 Imports CarveCAM.Core.Cam
 Imports CarveCAM.Core.Model
 Imports CarveCAM.Core.Post
@@ -12,11 +14,18 @@ Namespace Controllers
         Public Property ToolpathId As String
         Public Property Stats As ToolpathStats
         Public Property Warnings As List(Of String)
+        ''' <summary>Il percorso ha il grezzo (GET toolpath/{id}/stock).</summary>
+        Public Property HasStock As Boolean
     End Class
 
     Public Class ExportRequest
         Public Property ToolpathIds As List(Of String)
         Public Property Options As New PostOptions()
+    End Class
+
+    Public Class MachinePreviewRequest
+        Public Property Machine As MachineDef
+        Public Property CoolantMode As String
     End Class
 
     <ApiController>
@@ -26,24 +35,52 @@ Namespace Controllers
 
         Private ReadOnly _meshes As MeshStore
         Private ReadOnly _paths As ToolpathStore
+        Private ReadOnly _log As ILogger(Of CamController)
 
-        Public Sub New(meshes As MeshStore, paths As ToolpathStore)
+        Public Sub New(meshes As MeshStore, paths As ToolpathStore, log As ILogger(Of CamController))
             _meshes = meshes
             _paths = paths
+            _log = log
         End Sub
 
         ''' <summary>Calcola il percorso di una lavorazione (svuotatura o finitura).</summary>
         <HttpPost("compute")>
         Public Async Function Compute(<FromBody> req As ComputeRequest, ct As CancellationToken) As Task(Of IActionResult)
             If req Is Nothing OrElse req.Operation Is Nothing Then Return BadRequest(New With {.Error = "Richiesta non valida."})
+            Dim op = req.Operation
+            Dim sw = Stopwatch.StartNew()
+            _log.LogInformation("Calcolo {Kind} '{Name}': strategia {Strategy}, utensile {Tool} Ø{Diameter} R{Corner}, passo {Stepover}/{Stepdown} mm, prof. {Depth} mm, {Boundary} entità, {Objects} oggetti, {Artifacts} artefatti, normale ({Nx};{Ny};{Nz})",
+                               op.Kind, op.Name, op.Strategy, op.Tool?.Type, op.Tool?.Diameter, op.Tool?.CornerRadius, op.Stepover, op.Stepdown, op.MaxDepth,
+                               If(req.Boundary?.Count, 0), If(req.Objects?.Count, 0), If(req.Artifacts?.Count, 0),
+                               req.Plane?.N?.ElementAtOrDefault(0), req.Plane?.N?.ElementAtOrDefault(1), req.Plane?.N?.ElementAtOrDefault(2))
+            ' grezzo: si parte da quello lasciato dalla lavorazione precedente, che deve essere ancora sul server
+            Dim previous As Toolpath = Nothing
+            If Not String.IsNullOrEmpty(req.StockFrom) Then
+                previous = _paths.TryGet(req.StockFrom)
+                If previous Is Nothing OrElse previous.StockAfter Is Nothing Then
+                    _log.LogInformation("Calcolo '{Name}': grezzo della lavorazione precedente {Id} non disponibile", op.Name, req.StockFrom)
+                    Return Conflict(New With {.Error = "Grezzo della lavorazione precedente non disponibile: ricalcolare le lavorazioni precedenti.", .Code = "stock-chain"})
+                End If
+            End If
             Try
-                Dim tp = Await Task.Run(Function() CamEngine.Compute(req, AddressOf _meshes.TryGet, ct), ct)
+                Dim tp = Await Task.Run(Function() CamEngine.Compute(req, AddressOf _meshes.TryGet, ct, previous), ct)
                 _paths.Add(tp)
-                Return Ok(New ComputeResponse With {.ToolpathId = tp.Id, .Stats = tp.Stats, .Warnings = tp.Warnings})
+                Dim s = tp.Stats
+                _log.LogInformation("Calcolo '{Name}' concluso in {Ms} ms: {Points} punti, {Levels} livelli, lavoro {Feed:0.0} mm, rapidi {Rapid:0.0} mm, interferenza max {Gouge:0.000} mm, {Warnings} avvisi",
+                                   op.Name, sw.ElapsedMilliseconds, s?.PointCount, s?.Levels, s?.FeedLength, s?.RapidLength, s?.MaxGouge, If(tp.Warnings?.Count, 0))
+                For Each w In If(tp.Warnings, New List(Of String)())
+                    _log.LogWarning("Calcolo '{Name}': {Warning}", op.Name, w)
+                Next
+                Return Ok(New ComputeResponse With {.ToolpathId = tp.Id, .Stats = tp.Stats, .Warnings = tp.Warnings, .HasStock = tp.StockBefore IsNot Nothing})
             Catch ex As ArgumentException
+                _log.LogWarning("Calcolo '{Name}' rifiutato dopo {Ms} ms: {Message}", op.Name, sw.ElapsedMilliseconds, ex.Message)
                 Return BadRequest(New With {.Error = ex.Message})
             Catch ex As OperationCanceledException
+                _log.LogInformation("Calcolo '{Name}' annullato dopo {Ms} ms", op.Name, sw.ElapsedMilliseconds)
                 Return StatusCode(499, New With {.Error = "Calcolo annullato."})
+            Catch ex As Exception
+                _log.LogError(ex, "Calcolo '{Name}' non riuscito dopo {Ms} ms", op.Name, sw.ElapsedMilliseconds)
+                Throw
             End Try
         End Function
 
@@ -53,6 +90,14 @@ Namespace Controllers
             Dim tp = _paths.TryGet(id)
             If tp Is Nothing Then Return NotFound(New With {.Error = "Percorso non trovato: ricalcolare."})
             Return File(tp.ToBinary(), "application/octet-stream")
+        End Function
+
+        ''' <summary>Grezzo prima della lavorazione, per la simulazione dell'asportazione (formato di StockMap.ToBinary).</summary>
+        <HttpGet("toolpath/{id}/stock")>
+        Public Function GetStock(id As String) As IActionResult
+            Dim tp = _paths.TryGet(id)
+            If tp Is Nothing OrElse tp.StockBefore Is Nothing Then Return NotFound(New With {.Error = "Grezzo non disponibile: ricalcolare."})
+            Return File(tp.StockBefore.ToBinary(), "application/octet-stream")
         End Function
 
         Private Function Collect(req As ExportRequest, ByRef missing As String) As List(Of Toolpath)
@@ -70,10 +115,36 @@ Namespace Controllers
         Public Function GCode(<FromBody> req As ExportRequest) As IActionResult
             Dim missing As String = Nothing
             Dim list = Collect(req, missing)
-            If list Is Nothing Then Return NotFound(New With {.Error = "Percorso non disponibile, ricalcolare: " & missing})
+            If list Is Nothing Then
+                _log.LogWarning("G-code: percorso {Id} non più disponibile sul server", missing)
+                Return NotFound(New With {.Error = "Percorso non disponibile, ricalcolare: " & missing})
+            End If
             If list.Count = 0 Then Return BadRequest(New With {.Error = "Nessun percorso da esportare."})
-            Dim txt = PostProcessor.GCode(list, If(req.Options, New PostOptions()))
-            Return File(Encoding.ASCII.GetBytes(txt), "text/plain", "carvecam.nc")
+            Dim opts = If(req.Options, New PostOptions())
+            Dim warn As New List(Of String)()
+            Dim txt = PostProcessor.GCode(list, opts, warn)
+            Dim machine = If(opts.Machine?.Name, opts.Mode)
+            _log.LogInformation("G-code generato: {Count} percorsi, macchina {Machine}, {Chars} caratteri, {Warnings} avvisi", list.Count, machine, txt.Length, warn.Count)
+            ' avvisi (corse, avanzamenti, giri) anche per l'interfaccia, oltre che nei commenti del programma
+            If warn.Count > 0 Then Response.Headers("X-CarveCAM-Warnings") = Uri.EscapeDataString(String.Join(vbLf, warn))
+            Dim ext = If(String.IsNullOrWhiteSpace(opts.Machine?.FileExtension), "nc", opts.Machine.FileExtension.Trim().TrimStart("."c))
+            Return File(Encoding.ASCII.GetBytes(txt), "text/plain", "carvecam." & ext)
+        End Function
+
+        ''' <summary>Macchine predefinite del magazzino (per crearlo la prima volta e come valori di partenza).</summary>
+        <HttpGet("machines/presets")>
+        Public Function MachinePresetList() As IActionResult
+            Return Ok(MachinePresets.All())
+        End Function
+
+        ''' <summary>G-code di prova (svuotatura con elica, cerchio e raccordi, finitura curva) con la macchina indicata.</summary>
+        <HttpPost("machines/preview")>
+        Public Function MachinePreview(<FromBody> req As MachinePreviewRequest) As IActionResult
+            If req?.Machine Is Nothing Then Return BadRequest(New With {.Error = "Macchina mancante."})
+            Dim warn As New List(Of String)()
+            Dim txt = PostProcessor.GCode(SamplePaths.Build(),
+                New PostOptions With {.Machine = req.Machine, .ProgramName = "Anteprima", .ProgramNumber = 1000, .CoolantMode = req.CoolantMode}, warn)
+            Return Ok(New With {.Text = txt, .Warnings = warn})
         End Function
 
         <HttpPost("cl")>

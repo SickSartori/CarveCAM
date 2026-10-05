@@ -1,6 +1,7 @@
 Imports System.IO
 Imports Microsoft.AspNetCore.Http
 Imports Microsoft.AspNetCore.Mvc
+Imports Microsoft.Extensions.Logging
 Imports CarveCAM.Core.Meshes
 Imports CarveCAM.Server.Services
 
@@ -20,9 +21,11 @@ Namespace Controllers
         Inherits ControllerBase
 
         Private ReadOnly _store As MeshStore
+        Private ReadOnly _log As ILogger(Of MeshController)
 
-        Public Sub New(store As MeshStore)
+        Public Sub New(store As MeshStore, log As ILogger(Of MeshController))
             _store = store
+            _log = log
         End Sub
 
         Private Shared Function Info(id As String, name As String, pos As Single()) As MeshInfo
@@ -48,12 +51,15 @@ Namespace Controllers
             Using ms As New MemoryStream()
                 Await file.CopyToAsync(ms)
                 Try
+                    Dim sw = System.Diagnostics.Stopwatch.StartNew()
                     Dim pos = MeshImporter.Import(file.FileName, ms.ToArray())
                     Dim id = _store.Add(pos)
+                    _log.LogInformation("Importato {File} ({Bytes} byte): {Triangles} triangoli in {Ms} ms, mesh {Id}", file.FileName, file.Length, pos.Length \ 9, sw.ElapsedMilliseconds, id)
                     Return Ok(Info(id, Path.GetFileNameWithoutExtension(file.FileName), pos))
                 Catch ex As Exception When TypeOf ex Is InvalidDataException OrElse TypeOf ex Is NotSupportedException OrElse
                                            TypeOf ex Is FormatException OrElse TypeOf ex Is IndexOutOfRangeException OrElse
                                            TypeOf ex Is ArgumentException
+                    _log.LogWarning(ex, "Importazione di {File} non riuscita", file.FileName)
                     Return BadRequest(New With {.Error = "Impossibile leggere il file: " & ex.Message})
                 End Try
             End Using
@@ -69,6 +75,7 @@ Namespace Controllers
                 Dim pos = MeshData.Sanitize(MeshData.FromBytes(ms.ToArray()))
                 If pos.Length = 0 Then Return BadRequest(New With {.Error = "La mesh non contiene triangoli validi."})
                 Dim id = _store.Add(pos)
+                _log.LogInformation("Mesh caricata dal browser '{Name}': {Triangles} triangoli, mesh {Id}", name, pos.Length \ 9, id)
                 Return Ok(Info(id, If(name, "Mesh"), pos))
             End Using
         End Function
@@ -77,7 +84,10 @@ Namespace Controllers
         <HttpGet("{id}")>
         Public Function GetMesh(id As String) As IActionResult
             Dim pos = _store.TryGet(id)
-            If pos Is Nothing Then Return NotFound(New With {.Error = "Mesh non trovata."})
+            If pos Is Nothing Then
+                _log.LogWarning("Mesh {Id} richiesta ma non presente sul server", id)
+                Return NotFound(New With {.Error = "Mesh non trovata."})
+            End If
             Return File(MeshData.ToBytes(pos), "application/octet-stream")
         End Function
 

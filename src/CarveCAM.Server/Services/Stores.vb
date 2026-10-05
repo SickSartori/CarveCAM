@@ -82,10 +82,15 @@ Namespace Services
         End Function
     End Class
 
-    ''' <summary>Percorsi calcolati (in memoria, ultimi 300).</summary>
+    ''' <summary>
+    ''' Percorsi calcolati (in memoria, ultimi 300). Le mappe del grezzo occupano più memoria: si tengono solo per
+    ''' gli ultimi 40 percorsi (per i più vecchi il client ricalcola la catena delle lavorazioni).
+    ''' </summary>
     Public NotInheritable Class ToolpathStore
+        Private Const MaxStock As Integer = 40
         Private ReadOnly _items As New ConcurrentDictionary(Of String, Toolpath)()
         Private ReadOnly _order As New ConcurrentQueue(Of String)()
+        Private ReadOnly _withStock As New ConcurrentQueue(Of String)()
 
         Public Sub Add(tp As Toolpath)
             _items(tp.Id) = tp
@@ -93,6 +98,16 @@ Namespace Services
             While _order.Count > 300
                 Dim old As String = Nothing
                 If _order.TryDequeue(old) Then _items.TryRemove(old, Nothing)
+            End While
+            If tp.StockBefore Is Nothing AndAlso tp.StockAfter Is Nothing Then Return
+            _withStock.Enqueue(tp.Id)
+            While _withStock.Count > MaxStock
+                Dim old As String = Nothing
+                Dim otp As Toolpath = Nothing
+                If _withStock.TryDequeue(old) AndAlso _items.TryGetValue(old, otp) Then
+                    otp.StockBefore = Nothing
+                    otp.StockAfter = Nothing
+                End If
             End While
         End Sub
 

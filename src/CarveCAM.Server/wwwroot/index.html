@@ -9,22 +9,63 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="css/app.css">
+  <script>
+    // tema e lingua letti subito dalle opzioni: la schermata di avvio compare già con i colori giusti
+    try {
+      var cc = JSON.parse(localStorage.getItem('carvecam.settings.v1') || '{}');
+      if (cc.theme === 'light') document.documentElement.dataset.theme = 'light';
+      window.__ccLang = cc.lang === 'en' ? 'en' : 'it';
+    } catch (e) { window.__ccLang = 'it'; }
+  </script>
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+      "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.8.3/build/index.module.js",
+      "three-bvh-csg": "https://cdn.jsdelivr.net/npm/three-bvh-csg@0.0.17/build/index.module.js"
     }
   }
   </script>
 </head>
 <body>
+  <!-- schermata di avvio: la fresa (punto ambra) scava la passata interna e poi la "C" del logo -->
+  <div id="splash" class="splash" role="status" aria-live="polite">
+    <svg class="cc-loader" viewBox="0 0 32 32" aria-hidden="true">
+      <defs>
+        <linearGradient id="ccl-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#4f6bff"/>
+          <stop offset="1" stop-color="#12b5d6"/>
+        </linearGradient>
+      </defs>
+      <rect class="ccl-tile" width="32" height="32" rx="8" fill="url(#ccl-bg)"/>
+      <rect x=".5" y=".5" width="31" height="31" rx="7.5" fill="none" stroke="#fff" stroke-opacity=".18"/>
+      <path class="ccl-guide" d="M22.36 9.64A9 9 0 1 0 22.36 22.36M19.39 12.61A4.8 4.8 0 1 0 19.39 19.39"/>
+      <path class="ccl-inner" pathLength="100" d="M19.39 12.61A4.8 4.8 0 1 0 19.39 19.39"/>
+      <path class="ccl-outer" pathLength="100" d="M22.36 9.64A9 9 0 1 0 22.36 22.36"/>
+      <g class="ccl-tool ccl-tool-in"><circle cx="20.8" cy="16" r="2.3"/></g>
+      <g class="ccl-tool ccl-tool-out"><circle cx="25" cy="16" r="3.1"/></g>
+    </svg>
+    <div class="splash-name">CarveCAM</div>
+    <div id="splash-text" class="splash-text">Avvio…</div>
+  </div>
+  <script>
+    if (window.__ccLang === 'en') document.getElementById('splash-text').textContent = 'Starting…';
+    // moduli non caricati dopo 15 s (Three.js arriva da Internet): lo si dice invece di restare sull'animazione
+    setTimeout(function () {
+      if (window.carvecam) return;
+      var e = document.getElementById('splash-text');
+      if (e) e.textContent = window.__ccLang === 'en'
+        ? 'Loading is taking long: check the Internet connection (Three.js) and that the CarveCAM server is running.'
+        : 'Il caricamento richiede più del previsto: controlla la connessione a Internet (Three.js) e che il server CarveCAM sia avviato.';
+    }, 15000);
+  </script>
   <header id="topbar">
     <div id="titlebar">
-      <div class="brand" aria-label="CarveCAM">
+      <button id="brand" class="brand" type="button" title="Schermata iniziale">
         <img class="brand-mark" src="favicon.svg" alt="" width="18" height="18">
         <span class="brand-name">CarveCAM</span>
-      </div>
+      </button>
       <nav id="menubar" role="menubar" aria-label="Menu principale"></nav>
       <div class="title-center">
         <input id="proj-name" class="proj-name" aria-label="Nome del progetto" title="Nome del progetto (clic per rinominare)" spellcheck="false">
@@ -37,7 +78,7 @@
         <span id="srv-status" class="srv" data-state="checking" title="Verifica del server in corso">
           <span class="srv-dot" aria-hidden="true"></span><span class="srv-lbl">Server</span>
         </span>
-        <button id="btn-help" class="tb-btn" type="button" aria-label="Scorciatoie da tastiera"></button>
+        <button id="btn-help" class="tb-btn" type="button" aria-label="Guida di CarveCAM (F1)" title="Guida di CarveCAM (F1)"></button>
       </div>
     </div>
     <div id="toolbar" role="toolbar" aria-label="Strumenti"></div>
@@ -50,16 +91,11 @@
         <div class="panel-title">
           <span>Navigatore</span>
           <span class="panel-title-actions">
-            <button class="icon-btn" id="tree-collapse" title="Comprimi tutto">&#x2212;</button>
-            <button class="icon-btn" id="tree-expand" title="Espandi tutto">+</button>
+            <button class="icon-btn" id="tree-collapse" title="Comprimi tutto" type="button"></button>
+            <button class="icon-btn" id="tree-expand" title="Espandi tutto" type="button"></button>
           </span>
         </div>
         <div id="tree" class="tree" tabindex="0"></div>
-      </section>
-      <div id="sidebar-split" class="hsplit" title="Trascina per ridimensionare"></div>
-      <section id="props-panel" class="panel">
-        <div class="panel-title"><span id="props-title">Proprietà</span></div>
-        <div id="props" class="props"></div>
       </section>
     </aside>
     <div id="sidebar-resizer" class="vsplit" title="Trascina per ridimensionare"></div>
@@ -72,7 +108,7 @@
           <button type="button" data-view="fit" data-ico="fit" aria-label="Adatta alla vista" data-kbd="F"></button>
           <button type="button" data-view="proj" data-ico="ortho" id="btn-proj" aria-label="Proiezione ortogonale" data-kbd="5" aria-pressed="false"></button>
           <span class="vc-sep" aria-hidden="true"></span>
-          <button type="button" data-view="plane" data-ico="planeView" class="vc-plane" aria-label="Piano dalla vista" data-hint="Crea un piano di lavoro con la normale verso di te"></button>
+          <button type="button" data-view="normal" data-ico="viewNormal" class="vc-plane" aria-label="Vista normale al piano" data-hint="Guarda lungo la normale il piano selezionato (o quello dello sketch, dell'entità o della lavorazione selezionata)"></button>
         </div>
       </div>
 
@@ -90,8 +126,6 @@
           <span class="sep"></span>
           <label title="Aggancio alla griglia"><input type="checkbox" id="sk-snap" checked> Griglia</label>
           <label title="Passo della griglia (mm)"><input id="sk-step" type="number" value="1" min="0.01" step="0.5"> mm</label>
-          <span class="sep"></span>
-          <input id="sk-input" class="sk-input" placeholder="x,y   @dx,dy   raggio" title="Coordinate: x,y assolute; @dx,dy relative all'ultimo punto; un numero = raggio (cerchio/poligono) o lato (rettangolo quadrato). Invio per confermare.">
         </span>
         <span id="sk-profile" class="sk-profile" hidden>
           <span class="sk-seg" role="group" aria-label="Cosa selezionare">
@@ -116,6 +150,13 @@
       <div id="hint" class="overlay hint" hidden></div>
 
       <div id="sim-bar" class="overlay sim-bar" hidden>
+        <span id="sim-op" class="sim-op"></span>
+        <span class="sim-lbl">Simula:</span>
+        <div id="sim-scope" class="seg sim-scope" role="radiogroup" aria-label="Lavorazioni da simulare">
+          <button type="button" class="seg-btn" role="radio" data-scope="one" title="Simula solo la lavorazione selezionata">Solo la selezionata</button>
+          <button type="button" class="seg-btn" role="radio" data-scope="rest" title="Simula la lavorazione selezionata e tutte le successive fino all'ultima">Dalla selezionata all'ultima</button>
+        </div>
+        <span class="sep"></span>
         <button id="sim-play" class="primary" title="Avvia / pausa (Spazio)">&#9654;</button>
         <button id="sim-rew" title="Dall'inizio">&#9198;</button>
         <input id="sim-slider" type="range" min="0" max="1000" value="0">
@@ -128,13 +169,23 @@
       </div>
 
       <div id="busy" class="busy" hidden>
-        <div class="busy-box">
-          <div class="spinner"></div>
-          <div id="busy-text">Calcolo in corso…</div>
-          <button id="busy-cancel">Annulla</button>
+        <div class="busy-box" role="status" aria-live="polite">
+          <div class="busy-logo"></div>
+          <div class="busy-info">
+            <div id="busy-text">Calcolo in corso…</div>
+            <div id="busy-time" class="busy-time"></div>
+          </div>
+          <button id="busy-cancel" class="btn">Annulla</button>
         </div>
       </div>
     </div>
+    <div id="props-resizer" class="vsplit" title="Trascina per ridimensionare"></div>
+    <aside id="propsbar">
+      <section id="props-panel" class="panel">
+        <div class="panel-title"><span id="props-title">Proprietà</span></div>
+        <div id="props" class="props"></div>
+      </section>
+    </aside>
   </div>
 
   <footer id="statusbar">

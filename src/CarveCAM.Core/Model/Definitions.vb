@@ -27,6 +27,11 @@ Namespace Model
         Public Property Position As Double() = {0, 0, 0}
         Public Property Rotation As Double() = {0, 0, 0}
         Public Property Include As Boolean = True
+        ''' <summary>
+        ''' Triangoli nel sistema locale (9 valori per triangolo) per gli artefatti non parametrici, come il
+        ''' profilo estruso ("extrude"): li prepara il client con la stessa geometria che mostra.
+        ''' </summary>
+        Public Property Mesh As Single()
     End Class
 
     ''' <summary>Piano di lavoro: origine e assi (U,V nel piano, N normale = asse utensile).</summary>
@@ -85,6 +90,119 @@ Namespace Model
                 Return 0
             End Get
         End Property
+
+        ' ------------------------------------------------------------ fresa conica ("taper")
+        ''' <summary>Altezza del tagliente [mm]: per la fresa conica è l'altezza del cono.</summary>
+        Public Property FluteLength As Double
+        ''' <summary>Fresa conica: angolo di conicità per lato, rispetto all'asse [gradi].</summary>
+        Public Property TaperAngle As Double = 5
+        ''' <summary>Fresa conica: punta "flat" (piatta, a V se il diametro in punta è 0) o "ball" (sferica).</summary>
+        Public Property TipType As String = "flat"
+
+        ''' <summary>Fresa conica: Diameter è il diametro in punta (0 = punta a V).</summary>
+        Public ReadOnly Property IsTaper As Boolean
+            Get
+                Return String.Equals(Type, "taper", StringComparison.OrdinalIgnoreCase)
+            End Get
+        End Property
+
+        Public ReadOnly Property TipIsBall As Boolean
+            Get
+                Return IsTaper AndAlso String.Equals(TipType, "ball", StringComparison.OrdinalIgnoreCase) AndAlso Diameter > 0
+            End Get
+        End Property
+
+        Public ReadOnly Property TaperTan As Double
+            Get
+                Return Math.Tan(Math.Max(0.1, Math.Min(80.0, TaperAngle)) * Math.PI / 180.0)
+            End Get
+        End Property
+
+        Public ReadOnly Property ConeHeight As Double
+            Get
+                Return If(FluteLength > 0, FluteLength, Math.Max(10.0, 3 * Diameter))
+            End Get
+        End Property
+
+        ''' <summary>Raggio del tagliente all'altezza h sopra la punta (fresa conica; le altre: raggio costante).</summary>
+        Public Function RadiusAt(h As Double) As Double
+            If Not IsTaper Then Return Radius
+            Dim hh = Math.Max(0, Math.Min(h, ConeHeight))
+            Dim rt = Math.Max(0, Radius)
+            If TipIsBall Then
+                Dim a = Math.Atan(TaperTan)
+                Dim q0 = rt * Math.Cos(a), h0 = rt * (1 - Math.Sin(a))
+                If hh <= h0 Then Return Math.Sqrt(Math.Max(0, rt * rt - (rt - hh) * (rt - hh)))
+                Return q0 + (hh - h0) * TaperTan
+            End If
+            Return rt + hh * TaperTan
+        End Function
+
+        ''' <summary>
+        ''' Quota del punto più basso del tagliente rispetto alla punta, lungo Z mondo, con l'asse utensile (dalla
+        ''' punta verso il mandrino) di componente Z axisZ: 0 con l'asse verticale, negativa con l'asse inclinato
+        ''' (scende il bordo del tagliente).
+        ''' </summary>
+        Public Function LowestOffset(axisZ As Double) As Double
+            Dim nz = Math.Max(-1, Math.Min(1, axisZ))
+            Dim s = Math.Sqrt(Math.Max(0, 1 - nz * nz))
+            If s < 0.000000001 Then Return If(nz >= 0, 0, -ConeHeight)
+            Dim rc = EffectiveCorner, r = Radius
+            Dim prof = Function(h As Double) As Double
+                           If IsTaper Then Return RadiusAt(h)
+                           If h < rc Then Return (r - rc) + Math.Sqrt(Math.Max(0, rc * rc - (rc - h) * (rc - h)))
+                           Return r
+                       End Function
+            ' con l'asse rivolto in basso conta solo il primo tratto (raccordo, cono); altrimenti tutto il tagliente
+            Dim hMax = If(IsTaper OrElse nz <= 0, ConeHeight, Math.Max(rc, 0.000001))
+            Dim best = 0.0
+            Const N = 256
+            For k = 0 To N
+                Dim h = hMax * k / N
+                best = Math.Min(best, h * nz - prof(h) * s)
+            Next
+            Return best
+        End Function
+
+        ''' <summary>Raggio massimo del tagliente (in cima al cono per la fresa conica).</summary>
+        Public ReadOnly Property MaxRadius As Double
+            Get
+                Return If(IsTaper, RadiusAt(ConeHeight), Radius)
+            End Get
+        End Property
+
+        ''' <summary>
+        ''' Raggio "di lavoro" per contorni, passi e risoluzioni: per la fresa conica il raggio alla profondità
+        ''' massima di lavoro (la parte più alta del cono resta sopra il piano, fuori dal materiale).
+        ''' </summary>
+        Public Function WorkRadius(maxDepth As Double) As Double
+            If Not IsTaper Then Return Radius
+            Return Math.Max(0.02, RadiusAt(Math.Min(Math.Max(0, maxDepth), ConeHeight)))
+        End Function
+
+        ''' <summary>Profilo del tagliente (metà, dalla punta) per punti (raggio, altezza): riferimento per i test; il drop-cutter usa tratti esatti.</summary>
+        Public Function TaperProfile() As List(Of (Q As Double, H As Double))
+            Dim pts As New List(Of (Q As Double, H As Double))()
+            Dim rt = Math.Max(0, Radius), lc = ConeHeight, tn = TaperTan
+            If TipIsBall Then
+                Dim a = Math.Atan(tn)
+                Dim phiMax = Math.PI / 2 - a   ' punto di tangenza tra sfera e cono
+                Dim n = 24
+                For i = 0 To n
+                    Dim phi = phiMax * i / n
+                    Dim h = rt * (1 - Math.Cos(phi))
+                    If h > lc Then Exit For
+                    pts.Add((rt * Math.Sin(phi), h))
+                Next
+                Dim q0 = rt * Math.Cos(a), h0 = rt * (1 - Math.Sin(a))
+                If lc > h0 Then pts.Add((q0 + (lc - h0) * tn, lc))
+            Else
+                pts.Add((0.0, 0.0))
+                If rt > 0.000001 Then pts.Add((rt, 0.0))
+                pts.Add((rt + lc * tn, lc))
+            End If
+            Return pts
+        End Function
     End Class
 
     ''' <summary>Parametri di una lavorazione.</summary>
@@ -134,12 +252,24 @@ Namespace Model
     End Class
 
     ''' <summary>Richiesta di calcolo percorso: tutto ciò che serve per essere autosufficiente.</summary>
+    ''' <summary>Solidi del grezzo (materiale da lavorare, non ostacoli).</summary>
+    Public Class StockDef
+        Public Property Objects As List(Of SceneObjectDef)
+        Public Property Artifacts As List(Of ArtifactDef)
+    End Class
+
     Public Class ComputeRequest
         Public Property Operation As OperationDef
         Public Property Plane As PlaneDef
         Public Property Boundary As List(Of SketchEntityDef)
         Public Property Objects As List(Of SceneObjectDef)
         Public Property Artifacts As List(Of ArtifactDef)
+        ''' <summary>Grezzo iniziale (prima lavorazione).</summary>
+        Public Property Stock As StockDef
+        ''' <summary>Percorso della lavorazione precedente: il grezzo parte da quello che ha lasciato.</summary>
+        Public Property StockFrom As String
+        ''' <summary>Quota Z mondo sotto cui l'utensile non scende (piano della griglia); Nothing = nessun limite.</summary>
+        Public Property Floor As Double?
     End Class
 
 End Namespace

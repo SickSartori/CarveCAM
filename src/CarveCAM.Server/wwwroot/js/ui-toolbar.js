@@ -1,6 +1,10 @@
 // Barra strumenti ordinata come il flusso di lavoro CAM, con spia di stato per ogni fase.
 import { h } from './dialogs.js';
 import { TB } from './icons.js';
+import { contextMenu } from './ui-menu.js';
+import { t } from './i18n.js';
+
+const CARET = '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4 5 6.5 7.5 4"/></svg>';
 
 export class Toolbar {
   /**
@@ -15,15 +19,37 @@ export class Toolbar {
     this.actions = actions;
     this.stageOf = stageOf;
     this.buttons = [];
+    this.selects = [];
     this.leds = [];
     this.tip = document.getElementById('tooltip');
     this.render();
+    // la barra si compatta quando la finestra si restringe (e torna estesa quando si allarga)
+    new ResizeObserver(() => this.fit()).observe(el);
+    document.fonts?.ready.then(() => this.fit());
+  }
+
+  /**
+   * Adatta la barra alla larghezza disponibile: livelli di compattazione crescenti (fit-1 spazi ridotti,
+   * fit-2 senza testi sui pulsanti, fit-collapse gruppi comprimibili in un solo pulsante con menu, fit-3 senza
+   * testo sul pulsante principale, fit-tight pulsanti e margini più stretti, fit-4 senza il gruppo Vista, i cui
+   * comandi restano nei menu) finché tutti i gruppi entrano.
+   */
+  fit() {
+    const el = this.el;
+    const levels = ['fit-1', 'fit-2', 'fit-collapse', 'fit-3', 'fit-tight', 'fit-4'];
+    el.classList.remove(...levels);
+    for (const c of levels) {
+      if (el.scrollWidth <= el.clientWidth + 1) break;
+      el.classList.add(c);
+    }
   }
 
   render() {
     this.el.innerHTML = '';
     this.buttons = [];
+    this.selects = [];
     this.leds = [];
+    this.mores = [];
     for (const g of this.groups) {
       if (g.end) this.el.append(h('div', { class: 'tb-spacer' }));
       const row = h('div', { class: 'tb-row' });
@@ -32,9 +58,10 @@ export class Toolbar {
         const spec = typeof it === 'string' ? { id: it } : it;
         const a = this.actions.get(spec.id);
         if (!a) continue;
+        if (a.options) { row.append(this._select(a)); continue; }
         const b = h('button', {
           class: `tb-btn${spec.label ? ' labeled' : ''}${spec.primary ? ' primary' : ''}${a.tone ? ` tone-${a.tone}` : ''}`,
-          type: 'button', 'aria-label': a.label,
+          type: 'button', 'aria-label': a.label, 'data-action': a.id,
         }, h('span', { class: 'tb-ico', html: TB[a.icon] || '' }), spec.label ? h('span', { class: 'tb-lbl' }, a.short || a.label) : null);
         b.addEventListener('click', () => { this._hideTip(); this.actions.run(a); });
         b.addEventListener('mouseenter', () => this._showTip(b, a));
@@ -44,6 +71,7 @@ export class Toolbar {
         row.append(b);
         this.buttons.push({ b, a });
       }
+      if (g.collapse) row.append(this._more(g));
       const cap = h('div', { class: 'tb-cap' }, h('span', {}, g.caption));
       let led = null;
       if (g.stage) {
@@ -51,9 +79,53 @@ export class Toolbar {
         cap.prepend(led);
         this.leds.push({ led, cap, stage: g.stage, caption: g.caption });
       }
-      this.el.append(h('div', { class: `tb-group${g.stage ? ' stage' : ''}${g.end ? ' view-group' : ''}`, role: 'group', 'aria-label': g.caption }, row, cap));
+      // data-group: fase (o "project", "view") per la guida, che indica i gruppi nell'interfaccia
+      this.el.append(h('div', { class: `tb-group${g.stage ? ' stage' : ''}${g.end ? ' view-group' : ''}${g.collapse ? ' collapsible' : ''}`, role: 'group', 'aria-label': g.caption,
+        'data-group': g.group || g.stage || (g.end ? 'view' : 'project') }, row, cap));
     }
     this.update();
+    this.fit();
+  }
+
+  /**
+   * Pulsante che sostituisce i comandi di un gruppo comprimibile quando la barra è stretta (fit-collapse): apre
+   * un menu con gli stessi comandi e mostra l'icona di quello attivo.
+   */
+  _more(g) {
+    const ids = g.items.filter(x => x !== '|').map(x => (typeof x === 'string' ? x : x.id));
+    const info = { label: g.collapse.label, hint: g.collapse.hint };
+    const ico = h('span', { class: 'tb-ico', html: TB[g.collapse.icon] || '' });
+    const b = h('button', { class: 'tb-btn tb-more', type: 'button', 'aria-label': info.label, 'aria-haspopup': 'menu' }, ico, h('span', { class: 'tb-caret', html: CARET }));
+    b.addEventListener('click', () => {
+      this._hideTip();
+      const rc = b.getBoundingClientRect();
+      contextMenu({ clientX: rc.left, clientY: rc.bottom + 4 }, ids.map(id => this.actions.get(id)).filter(Boolean).map(a => ({
+        label: a.label, icon: a.icon, kbd: a.kbd, enabled: () => this.actions.isEnabled(a), action: () => this.actions.run(a),
+      })));
+    });
+    b.addEventListener('mouseenter', () => this._showTip(b, info, false));
+    b.addEventListener('mouseleave', () => this._hideTip());
+    b.addEventListener('focus', () => this._showTip(b, info, false));
+    b.addEventListener('blur', () => this._hideTip());
+    this.mores.push({ b, ico, ids, icon: g.collapse.icon });
+    return b;
+  }
+
+  /** Elenco a discesa: la prima voce è il titolo, scegliendo un'opzione si esegue l'azione. */
+  _select(a) {
+    const s = h('select', { class: `tb-select${a.tone ? ` tone-${a.tone}` : ''}`, 'aria-label': a.label },
+      h('option', { value: '' }, `${a.label}…`),
+      a.options.map(o => h('option', { value: o.value }, o.label)));
+    s.addEventListener('change', () => {
+      const v = s.value;
+      s.value = '';
+      if (v) { this._hideTip(); this.actions.pick(a, v); }
+    });
+    const wrap = h('span', { class: 'tb-select-wrap', 'data-action': a.id }, h('span', { class: 'tb-ico', html: TB[a.icon] || '' }), s);
+    wrap.addEventListener('mouseenter', () => this._showTip(wrap, a, s.disabled));
+    wrap.addEventListener('mouseleave', () => this._hideTip());
+    this.selects.push({ s, a, wrap });
+    return wrap;
   }
 
   /** Aggiorna abilitazione, stati attivi e spie delle fasi. */
@@ -66,6 +138,18 @@ export class Toolbar {
       else b.setAttribute('aria-pressed', String(on));
       b.classList.toggle('on', !!on);
     }
+    for (const m of this.mores) {
+      const on = m.ids.map(id => this.actions.get(id)).find(a => a?.checked && this.actions.isChecked(a));
+      m.b.classList.toggle('on', !!on);
+      m.b.setAttribute('aria-pressed', String(!!on));
+      const icon = on?.icon || m.icon;
+      if (m.shown !== icon) { m.ico.innerHTML = TB[icon] || ''; m.shown = icon; }
+    }
+    for (const { s, a, wrap } of this.selects) {
+      const en = this.actions.isEnabled(a);
+      s.disabled = !en;
+      wrap.classList.toggle('disabled', !en);
+    }
     for (const x of this.leds) {
       const st = this.stageOf(x.stage);
       x.led.dataset.state = st.state;
@@ -73,18 +157,19 @@ export class Toolbar {
     }
   }
 
-  _showTip(b, a) {
-    const t = this.tip;
-    if (!t) return;
-    t.innerHTML = '';
-    t.append(h('div', { class: 'tt-row' }, h('b', {}, a.label), a.kbd ? h('kbd', {}, a.kbd) : null));
-    if (a.hint) t.append(h('div', { class: 'tt-hint' }, a.hint));
-    if (b.disabled) t.append(h('div', { class: 'tt-hint' }, 'Non disponibile ora'));
-    t.hidden = false;
+  _showTip(b, a, disabled = b.disabled) {
+    const tt = this.tip;
+    if (!tt) return;
+    tt.innerHTML = '';
+    tt.append(h('div', { class: 'tt-row' }, h('b', {}, a.label), a.kbd ? h('kbd', {}, a.kbd) : null));
+    if (a.hint) tt.append(h('div', { class: 'tt-hint' }, a.hint));
+    if (disabled) tt.append(h('div', { class: 'tt-hint tt-off' }, a.whyOff?.() || (a.id.startsWith('plane.') && a.id !== 'plane.add'
+      ? t('Premi prima "Aggiungi piano"') : a.id.startsWith('tool.') ? t('Disponibile durante la modifica di uno sketch') : t('Non disponibile ora'))));
+    tt.hidden = false;
     const rc = b.getBoundingClientRect();
-    const w = t.offsetWidth;
-    t.style.left = `${Math.max(6, Math.min(window.innerWidth - w - 6, rc.left + rc.width / 2 - w / 2))}px`;
-    t.style.top = `${rc.bottom + 8}px`;
+    const w = tt.offsetWidth;
+    tt.style.left = `${Math.max(6, Math.min(window.innerWidth - w - 6, rc.left + rc.width / 2 - w / 2))}px`;
+    tt.style.top = `${rc.bottom + 8}px`;
   }
 
   _hideTip() {

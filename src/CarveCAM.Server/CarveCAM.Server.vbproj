@@ -3,12 +3,19 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>CarveCAM.Server</RootNamespace>
+    <AssemblyName>CarveCAM</AssemblyName>
     <TargetFramework>net10.0</TargetFramework>
     <OptionStrict>On</OptionStrict>
     <OptionInfer>On</OptionInfer>
     <OptionExplicit>On</OptionExplicit>
     <StartupObject>CarveCAM.Server.Program</StartupObject>
   </PropertyGroup>
+
+  <!-- i dati locali (archivi, mesh, copie di sicurezza, log) non vanno nel pacchetto -->
+  <ItemGroup>
+    <Content Remove="App_Data\**" />
+    <None Remove="App_Data\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\CarveCAM.Core\CarveCAM.Core.vbproj" />

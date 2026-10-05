@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { settings, color, onSettings } from './settings.js';
 
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
@@ -21,6 +22,7 @@ export class Viewport {
     this.handlers = {};           // move, down, click, dblclick, leave
     this.frameHooks = new Set();  // funzioni chiamate ad ogni frame (dt in secondi)
     this.overlays = new Set();    // disegni sovrapposti dopo la scena (renderer), es. cubo di orientamento
+    this.paused = false;          // true: vista coperta, il ciclo di disegno resta fermo
 
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: false });
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -48,20 +50,10 @@ export class Viewport {
     this.headLight = new THREE.DirectionalLight(0xffffff, 1.6);
     this.scene.add(this.headLight, this.headLight.target);
 
-    // griglia sul piano XY e assi
+    // griglia sul piano XY e assi (parametri e colori dalle opzioni)
     this.gridGroup = new THREE.Group();
-    const minor = new THREE.GridHelper(1000, 100, 0x2f363f, 0x2a3038);
-    const major = new THREE.GridHelper(1000, 20, 0x46505c, 0x3a424c);
-    for (const g of [minor, major]) {
-      g.rotation.x = Math.PI / 2;
-      g.material.transparent = true;
-      g.material.opacity = g === minor ? 0.55 : 0.8;
-      g.material.depthWrite = false;
-      g.renderOrder = -2;
-      this.gridGroup.add(g);
-    }
-    this.gridGroup.add(makeAxes(60));
     this.scene.add(this.gridGroup);
+    this.buildGrid();
 
     // gruppi di contenuto
     this.groups = {};
@@ -73,7 +65,7 @@ export class Viewport {
 
     // manipolatore
     const t = this.transform = new TransformControls(this.camera, r.domElement);
-    t.setSize(0.85);
+    t.setSize(settings.sizes.gizmo);
     this.scene.add(t.getHelper());
     t.addEventListener('dragging-changed', e => { c.enabled = !e.value; });
 
@@ -82,6 +74,7 @@ export class Viewport {
 
     this._buildTriad();
     this._bindInput();
+    onSettings(() => { this.buildGrid(); t.setSize(settings.sizes.gizmo); });
 
     this.clock = new THREE.Clock();
     const ro = new ResizeObserver(() => this.resize());
@@ -91,6 +84,30 @@ export class Viewport {
     requestAnimationFrame(this._loop);
   }
 
+  /** (Ri)costruisce la griglia del piano XY secondo le opzioni (lato, passo fine e principale, colori). */
+  buildGrid() {
+    for (const c of [...this.gridGroup.children]) {
+      c.removeFromParent();
+      c.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); });
+    }
+    const g = settings.grid;
+    const size = Math.max(10, Number(g.size) || 1000);
+    const div = step => Math.max(1, Math.min(2000, Math.round(size / Math.max(0.1, Number(step) || 10))));
+    const cMinor = new THREE.Color(color('gridMinor'));
+    const cMajor = new THREE.Color(color('gridMajor'));
+    const minor = new THREE.GridHelper(size, div(g.minor), cMinor, cMinor);
+    const major = new THREE.GridHelper(size, div(g.major), cMajor, cMajor);
+    for (const gr of [minor, major]) {
+      gr.rotation.x = Math.PI / 2;
+      gr.material.transparent = true;
+      gr.material.opacity = gr === minor ? 0.6 : 0.85;
+      gr.material.depthWrite = false;
+      gr.renderOrder = -2;
+      this.gridGroup.add(gr);
+    }
+    this.gridGroup.add(makeAxes(Math.min(60, size / 4)));
+  }
+
   // ---------------------------------------------------------------- dimensioni e loop
   resize() {
     const w = Math.max(1, this.el.clientWidth), h = Math.max(1, this.el.clientHeight);
@@ -98,6 +115,9 @@ export class Viewport {
     this.persp.aspect = w / h;
     this.persp.updateProjectionMatrix();
     this._updateOrthoFrustum();
+    // ridimensionare la tela la svuota: si ridisegna subito, altrimenti (es. trascinando i separatori dei
+    // pannelli) il fotogramma resta vuoto fino al giro successivo e la vista lampeggia
+    this._draw();
   }
 
   _updateOrthoFrustum(height) {
@@ -111,8 +131,55 @@ export class Viewport {
   _loop() {
     requestAnimationFrame(this._loop);
     const dt = Math.min(0.1, this.clock.getDelta());
+    // vista coperta (schermata iniziale): niente disegno, la scheda non consuma GPU né CPU
+    if (this.paused) return;
     for (const f of this.frameHooks) f(dt);
     this.controls.update();
+    this._draw();
+  }
+
+  /**
+   * Immagine della vista (JPEG, data URL) di w × h pixel, ritagliata al centro: si disegna e si copia subito,
+   * prima che il browser presenti il fotogramma (la tela non conserva il disegno). frame: inquadra modelli e
+   * artefatti dalla direzione attuale solo per l'immagine (la vista resta com'era).
+   */
+  snapshot(w = 320, h = 200, frame = false) {
+    const cam = this.camera;
+    const saved = frame && { pos: cam.position.clone(), target: this.controls.target.clone(), zoom: this.ortho.zoom, height: this.ortho.top - this.ortho.bottom };
+    try {
+      if (frame) {
+        const box = new THREE.Box3();
+        for (const g of [this.groups.objects, this.groups.artifacts]) g.traverseVisible(o => { if (o.isMesh) box.expandByObject(o); });
+        if (!box.isEmpty()) this.fit(box);
+      }
+      this.controls.update();
+      this._draw();
+      const src = this.renderer.domElement;
+      const sw = src.width, sh = src.height;
+      if (!sw || !sh) return null;
+      const s = Math.min(sw / w, sh / h);
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const g = c.getContext('2d');
+      g.fillStyle = color('background');
+      g.fillRect(0, 0, w, h);
+      g.drawImage(src, (sw - w * s) / 2, (sh - h * s) / 2, w * s, h * s, 0, 0, w, h);
+      return c.toDataURL('image/jpeg', 0.8);
+    } catch { return null; } finally {
+      if (saved) {
+        cam.position.copy(saved.pos);
+        this.controls.target.copy(saved.target);
+        this.ortho.zoom = saved.zoom;
+        this._updateOrthoFrustum(saved.height);
+        cam.lookAt(saved.target);
+        this.controls.update();
+      }
+    }
+  }
+
+  /** Disegna scena, triade degli assi e sovrapposizioni (cubo di orientamento) con la camera corrente. */
+  _draw() {
     this.headLight.position.copy(this.camera.position);
     this.headLight.target.position.copy(this.controls.target);
 
@@ -158,6 +225,27 @@ export class Viewport {
   _bindInput() {
     const dom = this.renderer.domElement;
     let down = null;
+    // presa di una maniglia (es. punti di un'entità dello sketch): handlers.grab(ev) restituisce { move, end }
+    // e il trascinamento non arriva a navigazione e manipolatore (ascoltatore in fase di cattura, eseguito prima)
+    dom.addEventListener('pointerdown', ev => {
+      if (ev.button !== 0 || !this.handlers.grab) return;
+      const g = this.handlers.grab(ev);
+      if (!g) return;
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+      dom.setPointerCapture(ev.pointerId);
+      const move = e => g.move?.(e);
+      const up = e => {
+        dom.removeEventListener('pointermove', move);
+        dom.removeEventListener('pointerup', up);
+        dom.removeEventListener('pointercancel', up);
+        try { dom.releasePointerCapture(e.pointerId); } catch { /* già rilasciato */ }
+        g.end?.(e, e.type === 'pointercancel');
+      };
+      dom.addEventListener('pointermove', move);
+      dom.addEventListener('pointerup', up);
+      dom.addEventListener('pointercancel', up);
+    }, true);
     dom.addEventListener('pointerdown', ev => {
       down = { x: ev.clientX, y: ev.clientY, b: ev.button };
       this.handlers.down?.(ev);
@@ -190,6 +278,20 @@ export class Viewport {
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(f.n, f.o);
     const p = new THREE.Vector3();
     return this.raycaster.ray.intersectPlane(plane, p) ? p : null;
+  }
+
+  /** Posizione sullo schermo (px rispetto all'angolo della vista) di un punto del mondo; null se dietro la camera. */
+  toScreen(p) {
+    const v = p.clone().project(this.camera);
+    if (v.z > 1 || v.z < -1) return null;
+    const w = this.el.clientWidth, h = this.el.clientHeight;
+    return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h };
+  }
+
+  /** Posizione del puntatore rispetto all'angolo della vista. */
+  pointer(ev) {
+    const rc = this.renderer.domElement.getBoundingClientRect();
+    return { x: ev.clientX - rc.left, y: ev.clientY - rc.top };
   }
 
   /** Millimetri per pixel in corrispondenza del punto dato. */
@@ -268,8 +370,34 @@ export class Viewport {
   }
 
   setView(name) {
+    // vista isometrica: quella memorizzata nelle opzioni (orientamento e zoom), se presente
+    if (name === 'iso' && settings.view?.saved) { this.applyView(settings.view, { keepTarget: true }); return; }
     const d = VIEW_DIRS[name];
     if (d) this.viewFrom(new THREE.Vector3(...d));
+  }
+
+  /** Altezza inquadrata (mm) in corrispondenza del bersaglio: misura dello zoom valida per entrambe le proiezioni. */
+  viewHeight() {
+    if (this.isOrtho) return (this.ortho.top - this.ortho.bottom) / (this.ortho.zoom || 1);
+    return 2 * this.camera.position.distanceTo(this.controls.target) * Math.tan(THREE.MathUtils.degToRad(this.persp.fov / 2));
+  }
+
+  /** Vista corrente da memorizzare nelle opzioni: direzione, zoom (altezza inquadrata), bersaglio e proiezione. */
+  captureView() {
+    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    const r = v => v.toArray().map(x => Math.round(x * 1e6) / 1e6);
+    return { saved: true, dir: r(dir), height: Math.round(this.viewHeight() * 1000) / 1000, target: r(this.controls.target), ortho: this.isOrtho };
+  }
+
+  /** Applica una vista memorizzata (keepTarget: ruota e zooma attorno al bersaglio attuale, con animazione). */
+  applyView(v, { keepTarget = false, animate = true } = {}) {
+    if (!v || !Array.isArray(v.dir)) return;
+    if (!keepTarget && typeof v.ortho === 'boolean') this.setProjection(v.ortho);
+    if (!keepTarget && Array.isArray(v.target)) this.controls.target.fromArray(v.target);
+    const h = v.height > 0 ? v.height : null;
+    const dist = h ? h / (2 * Math.tan(THREE.MathUtils.degToRad(this.persp.fov / 2))) : null;
+    if (h && this.isOrtho) { this.ortho.zoom = 1; this._updateOrthoFrustum(h); }
+    this.viewFrom(new THREE.Vector3().fromArray(v.dir), animate && keepTarget, dist);
   }
 
   /**
@@ -277,28 +405,30 @@ export class Viewport {
    * per il movimento ridotto. Si anima solo la direzione: distanza e bersaglio restano quelli correnti, così
    * un "Adatta" durante la rotazione non viene annullato.
    */
-  viewFrom(dir, animate = true) {
+  viewFrom(dir, animate = true, distance = null) {
     const to = new THREE.Vector3().copy(dir).normalize();
     // dall'alto o dal basso: piccolo scarto per evitare la singolarità dei controlli orbitali con Z in alto
     if (Math.abs(to.z) > 0.99999) to.set(0, -0.0001 * Math.sign(to.z), Math.sign(to.z)).normalize();
     this._stopViewAnim();
     const target = this.controls.target;
-    const place = d => {
-      const dist = Math.max(50, this.camera.position.distanceTo(target));
+    const d0 = this.camera.position.distanceTo(target);
+    // distance: nuova distanza (zoom) raggiunta insieme alla rotazione
+    const place = (d, k = 1) => {
+      const dist = distance > 0 ? d0 + (distance - d0) * k : Math.max(50, this.camera.position.distanceTo(target));
       this.camera.up.set(0, 0, 1);
       this.camera.position.copy(target).addScaledVector(d, dist);
       this.camera.lookAt(target);
     };
     const from = this.camera.position.clone().sub(target).normalize();
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (!animate || reduce || from.angleTo(to) < 0.002) { place(to); this.controls.update(); return; }
+    if (!animate || reduce || (from.angleTo(to) < 0.002 && !(distance > 0))) { place(to); this.controls.update(); return; }
     const q = new THREE.Quaternion().setFromUnitVectors(from, to);
     const q0 = new THREE.Quaternion(), qk = new THREE.Quaternion();
     let t = 0;
     const hook = dt => {
       t = Math.min(1, t + dt / 0.32);
       const k = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;   // accelera e rallenta
-      place(t < 1 ? from.clone().applyQuaternion(qk.slerpQuaternions(q0, q, k)) : to);
+      place(t < 1 ? from.clone().applyQuaternion(qk.slerpQuaternions(q0, q, k)) : to, k);
       if (t >= 1) this._stopViewAnim();
     };
     this._viewAnim = hook;

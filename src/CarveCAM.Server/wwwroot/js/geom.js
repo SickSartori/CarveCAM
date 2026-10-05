@@ -56,6 +56,22 @@ export function circleSegments(r, tol = 0.01) {
   return Math.max(24, Math.min(360, Math.ceil(Math.PI / Math.acos(1 - tol / r))));
 }
 
+/**
+ * Ribalta un'entità rispetto all'asse U del piano (v → -v), modificandola: è la stessa figura descritta nel
+ * piano con la normale opposta, che ha lo stesso asse U e l'asse V invertito. Le polilinee invertono anche
+ * l'ordine dei vertici, così il verso di percorrenza resta quello di prima.
+ */
+export function mirrorEntityV(e) {
+  const neg = v => (v ? -v : 0);
+  switch (e.kind) {
+    case 'rect': e.y1 = neg(e.y1); e.y2 = neg(e.y2); break;   // il primo punto resta il primo
+    case 'circle': e.cy = neg(e.cy); break;
+    case 'polygon': e.cy = neg(e.cy); e.rot = neg(e.rot); break;
+    case 'polyline': if (Array.isArray(e.pts)) e.pts = e.pts.map(p => [p[0], neg(p[1])]).reverse(); break;
+  }
+  return e;
+}
+
 /** Contorno chiuso di un'entità di sketch: array di [x,y] (senza ripetere il primo punto). */
 export function entityLoop(e) {
   switch (e.kind) {

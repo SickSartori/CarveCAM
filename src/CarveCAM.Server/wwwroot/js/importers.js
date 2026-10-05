@@ -3,6 +3,7 @@
 // - glTF/GLB, FBX, 3MF, DAE, 3DS, AMF, VRML: convertiti nel browser con i loader di Three.js.
 // - STEP, IGES, BREP: tassellati nel browser con OpenCascade (occt-import-js, WebAssembly).
 import * as THREE from 'three';
+import { t } from './i18n.js';
 
 export const SERVER_FORMATS = ['stl', 'obj', 'ply', 'off'];
 export const CLIENT_FORMATS = ['gltf', 'glb', 'fbx', '3mf', 'dae', '3ds', 'amf', 'wrl', 'vrml', 'step', 'stp', 'iges', 'igs', 'brep', 'brp'];
@@ -132,7 +133,7 @@ function collectTriangles(root) {
   const out = new Float32Array(total);
   let off = 0;
   for (const c of chunks) { out.set(c, off); off += c.length; }
-  if (!total) throw new Error('Il file non contiene mesh triangolari');
+  if (!total) throw new Error(t('Il file non contiene mesh triangolari'));
   return out;
 }
 
@@ -154,7 +155,7 @@ function loadOcct() {
       // eslint-disable-next-line no-undef
       occtimportjs({ locateFile: f => OCCT_BASE + f }).then(resolve, reject);
     };
-    sc.onerror = () => { occtPromise = null; reject(new Error('Impossibile caricare il modulo OpenCascade (serve la connessione a internet)')); };
+    sc.onerror = () => { occtPromise = null; reject(new Error(t('Impossibile caricare il modulo OpenCascade (serve la connessione a internet)'))); };
     document.head.append(sc);
   });
   return occtPromise;
@@ -193,7 +194,7 @@ async function parseCad(file, ext) {
     faceBase = own + 1;
     tri = t0 + nt;
   }
-  if (!off) throw new Error('Il file non contiene superfici');
+  if (!off) throw new Error(t('Il file non contiene superfici'));
   const len = off - (off % 9);
   return { positions: out.subarray(0, len), faces: faces.subarray(0, len / 9) };
 }
