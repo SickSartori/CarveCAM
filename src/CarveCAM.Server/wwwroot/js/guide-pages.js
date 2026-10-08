@@ -239,7 +239,7 @@ export function guidePages() {
         ]),
         shot('operation', [
           S(1, L('<b>Contorno</b>: sketch ed entità che delimitano la zona.', '<b>Boundary</b>: sketch and entities bounding the area.')),
-          S(2, L('<b>Strategia</b>: concentrica o zigzag, concorde, utensile dentro il contorno.', '<b>Strategy</b>: concentric or zigzag, climb, tool inside the boundary.')),
+          S(2, L('<b>Strategia</b>: concentrica o zigzag, utensile dentro il contorno.', '<b>Strategy</b>: concentric or zigzag, tool inside the boundary.')),
           S(3, L('<b>Utensile</b>: dal magazzino o personalizzato.', '<b>Tool</b>: from the library or custom.')),
           S(4, L('<b>Passi e profondità</b>: passi in % della fresa, profondità massima, sovrametallo.', '<b>Steps and depth</b>: steps as a % of the cutter, maximum depth, stock allowance.')),
         ], L('Proprietà della sgrossatura del progetto di esempio', 'Properties of the roughing operation in the sample project')),
@@ -294,6 +294,7 @@ export function guidePages() {
           '[[toolLib]] <b>Tools › Tool library</b>: the archive of cutters, with T number, sizes of flutes, neck and shank, material and recommended feeds. The 3D preview is to scale; if the sizes are inconsistent a 2D drawing shows the error in red.')),
         shot('toollib', [], L('Il magazzino utensili con l\'anteprima 3D', 'The tool library with the 3D preview')),
         ul([
+          L('<b>Senso di rotazione</b> e <b>Lavora concorde</b> sono dell\'utensile: orario (M3) per le frese normali, antiorario (M4) per quelle sinistre; concorde (climb) o discorde. Insieme decidono il verso dei percorsi, e il G-code avvia il mandrino nel senso dell\'utensile.', '<b>Direction of rotation</b> and <b>Climb milling</b> belong to the tool: clockwise (M3) for normal cutters, counter-clockwise (M4) for left-hand ones; climb or conventional. Together they set the direction of the toolpaths, and the G-code starts the spindle in the direction of the tool.'),
           L('[[setups]] <b>Setup di lavorazione</b>: parametri preferiti (strategia, passi, quote, ingresso, avanzamenti), proposti quando crei una lavorazione.', '[[setups]] <b>Machining setups</b>: favourite parameters (strategy, steps, heights, entry, feeds), offered when you create an operation.'),
           L('<b>Esporta / Importa utensili e setup</b> (menu Strumenti): un file da portare su un altro computer o da tenere come copia.', '<b>Export / Import tools and setups</b> (Tools menu): a file to bring to another computer or to keep as a backup.'),
           L('Il progetto salva le schede degli utensili usati: se apri il progetto su un computer dove mancano o sono diversi, CarveCAM lo segnala e può aggiornare il magazzino.', 'The project stores the cards of the tools it uses: if you open it on a computer where they are missing or different, CarveCAM tells you and can update the library.'),
