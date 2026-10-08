@@ -302,10 +302,10 @@ Namespace Cam
                     If op.ContourPass Then
                         Dim hasPos = segs.Count > 0
                         Dim pos = If(hasPos, segs(segs.Count - 1).Points.Last(), New Vec2(0, 0))
-                        segs.AddRange(PathPlanner.Contours(region, op.Climb, pos, hasPos, stepover))
+                        segs.AddRange(PathPlanner.Contours(region, op.Tool.ClimbM3, pos, hasPos, stepover))
                     End If
                 Else
-                    segs = PathPlanner.Concentric(region, stepover, op.Climb, startFrom)
+                    segs = PathPlanner.Concentric(region, stepover, op.Tool.ClimbM3, startFrom)
                 End If
 
                 For s = 0 To segs.Count - 1
@@ -364,7 +364,7 @@ Namespace Cam
             rh = Math.Max(0.05, rh)
             Dim tanA = RampTan(op)
             Dim n = Math.Max(24, Primitives.SegmentsFor(rh, Math.Max(0.002, op.Tolerance)))
-            Dim dirSign = If(op.Climb, 1.0, -1.0) ' antiorario = concorde con M3
+            Dim dirSign = If(op.Tool.ClimbM3, 1.0, -1.0) ' antiorario = concorde con utensile orario (M3)
             For k = 0 To 15
                 Dim ang = 2 * Math.PI * k / 16
                 Dim c As New Vec2(p0.X + rh * Math.Cos(ang), p0.Y + rh * Math.Sin(ang))
@@ -463,7 +463,7 @@ Namespace Cam
             If String.Equals(op.Strategy, "zigzag", StringComparison.OrdinalIgnoreCase) Then
                 segs = PathPlanner.ZigZag(region0, stepover, op.Angle, coverEdges:=True)
             Else
-                segs = PathPlanner.Concentric(region0, stepover, op.Climb)
+                segs = PathPlanner.Concentric(region0, stepover, op.Tool.ClimbM3)
             End If
 
             ' proiezione lungo la normale (parallela per tratto)

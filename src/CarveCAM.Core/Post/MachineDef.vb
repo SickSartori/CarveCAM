@@ -99,8 +99,7 @@ Namespace Post
         ' ---------------------------------------------------------------- mandrino
         ''' <summary>"auto" (M3/M4 con i giri), "manual" (pausa per accenderlo a mano), "none".</summary>
         Public Property SpindleControl As String = "auto"
-        ''' <summary>"cw" (orario, M3) o "ccw" (antiorario, M4).</summary>
-        Public Property SpindleDirection As String = "cw"
+        ''' <summary>Avvio per gli utensili orari e antiorari (il senso di rotazione è quello dell'utensile).</summary>
         Public Property SpindleOnCw As String() = {"S{S} M3"}
         Public Property SpindleOnCcw As String() = {"S{S} M4"}
         Public Property SpindleOff As String() = {"M5"}

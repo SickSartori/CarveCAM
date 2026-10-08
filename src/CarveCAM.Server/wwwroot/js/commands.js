@@ -479,7 +479,8 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
         if (!(tl.cornerRadius > 0)) tl.cornerRadius = round4(Math.min(1, tl.diameter / 4));
         if (tl.cornerRadius > tl.diameter / 2) tl.cornerRadius = round4(tl.diameter / 4);
       }
-      if (r.type === 'operation' && key.startsWith('tool.') && key !== 'tool.number') r.item.tool.libId = null;
+      // la geometria cambiata scollega l'utensile dal magazzino; numero e concorde sono scelte della lavorazione
+      if (r.type === 'operation' && key.startsWith('tool.') && key !== 'tool.number' && key !== 'tool.climb') r.item.tool.libId = null;
     });
     sketch.refreshFrame();
   };
@@ -1416,6 +1417,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     delete d.base;
     const setup = chosen.setup;
     if (setup) Object.assign(d, structuredClone(setup.params));
+    delete d.climb;   // concorde è dell'utensile (setup salvati con le versioni precedenti)
     if (!setup || setup.useToolFeeds !== false) {
       if (libTool.feed > 0) d.feed = libTool.feed;
       if (libTool.plunge > 0) d.plunge = libTool.plunge;
@@ -1603,11 +1605,12 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
         id: o.id, name: o.name, kind: o.kind, strategy: o.strategy,
         tool: {
           number: o.tool.number, type: o.tool.type, diameter: o.tool.diameter, cornerRadius: o.tool.cornerRadius,
+          rotation: o.tool.rotation === 'ccw' ? 'ccw' : 'cw', climb: o.tool.climb !== false,
           // fresa conica: altezza del cono, angolo per lato e punta
           ...(o.tool.type === 'taper' ? { fluteLength: o.tool.fluteLength, taperAngle: o.tool.taperAngle ?? 5, tipType: o.tool.tipType || 'ball' } : {}),
         },
         stepover: effParam(o, 'stepover'), stepdown: effParam(o, 'stepdown'), maxDepth: o.maxDepth, stock: o.stock, safeHeight: o.safeHeight,
-        clearance: o.clearance, angle: o.angle, climb: o.climb !== false, toolInside: o.toolInside !== false,
+        clearance: o.clearance, angle: o.angle, toolInside: o.toolInside !== false,
         contourPass: o.contourPass !== false, resolution: o.resolution, tolerance: o.tolerance,
         feed: o.feed, plunge: o.plunge, spindle: o.spindle,
         entry: o.entry || 'plunge', rampAngle: o.rampAngle ?? 3, helixRadius: effParam(o, 'helixRadius') ?? 0, rampFeed: o.rampFeed ?? 0,

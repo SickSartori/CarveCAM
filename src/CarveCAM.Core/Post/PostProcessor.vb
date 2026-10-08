@@ -74,9 +74,15 @@ Namespace Post
             If t.IsTaper Then
                 Return $"CONICA {If(t.TipIsBall, "PUNTA SFERICA", If(t.Diameter > 0, "PUNTA PIATTA", "A V"))} D={F(t.Diameter, d)} A={F(t.TaperAngle, 2)} GRADI PER LATO DMAX={F(2 * t.MaxRadius, d)}"
             End If
-            If t.IsBall Then Return $"SFERICA D={F(t.Diameter, d)}"
-            If t.IsBull Then Return $"TORICA D={F(t.Diameter, d)} R={F(t.EffectiveCorner, d)}"
-            Return $"CILINDRICA D={F(t.Diameter, d)}"
+            Dim label As String
+            If t.IsBall Then
+                label = $"SFERICA D={F(t.Diameter, d)}"
+            ElseIf t.IsBull Then
+                label = $"TORICA D={F(t.Diameter, d)} R={F(t.EffectiveCorner, d)}"
+            Else
+                label = $"CILINDRICA D={F(t.Diameter, d)}"
+            End If
+            Return If(t.IsCcw, label & " ANTIORARIA", label)
         End Function
 
         Private Function FeedOf(tp As Toolpath, t As MoveType) As Double
@@ -456,24 +462,30 @@ Namespace Post
             Public Speed As Double = -1
             Public CoolantOn As Boolean
             Public FanOn As Boolean
+            ''' <summary>Senso di rotazione del mandrino acceso (true antiorario).</summary>
+            Public Ccw As Boolean
         End Class
 
         Private Sub StartSpindle(w As GWriter, m As MachineDef, coolant As String, st As SpindleState, vars As IDictionary(Of String, String), tp As Toolpath)
             Dim s = SpindleOf(tp, m)
+            Dim ccw = tp.Tool.IsCcw
+            ' cambia il senso di rotazione: il mandrino si ferma prima di ripartire nell'altro verso
+            If st.On AndAlso st.Ccw <> ccw Then StopSpindle(w, m, coolant, st, vars)
             Dim changed = Not st.On OrElse Math.Abs(s - st.Speed) > 0.5
             Select Case m.SpindleControl
                 Case "manual"
                     If changed Then
-                        w.Comment($"ACCENDERE IL MANDRINO A {CInt(Math.Round(s))} GIRI/MIN{If(m.SpindleDirection = "ccw", " ANTIORARIO", "")}")
+                        w.Comment($"ACCENDERE IL MANDRINO A {CInt(Math.Round(s))} GIRI/MIN{If(ccw, " ANTIORARIO", "")}")
                         w.Code("M0")
                     End If
                 Case "none"
                 Case Else
-                    w.Template(If(m.SpindleDirection = "ccw", m.SpindleOnCcw, m.SpindleOnCw), vars)
+                    w.Template(If(ccw, m.SpindleOnCcw, m.SpindleOnCw), vars)
                     If changed AndAlso m.SpindleDelay > 0 AndAlso Not String.IsNullOrWhiteSpace(m.Dwell) Then w.Template({m.Dwell}, vars)
             End Select
             st.On = True
             st.Speed = s
+            st.Ccw = ccw
             If Not st.CoolantOn AndAlso coolant <> "none" Then
                 w.Template(If(coolant = "mist", m.CoolantMist, If(coolant = "air", m.CoolantAir, m.CoolantFlood)), vars)
                 st.CoolantOn = True
@@ -664,7 +676,7 @@ Namespace Post
                 Else
                     sb.AppendLine($"CUTTER/{F(tp.Tool.Diameter, d)},{F(tp.Tool.EffectiveCorner, d)}")
                 End If
-                sb.AppendLine($"SPINDL/RPM,{CInt(tp.Spindle)},CLW")
+                sb.AppendLine($"SPINDL/RPM,{CInt(tp.Spindle)},{If(tp.Tool.IsCcw, "CCLW", "CLW")}")
                 Dim lastType = CType(255, MoveType)
                 For Each p In tp.Points
                     If p.Type <> lastType Then

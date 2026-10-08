@@ -94,6 +94,12 @@ function normalize(p) {
     if (!Array.isArray(op.obstacles)) op.obstacles = [...included];
     if (!op.rel || typeof op.rel !== 'object') op.rel = {};
     if (op.tool && !(op.tool.fluteLength > 0)) op.tool.fluteLength = Math.round((op.tool.diameter || 6) * 2.5 * 100) / 100;
+    // senso di rotazione e concorde sono dell'utensile (prima "concorde" era un parametro della lavorazione)
+    if (op.tool) {
+      if (op.tool.rotation !== 'ccw') op.tool.rotation = 'cw';
+      if (typeof op.tool.climb !== 'boolean') op.tool.climb = op.climb !== false;
+    }
+    delete op.climb;
   }
   if (r.version < 2) r.version = 2;
   return r;

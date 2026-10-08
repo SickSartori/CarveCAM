@@ -183,7 +183,6 @@ export const EN = {
   "Concentrica (offset)": "Concentric (offset)",
   "Concentrica: passate parallele al contorno, dall'interno verso l'esterno. Rettangolare (zigzag): passate rettilinee parallele con l'angolo indicato, collegate a zigzag.":
     "Concentric: passes parallel to the boundary, from the inside out. Raster (zigzag): straight parallel passes at the given angle, linked in a zigzag.",
-  "Concorde (climb)": "Climb milling",
   "contorni separati": "separate outlines",
   "Continua": "Continue",
   "Contorno (sketch)": "Boundary (sketch)",
@@ -287,7 +286,6 @@ export const EN = {
   "Formato .{ext} non supportato": "Format .{ext} not supported",
   "Frecce della normale": "Normal arrows",
   "Frecce e cursori": "Arrows and cursors",
-  "Fresatura concorde con mandrino orario (M3): migliore finitura e minore usura. Disattivato: fresatura discorde.": "Climb milling with clockwise spindle (M3): better finish and less wear. Off: conventional milling.",
   "fronte": "front",
   "FRONTE": "FRONT",
   "G-code…": "G-code…",
@@ -1564,4 +1562,14 @@ export const EN = {
   "Movimenti smooth con G64 P (tolleranza di raccordo) nelle lavorazioni, G61 per il movimento esatto.": "Smooth motion with G64 P (blending tolerance) in the operations, G61 for exact motion.",
   "Archi con centro incrementale (impostare IJ incrementale anche in Mach); G64 per il movimento continuo.": "Arcs with incremental centre (set incremental IJ in Mach too); G64 for continuous motion.",
   "Solo movimenti lineari: gli archi si rifanno a corde con errore e lunghezza minima e massima.": "Linear moves only: arcs are remade as chords with error and minimum and maximum length.",
+  // senso di rotazione e lavorazione concorde dell'utensile
+  "Lavora concorde": "Climb milling",
+  "no = discorde": "no = conventional",
+  "antioraria": "counter-clockwise",
+  "discorde": "conventional",
+  "orario": "clockwise",
+  "antiorario": "counter-clockwise",
+  "Senso di rotazione dell'utensile visto dal mandrino verso il pezzo: orario (M3, le frese normali) o antiorario (M4, frese sinistre). Nel G-code il mandrino parte nel senso dell'utensile; insieme a \"Lavora concorde\" decide il verso dei percorsi.": "Direction of rotation of the tool seen from the spindle towards the part: clockwise (M3, normal cutters) or counter-clockwise (M4, left-hand cutters). In the G-code the spindle starts in the direction of the tool; together with \"Climb milling\" it sets the direction of the toolpaths.",
+  "Movimento degli assi concorde al senso di rotazione dell'utensile (fresatura concorde, climb): migliore finitura e minore usura. Disattivato: discorde (fresatura convenzionale), utile su macchine con giochi o materiali duri. Con un utensile antiorario i percorsi si invertono di conseguenza.": "Axis motion in the same direction as the tool rotation (climb milling): better finish and less wear. Off: conventional milling, useful on machines with backlash or hard materials. With a counter-clockwise tool the toolpaths are reversed accordingly.",
+  "Il senso di rotazione è quello dell'utensile (magazzino utensili): orario per le frese normali, antiorario per quelle sinistre. Per invertirlo il mandrino si ferma e riparte.": "The direction of rotation is that of the tool (tool library): clockwise for normal cutters, counter-clockwise for left-hand ones. To reverse it the spindle stops and restarts.",
 };

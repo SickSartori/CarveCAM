@@ -193,9 +193,9 @@ function machineForm(m, changedList, presets) {
     spindle: () => [
       row('Controllo', select(m, 'spindleControl', [['auto', 'Automatico (M3/M4 con i giri)'], ['manual', 'Manuale: pausa per accenderlo e regolarlo'], ['none', 'Nessuno']], changed, draw)),
       ...(m.spindleControl === 'auto' ? [
-        row('Senso di rotazione', select(m, 'spindleDirection', [['cw', 'Orario (M3)'], ['ccw', 'Antiorario (M4)']], changed)),
         row('Avvio orario', lines(m, 'spindleOnCw', changed, 2)),
         row('Avvio antiorario', lines(m, 'spindleOnCcw', changed, 2)),
+        note('Il senso di rotazione è quello dell\'utensile (magazzino utensili): orario per le frese normali, antiorario per quelle sinistre. Per invertirlo il mandrino si ferma e riparte.'),
         row('Arresto', lines(m, 'spindleOff', changed, 2)),
         row('Attesa dopo l\'avvio', num(m, 'spindleDelay', changed), unit('s'), text(m, 'dwell', changed, { width: '120px', placeholder: 'G4 P{SEC}' })),
         note('L\'attesa si scrive solo quando il mandrino parte o cambia velocità. GRBL: G4 P{SEC} (secondi); Fanuc: G4 X{SEC}, oppure G4 P{MS} in millisecondi.'),
