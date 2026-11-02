@@ -67,6 +67,24 @@ Namespace Model
         Public Property Diameter As Double = 6
         ''' <summary>Raggio di raccordo dello spigolo (solo fresa torica) [mm].</summary>
         Public Property CornerRadius As Double = 1
+        ''' <summary>Senso di rotazione visto dal mandrino verso il pezzo: "cw" orario (M3) o "ccw" antiorario (M4).</summary>
+        Public Property Rotation As String = "cw"
+        ''' <summary>Lavora concorde (climb): avanzamento concorde al senso di rotazione dell'utensile; falso: discorde.</summary>
+        Public Property Climb As Boolean = True
+        Public ReadOnly Property IsCcw As Boolean
+            Get
+                Return String.Equals(Rotation, "ccw", StringComparison.OrdinalIgnoreCase)
+            End Get
+        End Property
+        ''' <summary>
+        ''' Verso dei percorsi chiusi come per la fresatura concorde con mandrino orario: concorde con utensile orario,
+        ''' oppure discorde con utensile antiorario (il verso di rotazione inverte quello di concorde e discorde).
+        ''' </summary>
+        Public ReadOnly Property ClimbM3 As Boolean
+            Get
+                Return Climb Xor IsCcw
+            End Get
+        End Property
         Public ReadOnly Property Radius As Double
             Get
                 Return Diameter / 2
@@ -228,8 +246,6 @@ Namespace Model
         Public Property Clearance As Double = 1
         ''' <summary>Angolo delle passate zigzag [gradi].</summary>
         Public Property Angle As Double = 0
-        ''' <summary>Fresatura concorde (climb) con mandrino M3.</summary>
-        Public Property Climb As Boolean = True
         ''' <summary>Vero: l'utensile resta interamente dentro il contorno; falso: il centro utensile percorre il contorno.</summary>
         Public Property ToolInside As Boolean = True
         ''' <summary>Passata di contornatura finale ad ogni terrazza (zigzag).</summary>

@@ -208,11 +208,11 @@ Public Class MachinePostTests
     Public Sub Motion_SpindleCoolantFanAndToolChange()
         Dim a = CirclePocket(1), b = CirclePocket(2)
         b.Kind = "finish"
+        a.Tool.Rotation = "ccw" : b.Tool.Rotation = "ccw"
         Dim m = MachinePresets.LinuxCnc()
         m.SmoothTolerance = 0.05
         m.MotionFinish = "exact"
         m.Fan = "program" : m.FanOn = {"M10"} : m.FanOff = {"M11"}
-        m.SpindleDirection = "ccw"
         m.ToolChangeAuto = {"T{T} M6", "(UTENSILE {TOOL} D{D})"}
         Dim lines = Code(PostProcessor.GCode({a, b}, New PostOptions With {.Machine = m, .CoolantMode = "mist"}))
         Assert.Contains("G64 P0.05", lines)

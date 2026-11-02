@@ -16,10 +16,13 @@ const TYPE_SHORT = { flat: 'Cilindrica', bull: 'Torica', ball: 'Sferica', taper:
 const KIND_LABEL = { pocket: 'Svuotatura', finish: 'Finitura' };
 const STRATEGIES = [['concentric', 'Concentrica (offset)'], ['zigzag', 'Rettangolare (zigzag)']];
 const ENTRIES = [['plunge', 'Affondo verticale'], ['ramp', 'Rampa lungo il percorso'], ['helix', 'Elica']];
+/** Senso di rotazione dell'utensile visto dal mandrino verso il pezzo. */
+export const ROTATIONS = [['cw', 'Orario (M3)'], ['ccw', 'Antiorario (M4)']];
 
 const tool = (number, name, type, diameter, cornerRadius, fluteLength, feed, plunge, spindle, extra = {}) => ({
   id: uid('tl'), number, name, type, diameter, cornerRadius, fluteLength, length: Math.max(40, fluteLength * 3),
-  shank: Math.max(3, Math.min(diameter, 8)), flutes: 2, material: 'Metallo duro', feed, plunge, spindle, notes: '', ...extra,
+  shank: Math.max(3, Math.min(diameter, 8)), flutes: 2, material: 'Metallo duro', feed, plunge, spindle, notes: '',
+  rotation: 'cw', climb: true, ...extra,
 });
 
 function defaultTools() {
@@ -74,6 +77,15 @@ export async function save(kind, list) {
   log.info(`Archivio ${kind} salvato`, { count: list.length });
 }
 
+/** fn(kind, prima, dopo): l'utente ha salvato un archivio (finestra di gestione o importazione). */
+const savedHandlers = [];
+export const onLibrarySaved = fn => savedHandlers.push(fn);
+function notifySaved(kind, before, after) {
+  for (const fn of savedHandlers) {
+    try { fn(kind, before, after); } catch (e) { log.error('Aggiornamento dopo il salvataggio dell\'archivio', e); }
+  }
+}
+
 export const getTools = () => load('tools');
 export const getSetups = () => load('setups');
 
@@ -88,6 +100,8 @@ export function toolFromLibrary(lt) {
     ...(taper ? { taperAngle: lt.taperAngle > 0 ? lt.taperAngle : 5, tipType: lt.tipType === 'flat' ? 'flat' : 'ball' } : {}),
     // geometria oltre il tagliente: serve per generare la fresa in simulazione
     length: lt.length > 0 ? lt.length : 0, neck: lt.neck > 0 ? lt.neck : 0, shank: lt.shank > 0 ? lt.shank : 0,
+    // senso di rotazione e lavorazione concorde (verso dei percorsi e M3/M4)
+    rotation: lt.rotation === 'ccw' ? 'ccw' : 'cw', climb: lt.climb !== false,
   };
 }
 
@@ -146,7 +160,8 @@ export function toolDesc(tl) {
     return `T${tl.number} · ${tp} ${tip} · ${fmt(g.deg, 2)}° ${t('per lato')} · Lc ${fmt(g.Lc, 1)} · Ø max ${fmt(g.R * 2, 2)}`;
   }
   const r = tl.type === 'bull' ? ` R${fmt(tl.cornerRadius, 2)}` : '';
-  return `T${tl.number} · ${tp} Ø${fmt(tl.diameter, 2)}${r} · Lc ${fmt(tl.fluteLength, 1)}`;
+  const extra = [tl.rotation === 'ccw' ? t('antioraria') : '', tl.climb === false ? t('discorde') : ''].filter(Boolean).map(x => ` · ${x}`).join('');
+  return `T${tl.number} · ${tp} Ø${fmt(tl.diameter, 2)}${r} · Lc ${fmt(tl.fluteLength, 1)}${extra}`;
 }
 
 // ------------------------------------------------------------------ campi dei moduli
@@ -227,7 +242,8 @@ const KINDS = {
  * cols: [{ label, get(item) }], form(item, onChange) -> Node, make() -> nuovo elemento; cls: classe in più.
  */
 export async function manager({ title, kind, cols, form, make, filter, cls = '' }) {
-  const list = structuredClone(await load(kind));
+  const before = await load(kind);
+  const list = structuredClone(before);
   let sel = list[0]?.id || null;
   const tbody = h('tbody');
   const formBox = h('div', { class: 'lib-form' });
@@ -309,6 +325,7 @@ export async function manager({ title, kind, cols, form, make, filter, cls = '' 
   try {
     await save(kind, list);
     toast(t('Archivio salvato'), 'ok', 1800);
+    notifySaved(kind, before, list);
     return true;
   } catch (e) {
     toast(t('Salvataggio dell\'archivio non riuscito: {msg}', { msg: e.message }), 'err', 6000);
@@ -381,6 +398,8 @@ function toolForm(it, changed0) {
       frow('neck', 'Diametro collo', numInput(it, 'neck', changed, { min: 0 }), unit(t('mm (0=come Ø)'))),
       frow('shank', 'Diametro gambo', numInput(it, 'shank', changed, { min: 0 }), unit('mm')),
       row('Numero taglienti', numInput(it, 'flutes', changed, { min: 1, int: true })),
+      row('Senso di rotazione', selectInput(it, 'rotation', ROTATIONS, changed)),
+      row('Lavora concorde', checkInput(it, 'climb', changed), unit(t('no = discorde'))),
       row('Materiale', textInput(it, 'material', changed)),
       h('div', { class: 'p-sec' }, t('Tecnologia consigliata')),
       row('Avanzamento', numInput(it, 'feed', changed, { min: 0 }), unit('mm/min')),
@@ -422,7 +441,6 @@ function setupForm(it, changed) {
       h('div', { class: 'p-sec' }, t('Strategia')),
       row('Strategia', selectInput(p, 'strategy', STRATEGIES, () => { changed(); draw(); })),
       p.strategy === 'zigzag' ? row('Angolo passate', numInput(p, 'angle', changed), unit('°')) : null,
-      row('Concorde (climb)', checkInput(p, 'climb', changed)),
       row('Utensile dentro contorno', checkInput(p, 'toolInside', changed)),
       pocket && p.strategy === 'zigzag' ? row('Passata di contorno', checkInput(p, 'contourPass', changed)) : null,
       h('div', { class: 'p-sec' }, t('Passi e quote')),
@@ -664,9 +682,11 @@ export async function importLibrary() {
   const label = { tools: 'Utensili', setups: 'Setup', machines: 'Macchine' };
   try {
     for (const kind of kinds) {
-      const list = structuredClone(await load(kind));
+      const before = await load(kind);
+      const list = structuredClone(before);
       const r = mergeItems(list, data[kind], kind, mode === 'replace');
       await save(kind, list);
+      notifySaved(kind, before, list);
       msg.push(t('{what}: {a} aggiunti, {u} aggiornati', { what: t(label[kind]), a: r.added, u: r.updated }));
     }
     toast(msg.join(' · '), 'ok', 5000);
@@ -674,18 +694,18 @@ export async function importLibrary() {
 }
 
 // ------------------------------------------------------------------ utensili del progetto
-const GEOM_KEYS = ['type', 'diameter', 'cornerRadius', 'fluteLength', 'length', 'neck', 'shank', 'taperAngle', 'tipType'];
+const GEOM_KEYS = ['type', 'diameter', 'cornerRadius', 'fluteLength', 'length', 'neck', 'shank', 'taperAngle', 'tipType', 'rotation'];
 const DIFF_LABEL = {
   number: 'Numero (T)', name: 'Nome', type: 'Tipo fresa', diameter: 'Diametro', cornerRadius: 'Raggio raccordo', fluteLength: 'Altezza tagliente (Lc)',
   length: 'Sbalzo', neck: 'Diametro collo', shank: 'Diametro gambo', feed: 'Avanzamento', plunge: 'Affondo', spindle: 'Mandrino',
-  taperAngle: 'Angolo per lato', tipType: 'Punta',
+  taperAngle: 'Angolo per lato', tipType: 'Punta', rotation: 'Senso di rotazione',
 };
 
 /** Geometria confrontabile di una fresa (raggio coerente con il tipo, 0 per i valori non indicati). */
 function geomOf(tl) {
   const D = Number(tl.diameter) || 0;
   return {
-    type: tl.type, diameter: D,
+    type: tl.type, diameter: D, rotation: tl.rotation === 'ccw' ? 'ccw' : 'cw',
     cornerRadius: tl.type === 'ball' ? D / 2 : tl.type === 'bull' ? Number(tl.cornerRadius) || 0 : 0,
     fluteLength: Number(tl.fluteLength) || 0, length: Number(tl.length) || 0, neck: Number(tl.neck) || 0, shank: Number(tl.shank) || 0,
     // solo per la fresa conica (per le altre i campi mancano e risultano uguali nel confronto)
@@ -693,7 +713,7 @@ function geomOf(tl) {
   };
 }
 const sameNum = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) < 1e-6;
-const TEXT_KEYS = ['type', 'tipType'];
+const TEXT_KEYS = ['type', 'tipType', 'rotation'];
 const sameGeom = (a, b) => { const x = geomOf(a), y = geomOf(b); return GEOM_KEYS.every(k => (TEXT_KEYS.includes(k) ? x[k] === y[k] : sameNum(x[k], y[k]))); };
 
 /** Utensili usati dalle lavorazioni di un progetto: record del magazzino (con l'elenco delle lavorazioni). */
@@ -740,7 +760,8 @@ function toolDiffs(le, rec) {
   return out;
 }
 
-const diffVal = (k, v) => (k === 'type' ? t(TYPE_SHORT[v] || v || '–') : k === 'tipType' ? t(v === 'flat' ? 'piatta' : v ? 'sferica' : '–') : typeof v === 'number' ? fmt(v, 3) : (v ?? '–'));
+const diffVal = (k, v) => (k === 'type' ? t(TYPE_SHORT[v] || v || '–') : k === 'tipType' ? t(v === 'flat' ? 'piatta' : v ? 'sferica' : '–')
+  : k === 'rotation' ? t(v === 'ccw' ? 'antiorario' : 'orario') : typeof v === 'number' ? fmt(v, 3) : (v ?? '–'));
 
 /**
  * All'apertura di un progetto: confronta gli utensili usati con il magazzino. Se mancano o hanno parametri

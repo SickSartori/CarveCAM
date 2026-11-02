@@ -162,7 +162,7 @@ export const OP_DEFAULTS = {
   pocket: {
     base: 'Svuotatura', strategy: 'concentric',
     stepover: 3, stepdown: 1, maxDepth: 10, stock: 0, safeHeight: 10, clearance: 1, angle: 0,
-    climb: true, toolInside: true, contourPass: true, resolution: 0, tolerance: 0.01, feed: 1200, plunge: 300, spindle: 12000,
+    toolInside: true, contourPass: true, resolution: 0, tolerance: 0.01, feed: 1200, plunge: 300, spindle: 12000,
     entry: 'helix', rampAngle: 3, helixRadius: 0, rampFeed: 600,
     rel: {
       stepover: { on: true, pct: 50, min: 0.05, max: 0 },
@@ -173,7 +173,7 @@ export const OP_DEFAULTS = {
   finish: {
     base: 'Finitura', strategy: 'zigzag',
     stepover: 0.5, stepdown: 1, maxDepth: 20, stock: 0, safeHeight: 10, clearance: 2, angle: 0,
-    climb: true, toolInside: true, contourPass: false, resolution: 0, tolerance: 0.01, feed: 1500, plunge: 400, spindle: 14000,
+    toolInside: true, contourPass: false, resolution: 0, tolerance: 0.01, feed: 1500, plunge: 400, spindle: 14000,
     entry: 'plunge', rampAngle: 3, helixRadius: 0, rampFeed: 0,
     rel: {
       stepover: { on: true, pct: 8, min: 0.02, max: 2 },
@@ -185,7 +185,7 @@ export const OP_DEFAULTS = {
 
 /** Chiavi dei parametri di lavorazione salvati in un setup. */
 export const SETUP_KEYS = ['strategy', 'stepover', 'stepdown', 'maxDepth', 'stock', 'safeHeight', 'clearance', 'angle',
-  'climb', 'toolInside', 'contourPass', 'resolution', 'tolerance', 'entry', 'rampAngle', 'helixRadius', 'rampFeed', 'rel',
+  'toolInside', 'contourPass', 'resolution', 'tolerance', 'entry', 'rampAngle', 'helixRadius', 'rampFeed', 'rel',
   'feed', 'plunge', 'spindle'];
 
 /** Parametri di lavorazione (copia) presi da un'operazione, per salvarli come setup. */
@@ -228,7 +228,8 @@ const HELP = {
   entityIds: ['Entità del contorno', 'Se la lavorazione è stata creata da alcune entità selezionate, solo quelle delimitano la zona lavorata. "Usa tutto lo sketch" considera tutte le entità.'],
   strategy: ['Strategia', 'Concentrica: passate parallele al contorno, dall\'interno verso l\'esterno. Rettangolare (zigzag): passate rettilinee parallele con l\'angolo indicato, collegate a zigzag.'],
   angle: ['Angolo passate', 'Direzione delle passate zigzag, in gradi, misurata dall\'asse U del piano.'],
-  climb: ['Concorde (climb)', 'Fresatura concorde con mandrino orario (M3): migliore finitura e minore usura. Disattivato: fresatura discorde.'],
+  'tool.rotation': ['Senso di rotazione', 'Senso di rotazione dell\'utensile visto dal mandrino verso il pezzo: orario (M3, le frese normali) o antiorario (M4, frese sinistre). Nel G-code il mandrino parte nel senso dell\'utensile; insieme a "Lavora concorde" decide il verso dei percorsi.'],
+  'tool.climb': ['Lavora concorde', 'Movimento degli assi concorde al senso di rotazione dell\'utensile (fresatura concorde, climb): migliore finitura e minore usura. Disattivato: discorde (fresatura convenzionale), utile su macchine con giochi o materiali duri. Con un utensile antiorario i percorsi si invertono di conseguenza.'],
   toolInside: ['Utensile dentro contorno', 'Attivo: tutto l\'utensile resta dentro il contorno (il centro è ristretto del raggio). Disattivo: il centro dell\'utensile può percorrere il contorno.'],
   contourPass: ['Passata di contorno', 'Con la strategia zigzag aggiunge, a ogni terrazza, una passata lungo il bordo della zona lavorata per pulire le creste lasciate dalle passate.'],
   'tool.type': ['Tipo fresa', 'Cilindrica: fondo piatto. Torica: fondo piatto con spigolo raccordato (raggio r). Sferica: punta semisferica, adatta alla finitura di superfici curve.'],

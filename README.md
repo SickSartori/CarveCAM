@@ -230,6 +230,12 @@ nella vista, diventi l'origine.
   correggere evidenziato. Il calcolo dei percorsi verifica le collisioni della parte tagliente.
 - **Frese coniche:** diametro in punta (0 = punta a V), **angolo per lato**, punta **sferica** o **piatta** e
   altezza del cono; sono gestite dal motore di calcolo (drop-cutter a profilo), dalla simulazione e dal G-code.
+- **Senso di rotazione e Lavora concorde** (dell'utensile, anche nelle proprietà della lavorazione): orario (M3)
+  o antiorario (M4, frese sinistre); movimento degli assi concorde (climb) o discorde al senso di rotazione.
+  Insieme decidono il verso dei contorni, degli anelli concentrici e delle eliche (concorde con utensile orario =
+  antiorario nelle svuotature; ogni inversione cambia il verso). Il G-code avvia il mandrino con `M3` o `M4`
+  secondo l'utensile, fermandolo prima di invertire il senso; i commenti indicano le frese antiorarie e il CL data
+  scrive `SPINDL/…,CLW` o `CCLW`. I progetti precedenti passano il loro "Concorde" all'utensile.
 - **Esporta / Importa** (nelle finestre degli archivi e in *Strumenti › Esporta/Importa utensili e setup*):
   file `.json` con utensili e/o setup, da aggiungere (aggiornando quelli già presenti) o da sostituire.
 - **Utensili nel progetto:** il file `.ccam` contiene le schede degli utensili usati. All'apertura, se nel
@@ -376,7 +382,7 @@ l'**anteprima del G-code** su un percorso di prova (elica, cerchio, raccordi, fi
   **minima** e **massima** delle corde (0 = senza limite).
 - **Movimenti:** comandi di **movimento esatto** e **smooth** (es. `G61`, `G64 P{TOL}`, `G05.1 Q1`) per le
   svuotature e per le finiture, con la tolleranza e le righe per tornare alla modalità normale a fine programma.
-- **Mandrino:** automatico (`M3`/`M4` con i giri, senso di rotazione) o manuale (pausa per accenderlo), comandi
+- **Mandrino:** automatico (`M3`/`M4` con i giri, nel senso di rotazione dell'utensile) o manuale (pausa per accenderlo), comandi
   di avvio e arresto, attesa dopo l'avvio (`G4 P{SEC}`, `G4 X{SEC}`, `G4 P{MS}`), giri minimi e massimi, arresto
   a ogni lavorazione o solo ai cambi utensile.
 - **Refrigerazione e aspirazione:** a pioggia, nebulizzato, aria, con i loro comandi e quello predefinito
