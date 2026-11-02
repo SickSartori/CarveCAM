@@ -13,10 +13,10 @@ import { modal, confirmBox, toast, status, busy, busyText, idle, h } from './dia
 import { SERVER_FORMATS, CLIENT_FORMATS, extOf, parseInBrowser, buildDisplayGeometry } from './importers.js';
 import { sampleMesh, sampleProject, SAMPLE_VERSION, SAMPLE_BOUNDS } from './sample.js';
 import { shortcutRows } from './shortcuts.js';
-import { OP_DEFAULTS, effParam, round4 } from './oplib.js';
+import { OP_DEFAULTS, SETUP_KEYS, effParam, round4 } from './oplib.js';
 import {
   pickTool, pickSetup, toolFromLibrary, getTools, getSetups, openToolLibrary, openSetupLibrary, saveOperationAsSetup,
-  usedTools, reconcileProjectTools, exportLibrary, importLibrary,
+  usedTools, reconcileProjectTools, exportLibrary, importLibrary, onLibrarySaved,
 } from './library.js';
 import { pickProjectFile, writeProjectFile, addRecent, recentList, fileOfRecent, removeRecent } from './files.js';
 import { openOptions } from './options.js';
@@ -1531,6 +1531,56 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
       if (op) op.tool = toolFromLibrary(lt);
     });
   };
+
+  /**
+   * Magazzino utensili o setup salvati: le lavorazioni collegate (libId / setupId) prendono i nuovi valori.
+   * Un campo che nella lavorazione era già diverso dal vecchio valore del magazzino è una scelta della
+   * lavorazione e resta com'è.
+   */
+  onLibrarySaved(async (kind, before, after) => {
+    if (kind !== 'tools' && kind !== 'setups') return;
+    let setups = [];
+    if (kind === 'tools') try { setups = await getSetups(); } catch { /* setup non disponibili: avanzamenti dall'utensile */ }
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const find = (list, id) => (id && list.find(x => x.id === id)) || null;
+    const take = (op, k, oldV, newV) => { if (newV !== undefined && same(op[k], oldV) && !same(op[k], newV)) { op[k] = structuredClone(newV); return true; } return false; };
+    const plan = [];
+    for (const op of App.project.operations) {
+      if (kind === 'tools') {
+        const lt = find(after, op.tool?.libId), ot = find(before, op.tool?.libId);
+        if (lt && ot && !same(lt, ot)) plan.push({ op, lt, ot });
+      } else {
+        const st = find(after, op.setupId), os = find(before, op.setupId);
+        if (st && os && !same(st, os)) plan.push({ op, st, os });
+      }
+    }
+    if (plan.length) {
+      mutate(() => {
+        for (const { op, lt, ot, st, os } of plan) {
+          if (lt) {
+            const prev = toolFromLibrary(ot), next = toolFromLibrary(lt);
+            for (const k of ['number', 'climb']) if (op.tool[k] !== prev[k]) next[k] = op.tool[k];
+            op.tool = next;
+            const setup = find(setups, op.setupId);
+            if (!setup || setup.useToolFeeds !== false) {
+              for (const k of ['feed', 'plunge', 'spindle']) if (lt[k] > 0) take(op, k, ot[k], lt[k]);
+              if (op.rampFeed > 0 && ot.feed > 0 && lt.feed > 0) take(op, 'rampFeed', Math.round(ot.feed / 2), Math.round(lt.feed / 2));
+            }
+          } else {
+            op.setupName = st.name;
+            const feeds = st.useToolFeeds !== false;
+            for (const k of SETUP_KEYS) {
+              if (feeds && ['feed', 'plunge', 'spindle'].includes(k)) continue;
+              take(op, k, os.params?.[k], st.params?.[k]);
+            }
+          }
+        }
+      });
+      log.info('Lavorazioni aggiornate dall\'archivio', { kind, count: plan.length });
+      toast(t('{n} lavorazioni aggiornate con i nuovi valori dell\'archivio', { n: plan.length }), 'ok', 3500);
+    }
+    emit('selection');   // ricostruisce il pannello proprietà (elenco utensili del magazzino)
+  });
 
   cmd.setObstacle = (opId, itemId, on) => {
     mutate(() => {

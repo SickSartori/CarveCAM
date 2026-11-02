@@ -77,6 +77,15 @@ export async function save(kind, list) {
   log.info(`Archivio ${kind} salvato`, { count: list.length });
 }
 
+/** fn(kind, prima, dopo): l'utente ha salvato un archivio (finestra di gestione o importazione). */
+const savedHandlers = [];
+export const onLibrarySaved = fn => savedHandlers.push(fn);
+function notifySaved(kind, before, after) {
+  for (const fn of savedHandlers) {
+    try { fn(kind, before, after); } catch (e) { log.error('Aggiornamento dopo il salvataggio dell\'archivio', e); }
+  }
+}
+
 export const getTools = () => load('tools');
 export const getSetups = () => load('setups');
 
@@ -233,7 +242,8 @@ const KINDS = {
  * cols: [{ label, get(item) }], form(item, onChange) -> Node, make() -> nuovo elemento; cls: classe in più.
  */
 export async function manager({ title, kind, cols, form, make, filter, cls = '' }) {
-  const list = structuredClone(await load(kind));
+  const before = await load(kind);
+  const list = structuredClone(before);
   let sel = list[0]?.id || null;
   const tbody = h('tbody');
   const formBox = h('div', { class: 'lib-form' });
@@ -315,6 +325,7 @@ export async function manager({ title, kind, cols, form, make, filter, cls = '' 
   try {
     await save(kind, list);
     toast(t('Archivio salvato'), 'ok', 1800);
+    notifySaved(kind, before, list);
     return true;
   } catch (e) {
     toast(t('Salvataggio dell\'archivio non riuscito: {msg}', { msg: e.message }), 'err', 6000);
@@ -671,9 +682,11 @@ export async function importLibrary() {
   const label = { tools: 'Utensili', setups: 'Setup', machines: 'Macchine' };
   try {
     for (const kind of kinds) {
-      const list = structuredClone(await load(kind));
+      const before = await load(kind);
+      const list = structuredClone(before);
       const r = mergeItems(list, data[kind], kind, mode === 'replace');
       await save(kind, list);
+      notifySaved(kind, before, list);
       msg.push(t('{what}: {a} aggiunti, {u} aggiornati', { what: t(label[kind]), a: r.added, u: r.updated }));
     }
     toast(msg.join(' · '), 'ok', 5000);
