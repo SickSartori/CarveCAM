@@ -2,7 +2,7 @@
 
   <!-- versione comune a tutti i progetti: mostrata in Aiuto › Informazioni e nel log, usata nel nome del pacchetto -->
   <PropertyGroup>
-    <Version>0.3.1</Version>
+    <Version>0.3.2</Version>
   </PropertyGroup>
 
 </Project>
