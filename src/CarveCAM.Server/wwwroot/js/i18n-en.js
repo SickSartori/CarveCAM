@@ -945,8 +945,8 @@ export const EN = {
     "Problem description",
   "Includi le mesh dei modelli":
     "Include the model meshes",
-  "La password dell'archivio è nota all'assistenza: invia il file così com'è.":
-    "Support knows the archive password: send the file as it is.",
+  "Contiene il tuo progetto e i log e la password è pubblica: non allegarlo a una segnalazione su GitHub, invialo in privato a chi ti assiste.":
+    "It contains your project and logs and the password is public: do not attach it to a GitHub issue, send it privately to whoever is helping you.",
   "Esporta":
     "Export",
   "Preparazione blackbox…":
@@ -959,6 +959,10 @@ export const EN = {
     "Web CAM for mini CNC",
   "Sviluppo":
     "Development",
+  "Licenza":
+    "License",
+  "Software libero con licenza MIT.":
+    "Free software under the MIT license.",
   "Componenti di terze parti":
     "Third-party components",
   "Sviluppato da William Veronesi e Gabriel S. Sartori":

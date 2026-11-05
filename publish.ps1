@@ -1,5 +1,6 @@
-# Crea il pacchetto di prova: dist\CarveCAM-<versione>-<runtime>.zip con CarveCAM.exe autonomo (non serve .NET
-# installato), wwwroot, appsettings.json e LEGGIMI.txt. La versione è quella di Directory.Build.props.
+# Crea il pacchetto: dist\CarveCAM-<versione>-<runtime>.zip con CarveCAM.exe autonomo (non serve .NET
+# installato), wwwroot, appsettings.json, LEGGIMI.txt, LICENSE e THIRD-PARTY-NOTICES.md.
+# La versione è quella di Directory.Build.props.
 #   ./publish.ps1                  Windows 64 bit
 #   ./publish.ps1 -Runtime win-arm64
 param([string]$Runtime = 'win-x64')
@@ -18,7 +19,7 @@ dotnet publish "$root\src\CarveCAM.Server\CarveCAM.Server.vbproj" -c Release -r 
     -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o $out
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish non riuscito" }
 
-Copy-Item "$root\packaging\LEGGIMI.txt" $out
+Copy-Item "$root\packaging\LEGGIMI.txt", "$root\LICENSE", "$root\THIRD-PARTY-NOTICES.md" $out
 # nel pacchetto non devono finire file di sviluppo
 Get-ChildItem $out -Include '*.pdb', 'appsettings.Development.json', 'web.config' -Recurse | Remove-Item -Force
 

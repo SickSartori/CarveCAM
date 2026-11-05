@@ -5,3 +5,4 @@ obj/
 TestResults/
 src/CarveCAM.Server/App_Data/
 dist/
+.claude/
