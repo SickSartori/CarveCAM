@@ -965,6 +965,12 @@ export const EN = {
     "Free software under the MIT license.",
   "Componenti di terze parti":
     "Third-party components",
+  "Non disponibile nella demo online: installa CarveCAM per usare i tuoi modelli":
+    "Not available in the online demo: install CarveCAM to use your own models",
+  "Demo online: c'è solo il progetto di esempio. Per usare i tuoi modelli installa CarveCAM.":
+    "Online demo: only the sample project is available. Install CarveCAM to use your own models.",
+  "Demo online":
+    "Online demo",
   "Aggiornamenti":
     "Updates",
   "Aggiornamenti…":

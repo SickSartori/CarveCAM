@@ -4,6 +4,7 @@ import { PLANE_PRESETS } from './commands.js';
 import { MODIFY_COMMANDS } from './modify.js';
 import { t } from './i18n.js';
 import { log } from './log.js';
+import { DEMO, DEMO_OFF, demoWhy } from './demo.js';
 
 /**
  * Ogni azione: { id, label, icon (chiave di TB), kbd, run(), enabled(), checked(), hint, tone }
@@ -174,6 +175,7 @@ export function createActions({ cmd, vp, sketch }) {
     if (a.short) a.short = t(a.short);
     if (a.hint) a.hint = t(a.hint);
     if (a.options) for (const o of a.options) o.label = t(o.label);
+    if (DEMO && DEMO_OFF.has(a.id)) { a.enabled = () => false; a.whyOff = demoWhy; }   // prova online: vedi demo.js
   }
   // le etichette dei piani standard nel menu: "Piano " + preset tradotto
   for (const p of PLANE_PRESETS) {

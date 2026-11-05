@@ -16,8 +16,12 @@ importati e su solidi primitivi, con piani di lavoro liberi nello spazio (3+2) e
 
 Il pulsante apre CarveCAM in un ambiente di GitHub (Codespaces): compila il programma e apre la scheda del browser. Serve
 un account GitHub, anche gratuito. La prima apertura richiede un paio di minuti e usa la quota mensile di ore gratuite del
-tuo account. È solo una prova: il codespace si spegne dopo un po' di inattività, quindi salva il progetto sul tuo PC prima
-di chiuderlo. Per lavorare davvero installa il programma (vedi *Avvio rapido*).
+tuo account.
+
+È una **versione limitata**: si apre direttamente sul progetto di esempio (una targa con logo e tre lavorazioni già
+calcolate). Puoi guardarlo da ogni lato, cambiare i parametri, ricalcolare, simulare l'erosione del materiale ed esportare
+il G-code. Non si possono aprire, importare o salvare progetti. Per usare i tuoi modelli installa il programma (vedi
+*Avvio rapido*).
 
 ## A cosa serve
 

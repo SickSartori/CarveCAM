@@ -29,6 +29,7 @@ import { previousSessionCrashed, startSession } from './recovery.js';
 import { initLoaders, splashText, splashDone } from './loader.js';
 import { HomeScreen } from './home.js';
 import { checkOnStartup } from './update.js';
+import { DEMO, demoWhy } from './demo.js';
 import { openGuide, initGuide, guideOpen } from './guide.js';
 
 applyTheme();
@@ -65,7 +66,15 @@ cmd.guide = page => { menuBar.close(); return openGuide(page); };
 const home = new HomeScreen({ cmd, vp, openGuide: page => openGuide(page) });
 cmd.home = () => { menuBar.close(); return home.show(); };
 document.getElementById('brand').addEventListener('click', () => cmd.home());
-async function refreshRecent() { recent.list = await cmd.recentProjects(); }
+if (DEMO) {
+  // prova online: apertura, importazione e salvataggio non esistono (scorciatoie e trascinamento passano da qui; menu e barra dalle azioni)
+  const blocked = () => { toast(demoWhy(), 'warn', 4500); return false; };
+  for (const k of ['newProject', 'openProject', 'openRecent', 'saveProject', 'saveProjectAs', 'renameProject', 'importModel', 'importFiles', 'home']) cmd[k] = blocked;
+  const brand = document.getElementById('brand');
+  brand.title = t('Demo online');
+  brand.append(h('span', { style: { marginLeft: '8px', padding: '1px 7px', borderRadius: '999px', fontSize: '10px', fontWeight: 600, letterSpacing: '.06em', background: 'var(--accent-soft)', color: 'var(--accent)' } }, 'DEMO'));
+}
+async function refreshRecent() { recent.list = DEMO ? [] : await cmd.recentProjects(); }
 on('recent', refreshRecent);
 
 /** Stato di ciascuna fase del flusso di lavoro (spie della barra strumenti). */
@@ -442,9 +451,9 @@ window.addEventListener('beforeunload', e => {
 
 async function startUp() {
   let recovered = false;
-  const crashed = previousSessionCrashed();
+  const crashed = DEMO ? false : previousSessionCrashed();   // nella demo non si recupera né si riprende nulla
   startSession();
-  const saved = loadAutosave();
+  const saved = DEMO ? null : loadAutosave();
   const has = saved && isProjectDoc(saved.project);
   const content = has && (saved.project.objects?.length || saved.project.artifacts?.length || saved.project.planes?.length);
   if (has && crashed && saved.dirty && content) {
@@ -478,8 +487,14 @@ async function startUp() {
   } else vp.fit();
   await refreshRecent();
   // schermata iniziale (sotto la schermata di caricamento, che sfuma); non dopo un recupero appena confermato
-  const showHome = settings.startScreen !== false && !recovered;
+  const showHome = !DEMO && settings.startScreen !== false && !recovered;
   if (showHome) await home.show({ startup: true });
+  if (DEMO) {
+    // prova online: si apre direttamente il progetto di esempio, sotto la schermata di caricamento
+    splashText(t('Preparazione del progetto di esempio…'));
+    await cmd.demoProject();
+    toast(t('Demo online: c\'è solo il progetto di esempio. Per usare i tuoi modelli installa CarveCAM.'), 'info', 12000);
+  }
   splashDone();
   if (!showHome && has && !crashed && content) toast(t('Ripristinato l\'ultimo progetto aperto in questo browser'), 'info', 3000);
 }
