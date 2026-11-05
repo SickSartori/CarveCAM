@@ -167,6 +167,7 @@ export function createActions({ cmd, vp, sketch }) {
     { id: 'help.blackbox', label: 'Esporta blackbox…', icon: 'blackbox', run: cmd.exportBlackbox,
       hint: 'Archivio protetto da password con tutti i dati per riprodurre un problema da segnalare' },
     { id: 'help.about', label: 'Informazioni su CarveCAM…', icon: 'info', run: cmd.about, hint: 'Versione, crediti di sviluppo e componenti di terze parti' },
+    { id: 'help.updates', label: 'Aggiornamenti…', icon: 'import', run: cmd.updates, hint: 'Cerca una versione nuova di CarveCAM e installala' },
   ];
   for (const a of list) {
     a.label = t(a.label);
@@ -217,7 +218,7 @@ export const MENUS = [
   { label: 'Strumenti', items: ['tools.library', 'tools.setups', 'tools.machines', '-', 'tools.libExport', 'tools.libImport', '-', 'tools.options'] },
   { label: 'Vista', items: ['view.top', 'view.front', 'view.right', 'view.left', 'view.back', 'view.bottom', 'view.iso', '-', 'plane.normalView', 'view.fit', 'view.ortho', '-', 'view.grid', 'view.paths', 'view.rapids', 'view.wire'] },
   { label: 'Aiuto', items: ['help.guide', 'help.palette', 'help.shortcuts', '-', 'file.demo', 'file.home', '-', 'help.log', 'help.blackbox'] },
-  { label: 'Info', items: ['help.about'] },
+  { label: 'Info', items: ['help.about', 'help.updates'] },
 ];
 for (const m of MENUS) {
   m.label = t(m.label);

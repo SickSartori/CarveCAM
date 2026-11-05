@@ -26,10 +26,19 @@ AVVISO DI WINDOWS
   Al primo avvio Windows può mostrare "Windows ha protetto il PC": fare clic su
   "Ulteriori informazioni" e poi su "Esegui comunque". Il programma non è ancora firmato.
 
+AGGIORNAMENTI
+  All'avvio CarveCAM controlla su GitHub se c'è una versione nuova (non invia dati del progetto).
+  Se c'è, la scarica da solo, ne verifica l'SHA256 e la installa al riavvio successivo; si può
+  installare subito da Info > Aggiornamenti. Utensili, setup, copie di sicurezza e impostazioni
+  non si toccano. Per spegnere il controllo: Strumenti > Opzioni > Avvio, oppure "Update":
+  { "Enabled": false } in appsettings.json.
+  Se la cartella non è scrivibile (per esempio C:\Programmi) il programma segnala la versione
+  nuova ma non la installa: va scaricata a mano da https://github.com/SickSartori/CarveCAM/releases
+
 DATI
   Magazzino utensili, setup, copie di sicurezza e log si trovano nella cartella App_Data
-  accanto a CarveCAM.exe. Per conservarli passando a una nuova versione, copiare
-  App_Data nella cartella della nuova versione.
+  accanto a CarveCAM.exe. Aggiornando a mano da una versione che non si aggiorna da sola
+  (la 0.4.0), per conservarli copiare App_Data nella cartella della nuova versione.
   Non scompattare in "C:\Programmi": lì il programma non può scrivere i suoi dati.
   Va bene il Desktop, Documenti o qualsiasi cartella personale.
 

@@ -1,6 +1,7 @@
 # Crea il pacchetto: dist\CarveCAM-<versione>-<runtime>.zip con CarveCAM.exe autonomo (non serve .NET
 # installato), wwwroot, appsettings.json, LEGGIMI.txt, LICENSE e THIRD-PARTY-NOTICES.md.
-# La versione è quella di Directory.Build.props.
+# La versione è quella di Directory.Build.props. Il nome dello zip è quello che l'aggiornamento automatico cerca
+# tra gli allegati della release (CarveCAM-X.Y.Z-win-x64.zip): non cambiarlo.
 #   ./publish.ps1                  Windows 64 bit
 #   ./publish.ps1 -Runtime win-arm64
 param([string]$Runtime = 'win-x64')

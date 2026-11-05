@@ -965,6 +965,62 @@ export const EN = {
     "Free software under the MIT license.",
   "Componenti di terze parti":
     "Third-party components",
+  "Aggiornamenti":
+    "Updates",
+  "Aggiornamenti…":
+    "Updates…",
+  "Cerca una versione nuova di CarveCAM e installala":
+    "Look for a new version of CarveCAM and install it",
+  "Cerca aggiornamenti all'avvio e scaricali in automatico":
+    "Check for updates at startup and download them automatically",
+  "All'avvio CarveCAM contatta github.com per sapere se c'è una versione nuova (non invia dati del progetto). La versione scaricata e verificata si installa al prossimo avvio o da Info › Aggiornamenti. Per spegnere del tutto la funzione imposta Update:Enabled a false in appsettings.json.":
+    "At startup CarveCAM contacts github.com to see whether there is a new version (it sends no project data). The downloaded, verified version is installed at the next start or from Info › Updates. To turn the feature off completely, set Update:Enabled to false in appsettings.json.",
+  "È disponibile CarveCAM {v}: aprila da Info › Aggiornamenti":
+    "CarveCAM {v} is available: open it from Info › Updates",
+  "Aggiornamento alla versione {v} pronto: si installa al prossimo avvio, oppure subito da Info › Aggiornamenti":
+    "Update to version {v} is ready: it installs at the next start, or right away from Info › Updates",
+  "Versione in uso: {v}":
+    "Version in use: {v}",
+  "Gli aggiornamenti automatici funzionano solo con il pacchetto per Windows. Le nuove versioni si scaricano da GitHub.":
+    "Automatic updates only work with the Windows package. New versions are downloaded from GitHub.",
+  "Gli aggiornamenti automatici sono spenti in appsettings.json (Update:Enabled).":
+    "Automatic updates are turned off in appsettings.json (Update:Enabled).",
+  "Controllo in corso…":
+    "Checking…",
+  "Scaricamento della versione {v}: {p} %":
+    "Downloading version {v}: {p} %",
+  "La versione {v} è pronta e verificata: si installa al prossimo avvio.":
+    "Version {v} is ready and verified: it installs at the next start.",
+  "Riavvia e installa ora":
+    "Restart and install now",
+  "È disponibile la versione {v}.":
+    "Version {v} is available.",
+  "Questa installazione non si aggiorna da sola (cartella non scrivibile o pacchetto non verificabile): scarica la nuova versione da GitHub.":
+    "This installation cannot update itself (folder not writable or package cannot be verified): download the new version from GitHub.",
+  "CarveCAM è aggiornato.":
+    "CarveCAM is up to date.",
+  "Errore: {msg}":
+    "Error: {msg}",
+  "Note della versione":
+    "Release notes",
+  "Apri la pagina della versione su GitHub":
+    "Open the version page on GitHub",
+  "Cerca aggiornamenti":
+    "Check for updates",
+  "Riavvia e installa":
+    "Restart and install",
+  "CarveCAM si chiude e si riapre con la versione {v}; il progetto aperto resta nel browser.":
+    "CarveCAM closes and reopens with version {v}; the open project stays in the browser.",
+  "Ci sono modifiche non salvate nel progetto: salvalo prima.":
+    "There are unsaved changes in the project: save it first.",
+  "Riavvia":
+    "Restart",
+  "Riavvio in corso…":
+    "Restarting…",
+  "Il riavvio non è riuscito: controlla la finestra nera e il file di log.":
+    "The restart failed: check the black window and the log file.",
+  "Impossibile contattare GitHub: {msg}":
+    "Could not reach GitHub: {msg}",
   "Sviluppato da William Veronesi e Gabriel S. Sartori":
     "Developed by William Veronesi and Gabriel S. Sartori",
   "conica Ø{d} {a}° per lato":

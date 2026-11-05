@@ -20,6 +20,7 @@ import {
 } from './library.js';
 import { pickProjectFile, writeProjectFile, addRecent, recentList, fileOfRecent, removeRecent } from './files.js';
 import { openOptions } from './options.js';
+import { openUpdates } from './update.js';
 import { getMachines, openMachineLibrary, machineSummary, usesProgramNumber, COOLANTS } from './machines.js';
 import { color, settings } from './settings.js';
 import { artifactKeyPoints } from './scene-sync.js';
@@ -2129,6 +2130,8 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
     if (ok) toast(t('Esempio pronto: premi Simula tutto per vedere le tre lavorazioni, o seleziona una lavorazione per cambiarne i parametri'), 'ok', 7000);
     return true;
   };
+
+  cmd.updates = () => openUpdates();
 
   /** Informazioni sul programma: versione, descrizione, crediti di sviluppo e componenti di terze parti. */
   cmd.about = () => {

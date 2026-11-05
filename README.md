@@ -64,8 +64,8 @@ mandrino, refrigerazione, cambio utensile).
   estrusioni di profili e booleane; profili ricavati dal modello 3D.
 - **G-code:** magazzino macchine configurabile (GRBL 1.1 / grblHAL / FluidNC, Fanuc/ISO con `G68.2`, LinuxCNC,
   Mach3/Mach4, controllo generico) con archi `G2`/`G3`, anteprima ed esportazione; in alternativa CL data.
-- **Comodità:** schermata iniziale, guida illustrata (F1), simulazione, copie di sicurezza e recupero, interfaccia in
-  italiano e inglese, tema chiaro o scuro.
+- **Comodità:** schermata iniziale, guida illustrata (F1), simulazione, copie di sicurezza e recupero, aggiornamenti
+  automatici, interfaccia in italiano e inglese, tema chiaro o scuro.
 
 Il programma gira sul tuo PC: un server locale (VB.NET, .NET 10) e l'interfaccia nel browser (Three.js). I dati
 (magazzino utensili, setup, copie di sicurezza, log) restano nella cartella `App_Data` accanto al programma.
@@ -77,6 +77,11 @@ scompattalo in una cartella personale (non in `C:\Programmi`) e fai doppio clic 
 <http://localhost:5080>. Per uscire chiudi la finestra nera. Al primo avvio Windows può avvisare che il programma non è
 firmato: *Ulteriori informazioni › Esegui comunque*. Serve una connessione a internet, perché Three.js e OpenCascade
 (importazione STEP/IGES) si caricano da CDN.
+
+**Aggiornamenti:** dalla 0.4.1 CarveCAM controlla da solo, all'avvio, se su GitHub c'è una versione nuova (non invia dati
+del progetto). Se c'è, la scarica in background, ne verifica l'SHA256 e la installa al riavvio successivo, oppure subito
+da *Info › Aggiornamenti*. Utensili, setup, copie di sicurezza e `appsettings.json` restano dove sono. Si spegne in
+*Opzioni › Avvio* o con `Update:Enabled` a `false` in `appsettings.json`. La 0.4.0 non lo fa: va aggiornata a mano una volta.
 
 **Dai sorgenti** (serve il [.NET SDK 10](https://dotnet.microsoft.com/download)):
 

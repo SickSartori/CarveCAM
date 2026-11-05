@@ -402,6 +402,27 @@ Verificare sempre il programma con il simulatore della propria macchina prima de
   apribile con Esplora risorse e 7-Zip. Il valore predefinito è pubblico (è in questo repository): l'archivio evita
   l'apertura casuale ma **non è riservato**. Contiene il progetto e i log, quindi non va allegato a una segnalazione
   pubblica: si invia in privato a chi presta assistenza; chi lo gestisce può cambiare la password.
+- **Aggiornamenti automatici** (dalla 0.4.1, solo con il pacchetto per Windows; non con `dotnet run`). All'avvio il
+  programma legge da GitHub l'ultima release (`api.github.com`): la prima volta dopo ogni avvio e poi al massimo una
+  volta all'ora, salvo il pulsante *Cerca aggiornamenti*. Non invia dati del progetto, solo il nome e la versione del
+  programma. GitHub concede un numero limitato di richieste per indirizzo internet: con molti PC dietro lo stesso
+  indirizzo si può spegnere la ricerca automatica su alcuni. Se è più recente di quella in uso e la cartella del programma è
+  scrivibile, **scarica** il pacchetto `CarveCAM-X.Y.Z-win-x64.zip` in background, ne controlla l'**SHA256**
+  (quello che GitHub pubblica per l'allegato; senza SHA256 o con un valore diverso il pacchetto si scarta) e lo
+  scompatta in `App_Data/updates`. La versione pronta **si installa al riavvio successivo**, prima che parta il
+  server, oppure subito con *Info › Aggiornamenti › Riavvia e installa ora*: il lavoro in corso non viene
+  interrotto da un riavvio improvviso. Si sostituiscono l'eseguibile, `wwwroot` e i documenti; `App_Data` (magazzini,
+  copie di sicurezza, log) e `appsettings.json` restano come sono. Se qualcosa non riesce tutto torna come prima e si
+  continua con la versione in uso (il motivo è nel log). Senza internet non succede nulla.
+  - Si spegne in *Opzioni › Avvio* (solo la ricerca automatica; *Info › Aggiornamenti* resta disponibile) oppure del
+    tutto con `"Update": { "Enabled": false }` in `appsettings.json`.
+  - Se la cartella non è scrivibile (per esempio `C:\Programmi`) il programma avvisa che c'è una versione nuova ma non
+    la installa: va scaricata a mano dalla pagina Releases.
+  - La versione 0.4.0 non ha questa funzione: chi la usa scarica la 0.4.1 a mano una volta (copiando `App_Data`
+    nella nuova cartella per tenere i dati).
+  - **Fiducia:** il pacchetto è verificato con l'SHA256 pubblicato da GitHub, ma non è firmato dagli autori. Chi
+    controlla l'account GitHub `SickSartori` può quindi pubblicare codice che le installazioni eseguono: ci si fida di
+    GitHub e di quell'account. Chi non vuole questa fiducia spegne la funzione e aggiorna a mano.
 
 ## Limiti noti
 

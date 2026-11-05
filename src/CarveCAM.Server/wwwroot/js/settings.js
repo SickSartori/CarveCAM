@@ -33,6 +33,7 @@ export const DEFAULTS = {
     snapStep: 1,        // passo di aggancio predefinito dello sketch (mm)
   },
   startScreen: true,    // schermata iniziale all'avvio (progetto da riprendere, recenti, esempio, guida)
+  autoUpdate: true,     // all'avvio cerca una versione nuova su GitHub e la scarica (si installa al riavvio successivo)
   // vista memorizzata dalle opzioni: usata all'avvio e come vista isometrica (saved: false = vista standard)
   view: {
     saved: false,

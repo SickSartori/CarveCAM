@@ -131,9 +131,14 @@ export async function openOptions({ vp } = {}) {
       const home = h('input', { type: 'checkbox' });
       home.checked = work.startScreen !== false;
       home.addEventListener('change', () => { work.startScreen = home.checked; });
+      const upd = h('input', { type: 'checkbox' });
+      upd.checked = work.autoUpdate !== false;
+      upd.addEventListener('change', () => { work.autoUpdate = upd.checked; });
       return h('div', {},
         row('Schermata iniziale', h('label', { class: 'opt-radio' }, home, t('Mostra all\'avvio'))),
         h('p', { class: 'p-note', style: { margin: '0 0 12px' } }, t('All\'avvio compare la schermata con il progetto da riprendere, i progetti recenti, il progetto di esempio e la guida. Si riapre da File › Schermata iniziale o con un clic sul logo.')),
+        row('Aggiornamenti', h('label', { class: 'opt-radio' }, upd, t('Cerca aggiornamenti all\'avvio e scaricali in automatico'))),
+        h('p', { class: 'p-note', style: { margin: '0 0 12px' } }, t('All\'avvio CarveCAM contatta github.com per sapere se c\'è una versione nuova (non invia dati del progetto). La versione scaricata e verificata si installa al prossimo avvio o da Info › Aggiornamenti. Per spegnere del tutto la funzione imposta Update:Enabled a false in appsettings.json.')),
         row('Vista predefinita', state),
         h('div', { class: 'p-buttons', style: { padding: '4px 0 6px' } }, save, std, test),
         h('p', { class: 'p-note' }, t('Orientamento e zoom della vista attuale diventano quelli usati all\'avvio di CarveCAM e dal comando Vista isometrica (tasto 0 o pulsante sotto il cubo). All\'avvio si ripristinano anche il punto inquadrato e la proiezione.')));

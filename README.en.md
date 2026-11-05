@@ -63,8 +63,8 @@ spindle, coolant, tool change).
   extruded profiles and booleans; profiles derived from the 3D model.
 - **G-code:** configurable machine library (GRBL 1.1 / grblHAL / FluidNC, Fanuc/ISO with `G68.2`, LinuxCNC,
   Mach3/Mach4, generic controller) with `G2`/`G3` arcs, preview and export; CL data as an alternative.
-- **Also:** start screen, illustrated guide (F1), simulation, automatic backups and recovery, interface in Italian
-  and English, light or dark theme.
+- **Also:** start screen, illustrated guide (F1), simulation, automatic backups and recovery, automatic updates,
+  interface in Italian and English, light or dark theme.
 
 It runs on your PC: a local server (VB.NET, .NET 10) and the interface in your browser (Three.js). Your data (tool
 library, setups, backups, logs) stays in the `App_Data` folder next to the program.
@@ -76,6 +76,12 @@ page, extract it to a personal folder (not `C:\Program Files`) and double-click 
 <http://localhost:5080>. Close the black window to quit. On first run Windows may warn that the program is unsigned:
 *More info › Run anyway*. An internet connection is needed because Three.js and OpenCascade (STEP/IGES import) load
 from a CDN.
+
+**Updates:** from 0.4.1 on, CarveCAM checks GitHub at startup for a new version (it sends no project data). If there is
+one, it downloads it in the background, verifies its SHA256 and installs it at the next start, or right away from
+*Info › Updates*. Your tool library, setups, backups and `appsettings.json` stay where they are. Turn it off in
+*Options › Startup* or by setting `Update:Enabled` to `false` in `appsettings.json`. Version 0.4.0 does not do this: it
+has to be updated by hand once.
 
 **From source** (needs the [.NET SDK 10](https://dotnet.microsoft.com/download)):
 
