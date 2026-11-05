@@ -4,6 +4,12 @@ Le versioni seguono [Semantic Versioning](https://semver.org/lang/it/): finché 
 in sviluppo e i formati possono cambiare. Il numero è in `Directory.Build.props`. Il pacchetto Windows di ogni
 versione si scarica dalla pagina [Releases](https://github.com/SickSartori/CarveCAM/releases).
 
+## [Non rilasciato]
+
+### Aggiunto
+- **Prova online** con GitHub Codespaces (cartella `.devcontainer` e pulsante nel README): compila e avvia CarveCAM in un
+  ambiente di GitHub, senza installare nulla. Serve un account GitHub.
+
 ## [0.4.1] - 2026-11-05
 
 ### Aggiunto

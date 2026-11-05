@@ -1,0 +1,16 @@
+{
+  // Prova online di CarveCAM in GitHub Codespaces: compila il programma, lo avvia e apre la scheda del browser.
+  // Serve solo per provarlo: il codespace si spegne dopo un po' di inattività e i progetti vanno salvati sul proprio PC.
+  "name": "CarveCAM (prova online)",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:1-10.0",
+  "forwardPorts": [5080],
+  "portsAttributes": {
+    "5080": { "label": "CarveCAM", "onAutoForward": "openBrowser" }
+  },
+  // compilato una volta alla creazione, in Release (il motore di calcolo è molto più veloce che in Debug)
+  "postCreateCommand": "dotnet build src/CarveCAM.Server/CarveCAM.Server.vbproj -c Release",
+  // a ogni apertura avvia il server (stesso comando provato in locale); la porta 5080 è quella di appsettings.json
+  "postAttachCommand": {
+    "CarveCAM": "dotnet run -c Release --no-build --no-launch-profile --project src/CarveCAM.Server/CarveCAM.Server.vbproj"
+  }
+}

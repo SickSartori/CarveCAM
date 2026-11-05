@@ -3,12 +3,21 @@
 Web-based CAM software for **mini CNC machines**: **terraced pocketing** and **projected finishing** with an end mill,
 on imported 3D models and primitive solids, with free work planes in space (3+2) and G-code for your own machine.
 
-[Download](https://github.com/SickSartori/CarveCAM/releases/latest) · [Manual (Italian)](docs/MANUALE.md) · [Changelog (Italian)](CHANGELOG.md) · [Italiano](README.md)
+[Download](https://github.com/SickSartori/CarveCAM/releases/latest) · [Try it online](#try-it-online-no-install) · [Manual (Italian)](docs/MANUALE.md) · [Changelog (Italian)](CHANGELOG.md) · [Italiano](README.md)
 
 ![CarveCAM: sample project with three operations](src/CarveCAM.Server/wwwroot/img/guide/en/overview.webp)
 
 > **Work in progress (version 0.x).** Always check the G-code in your machine's simulator before cutting a part: the
 > license provides no warranty.
+
+## Try it online, no install
+
+[![Apri in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/SickSartori/CarveCAM?quickstart=1)
+
+The button opens CarveCAM in a GitHub environment (Codespaces): it builds the program and opens the browser tab. You need
+a GitHub account, a free one will do. The first start takes a couple of minutes and uses your account's free monthly
+hours. It is only a trial: the codespace shuts down after a while of inactivity, so save your project to your own PC
+before closing it. To work for real, install the program (see *Quick start*).
 
 ## What it is for
 

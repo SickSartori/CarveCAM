@@ -3,12 +3,21 @@
 Software CAM web per **mini CNC**: **svuotatura a terrazze** e **finitura in proiezione** con fresa, su modelli 3D
 importati e su solidi primitivi, con piani di lavoro liberi nello spazio (3+2) e G-code per la tua macchina.
 
-[Scarica](https://github.com/SickSartori/CarveCAM/releases/latest) · [Manuale](docs/MANUALE.md) · [Novità](CHANGELOG.md) · [English](README.en.md)
+[Scarica](https://github.com/SickSartori/CarveCAM/releases/latest) · [Provalo online](#provalo-online-senza-installare) · [Manuale](docs/MANUALE.md) · [Novità](CHANGELOG.md) · [English](README.en.md)
 
 ![CarveCAM: progetto di esempio con tre lavorazioni](src/CarveCAM.Server/wwwroot/img/guide/it/overview.webp)
 
 > **Programma in sviluppo (versione 0.x).** Verifica sempre il G-code con il simulatore della tua macchina prima di
 > lavorare un pezzo: la licenza non prevede garanzie.
+
+## Provalo online, senza installare
+
+[![Apri in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/SickSartori/CarveCAM?quickstart=1)
+
+Il pulsante apre CarveCAM in un ambiente di GitHub (Codespaces): compila il programma e apre la scheda del browser. Serve
+un account GitHub, anche gratuito. La prima apertura richiede un paio di minuti e usa la quota mensile di ore gratuite del
+tuo account. È solo una prova: il codespace si spegne dopo un po' di inattività, quindi salva il progetto sul tuo PC prima
+di chiuderlo. Per lavorare davvero installa il programma (vedi *Avvio rapido*).
 
 ## A cosa serve
 
