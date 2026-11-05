@@ -1,5 +1,6 @@
-// Aggiornamenti automatici: ricerca all'avvio, scaricamento in background e finestra Info › Aggiornamenti.
-// Il server scarica il pacchetto da GitHub e ne verifica l'SHA256; si installa al riavvio successivo.
+// Aggiornamenti: tutto passa da qui, cioè solo quando l'app è aperta. All'apertura si cerca una versione nuova e
+// si avvisa; scaricare e installare si fa a comando da Info › Aggiornamenti. Il server non contatta GitHub da solo.
+// Il pacchetto scaricato si verifica con l'SHA256 e si installa solo con «Riavvia e installa ora».
 import { api } from './api.js';
 import { App } from './state.js';
 import { modal, toast, confirmBox, h } from './dialogs.js';
@@ -22,21 +23,14 @@ async function waitDownload(s, onTick) {
 }
 
 /**
- * All'avvio, se non è spento nelle opzioni: cerca una versione nuova e, se si può installare, la scarica in silenzio.
- * Offline o senza risposta di GitHub non compare nulla (solo il log): le officine spesso sono scollegate.
+ * All'apertura dell'app, se non è spento nelle opzioni: cerca una versione nuova e, se c'è, avvisa. Non scarica né
+ * installa nulla. Offline o senza risposta di GitHub non compare niente (solo il log): le officine spesso sono scollegate.
  */
 export async function checkOnStartup() {
   if (settings.autoUpdate === false) return;
   try {
-    let s = await api.updateCheck();
-    if (!s.supported || !s.enabled || !s.available) return;
-    if (!s.canInstall) {
-      toast(t('È disponibile CarveCAM {v}: aprila da Info › Aggiornamenti', { v: s.latest }), 'info', 8000);
-      return;
-    }
-    s = await waitDownload(await api.updateDownload());
-    if (s.state === 'ready') toast(t('Aggiornamento alla versione {v} pronto: si installa al prossimo avvio, oppure subito da Info › Aggiornamenti', { v: s.latest }), 'ok', 10000);
-    else log.warn('Aggiornamento non scaricato', { state: s.state, error: s.lastError });
+    const s = await api.updateCheck();
+    if (s.supported && s.enabled && s.available) toast(t('È disponibile CarveCAM {v}: aprila da Info › Aggiornamenti', { v: s.latest }), 'info', 9000);
   } catch (e) {
     log.info('Controllo aggiornamenti non riuscito', { msg: e.message });
   }
@@ -61,12 +55,14 @@ export function openUpdates() {
       if (s.state === 'checking') kids.push(line(t('Controllo in corso…')));
       else if (s.state === 'downloading') kids.push(line(t('Scaricamento della versione {v}: {p} %', { v: s.latest, p: pct(s) })));
       else if (s.state === 'ready') {
-        kids.push(line(t('La versione {v} è pronta e verificata: si installa al prossimo avvio.', { v: s.latest })));
+        kids.push(line(t('La versione {v} è pronta e verificata. Riavvia CarveCAM per installarla.', { v: s.latest })));
         act.push(btn(t('Riavvia e installa ora'), restart, true));
       } else if (s.available) {
         kids.push(line(t('È disponibile la versione {v}.', { v: s.latest })));
-        if (s.canInstall) act.push(btn(t('Scarica'), download, true));
-        else kids.push(line(t('Questa installazione non si aggiorna da sola (cartella non scrivibile o pacchetto non verificabile): scarica la nuova versione da GitHub.'), { note: true }));
+        if (s.canInstall) {
+          kids.push(line(t('Si scarica e si verifica adesso; l\'installazione parte solo quando premi «Riavvia e installa ora».'), { note: true }));
+          act.push(btn(t('Scarica'), download, true));
+        } else kids.push(line(t('Questa installazione non si aggiorna da sola (cartella non scrivibile o pacchetto non verificabile): scarica la nuova versione da GitHub.'), { note: true }));
       } else if (s.checkedAt) kids.push(line(t('CarveCAM è aggiornato.')));
       if (s.state === 'error' && s.lastError) kids.push(line(t('Errore: {msg}', { msg: s.lastError }), { err: true }));
       if (s.available && s.notes) {
@@ -109,7 +105,10 @@ export function openUpdates() {
       }
       body.replaceChildren(line(t('Il riavvio non è riuscito: controlla la finestra nera e il file di log.'), { err: true }));
     } catch (e) {
-      body.replaceChildren(line(t('Errore: {msg}', { msg: e.message }), { err: true }));
+      // es. il file scaricato non c'è più: si torna alla schermata con lo stato e il motivo
+      working = false;
+      try { s = await api.updateStatus(); } catch { s = { ...s, state: 'error', lastError: e.message }; }
+      render();
     }
   }
 

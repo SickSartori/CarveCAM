@@ -9,6 +9,12 @@
     <OptionInfer>On</OptionInfer>
     <OptionExplicit>On</OptionExplicit>
     <StartupObject>CarveCAM.Server.Program</StartupObject>
+    <!-- icona e dati del file .exe (Proprietà › Dettagli): collegamenti, barra delle applicazioni e meno sospetti per gli antivirus -->
+    <ApplicationIcon>..\..\packaging\carvecam.ico</ApplicationIcon>
+    <Product>CarveCAM</Product>
+    <AssemblyTitle>CarveCAM - CAM web per mini CNC</AssemblyTitle>
+    <Description>CAM web per mini CNC</Description>
+    <Copyright>Copyright (c) 2026 William Veronesi and SickSartori</Copyright>
   </PropertyGroup>
 
   <!-- i dati locali (archivi, mesh, copie di sicurezza, log) non vanno nel pacchetto -->

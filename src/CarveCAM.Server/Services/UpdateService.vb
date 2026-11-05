@@ -76,6 +76,9 @@ Namespace Services
             If _supported AndAlso _enabled AndAlso Not _writable Then
                 _log.LogWarning("La cartella {Dir} non è scrivibile: gli aggiornamenti vanno installati a mano", _installDir)
             End If
+            ' un pacchetto scaricato in una sessione precedente e mai installato non resta sul disco: niente si installa
+            ' se l'utente non lo chiede dall'app (il riavvio per installare ha già usato il pacchetto prima di arrivare qui)
+            If _supported AndAlso _enabled Then UpdateLogic.DiscardUpdateFiles(_installDir)
         End Sub
 
         Private ReadOnly Property Active As Boolean
@@ -250,6 +253,16 @@ Namespace Services
             SyncLock _lock
                 If _state <> "ready" Then Return False
             End SyncLock
+            ' prima di fermare il programma ci si assicura che il pacchetto sia ancora lì (un antivirus può averlo isolato)
+            Dim staged As Version = Nothing
+            If UpdateLogic.FindStaged(_installDir, UpdateLogic.ParseVersion(_current), staged) Is Nothing Then
+                SyncLock _lock
+                    _state = "error"
+                    _lastError = "Il file scaricato non c'è più (forse lo ha isolato l'antivirus): scaricalo di nuovo o aggiorna a mano da GitHub"
+                End SyncLock
+                _log.LogWarning("Riavvio annullato: {Msg}", _lastError)
+                Return False
+            End If
             Dim ignored = Task.Run(Async Function()
                          Await Task.Delay(400)   ' il tempo di rispondere al browser
                          Try

@@ -12,6 +12,8 @@ AVVIO
   Doppio clic su CarveCAM.exe: si apre una finestra nera (il server) e subito dopo
   il browser con CarveCAM. Non serve installare nulla.
   Se il browser non si apre da solo, andare su http://localhost:5080
+  Per avere l'icona sul desktop e la voce nel menu Start c'è anche l'installatore
+  CarveCAM-X.Y.Z-win-x64-setup.exe, nella pagina https://github.com/SickSartori/CarveCAM/releases
 
 USCITA
   Chiudere la finestra nera. Chiudere solo la scheda del browser non basta.
@@ -27,11 +29,11 @@ AVVISO DI WINDOWS
   "Ulteriori informazioni" e poi su "Esegui comunque". Il programma non è ancora firmato.
 
 AGGIORNAMENTI
-  All'avvio CarveCAM controlla su GitHub se c'è una versione nuova (non invia dati del progetto).
-  Se c'è, la scarica da solo, ne verifica l'SHA256 e la installa al riavvio successivo; si può
-  installare subito da Info > Aggiornamenti. Utensili, setup, copie di sicurezza e impostazioni
-  non si toccano. Per spegnere il controllo: Strumenti > Opzioni > Avvio, oppure "Update":
-  { "Enabled": false } in appsettings.json.
+  Quando CarveCAM è aperto controlla su GitHub se c'è una versione nuova e te lo dice (non invia
+  dati del progetto). Non scarica né installa nulla senza il tuo comando: da Info > Aggiornamenti
+  la scarichi, ne viene verificato l'SHA256 e la installi con un riavvio. Utensili, setup, copie
+  di sicurezza e impostazioni non si toccano. Per spegnere l'avviso: Strumenti > Opzioni > Avvio;
+  per spegnere tutto: "Update": { "Enabled": false } in appsettings.json.
   Se la cartella non è scrivibile (per esempio C:\Programmi) il programma segnala la versione
   nuova ma non la installa: va scaricata a mano da https://github.com/SickSartori/CarveCAM/releases
 

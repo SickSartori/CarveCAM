@@ -38,15 +38,17 @@ Public Module Program
             End Try
             ' riavvio per un aggiornamento: il processo precedente occupa ancora la porta, se ne aspetta l'uscita
             Dim waitPid As Integer
-            If Integer.TryParse(ArgValue(args, "--after-update"), waitPid) Then WaitForExit(waitPid)
+            Dim afterUpdate = Integer.TryParse(ArgValue(args, "--after-update"), waitPid)
+            If afterUpdate Then WaitForExit(waitPid)
             UpdateLogic.CleanupOld(exeDir)
             ' secondo doppio clic sull'eseguibile: CarveCAM è già in esecuzione, basta riaprire il browser
             If IsCarveCamRunning(appUrl) Then
                 If openBrowser Then StartBrowser(appUrl)
                 Return
             End If
-            ' aggiornamento già scaricato e verificato: si installa prima di avviare il server, quando nessun file è in uso
-            If builder.Configuration.GetValue(Of Boolean)("Update:Enabled", True) AndAlso TryApplyStagedUpdate(exeDir, version, args, startupNote) Then Return
+            ' si installa solo dopo che l'utente l'ha chiesto dall'app (il riavvio parte con --after-update), prima di avviare
+            ' il server, quando nessun file è in uso. A un avvio normale non si sostituisce né si riavvia nulla.
+            If afterUpdate AndAlso builder.Configuration.GetValue(Of Boolean)("Update:Enabled", True) AndAlso TryApplyStagedUpdate(exeDir, version, args, startupNote) Then Return
         End If
 
         ' log su file (App_Data/logs): server e interfaccia scrivono nello stesso file
@@ -66,7 +68,9 @@ Public Module Program
         builder.Services.AddSingleton(Of Services.UpdateService)()
 
         Dim app = builder.Build()
-        Dim log = app.Services.GetRequiredService(Of ILoggerFactory)().CreateLogger("CarveCAM.Server.Http")
+        ' creato subito (non alla prima richiesta): toglie dal disco un pacchetto scaricato e mai installato
+        app.Services.GetRequiredService(Of Services.UpdateService)()
+        Dim log =app.Services.GetRequiredService(Of ILoggerFactory)().CreateLogger("CarveCAM.Server.Http")
         Dim life = app.Services.GetRequiredService(Of ILoggerFactory)().CreateLogger("CarveCAM.Server.Avvio")
         If Not String.IsNullOrEmpty(updatedFrom) Then life.LogInformation("Aggiornato dalla versione {From} alla {To}", updatedFrom, version.Split("+"c)(0))
         If startupNote IsNot Nothing Then life.LogWarning("{Note}", startupNote)

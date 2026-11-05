@@ -236,6 +236,14 @@ Namespace Update
             End Try
         End Sub
 
+        ''' <summary>Toglie tutto ciò che resta di un aggiornamento mai installato (versioni pronte, file parziali, cartelle di lavoro).</summary>
+        Public Sub DiscardUpdateFiles(installDir As String)
+            Try
+                DeleteEntry(UpdatesDir(installDir))
+            Catch
+            End Try
+        End Sub
+
         ''' <summary>Argomenti per riavviare il programma: quelli di partenza più l'attesa dell'uscita di questo processo.</summary>
         Public Function RelaunchArgs(args As IEnumerable(Of String), pid As Integer, fromVersion As String, noBrowser As Boolean) As String
             Dim list As New List(Of String)

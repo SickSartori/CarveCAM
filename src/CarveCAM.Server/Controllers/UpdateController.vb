@@ -43,7 +43,7 @@ Namespace Controllers
         <HttpPost("restart")>
         Public Function Restart() As IActionResult
             If Not FromApp() Then Return StatusCode(403)
-            If Not _svc.RequestRestart() Then Return Conflict(New With {.Error = "Nessun aggiornamento pronto da installare"})
+            If Not _svc.RequestRestart() Then Return Conflict(New With {.Error = If(_svc.Status().LastError, "Nessun aggiornamento pronto da installare")})
             Return Accepted(New With {.Ok = True})
         End Function
 

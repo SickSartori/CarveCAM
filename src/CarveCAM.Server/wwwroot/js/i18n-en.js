@@ -971,14 +971,12 @@ export const EN = {
     "Updates…",
   "Cerca una versione nuova di CarveCAM e installala":
     "Look for a new version of CarveCAM and install it",
-  "Cerca aggiornamenti all'avvio e scaricali in automatico":
-    "Check for updates at startup and download them automatically",
-  "All'avvio CarveCAM contatta github.com per sapere se c'è una versione nuova (non invia dati del progetto). La versione scaricata e verificata si installa al prossimo avvio o da Info › Aggiornamenti. Per spegnere del tutto la funzione imposta Update:Enabled a false in appsettings.json.":
-    "At startup CarveCAM contacts github.com to see whether there is a new version (it sends no project data). The downloaded, verified version is installed at the next start or from Info › Updates. To turn the feature off completely, set Update:Enabled to false in appsettings.json.",
+  "Cerca aggiornamenti quando apri CarveCAM":
+    "Check for updates when you open CarveCAM",
+  "Quando CarveCAM è aperto controlla su github.com se c'è una versione nuova e ti avvisa (non invia dati del progetto). Non scarica né installa nulla da solo: lo fai tu da Info › Aggiornamenti. Per spegnere del tutto la funzione imposta Update:Enabled a false in appsettings.json.":
+    "While CarveCAM is open it checks github.com for a new version and tells you (it sends no project data). It never downloads or installs anything by itself: you do that from Info › Updates. To turn the feature off completely, set Update:Enabled to false in appsettings.json.",
   "È disponibile CarveCAM {v}: aprila da Info › Aggiornamenti":
     "CarveCAM {v} is available: open it from Info › Updates",
-  "Aggiornamento alla versione {v} pronto: si installa al prossimo avvio, oppure subito da Info › Aggiornamenti":
-    "Update to version {v} is ready: it installs at the next start, or right away from Info › Updates",
   "Versione in uso: {v}":
     "Version in use: {v}",
   "Gli aggiornamenti automatici funzionano solo con il pacchetto per Windows. Le nuove versioni si scaricano da GitHub.":
@@ -989,8 +987,10 @@ export const EN = {
     "Checking…",
   "Scaricamento della versione {v}: {p} %":
     "Downloading version {v}: {p} %",
-  "La versione {v} è pronta e verificata: si installa al prossimo avvio.":
-    "Version {v} is ready and verified: it installs at the next start.",
+  "La versione {v} è pronta e verificata. Riavvia CarveCAM per installarla.":
+    "Version {v} is ready and verified. Restart CarveCAM to install it.",
+  "Si scarica e si verifica adesso; l'installazione parte solo quando premi «Riavvia e installa ora».":
+    "It is downloaded and verified now; the installation only starts when you press “Restart and install now”.",
   "Riavvia e installa ora":
     "Restart and install now",
   "È disponibile la versione {v}.":

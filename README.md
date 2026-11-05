@@ -72,16 +72,21 @@ Il programma gira sul tuo PC: un server locale (VB.NET, .NET 10) e l'interfaccia
 
 ## Avvio rapido
 
-**Windows 10/11 a 64 bit:** scarica lo zip dalla pagina [Releases](https://github.com/SickSartori/CarveCAM/releases/latest),
-scompattalo in una cartella personale (non in `C:\Programmi`) e fai doppio clic su `CarveCAM.exe`: si apre il browser su
-<http://localhost:5080>. Per uscire chiudi la finestra nera. Al primo avvio Windows può avvisare che il programma non è
-firmato: *Ulteriori informazioni › Esegui comunque*. Serve una connessione a internet, perché Three.js e OpenCascade
-(importazione STEP/IGES) si caricano da CDN.
+**Windows 10/11 a 64 bit:** scarica dalla pagina [Releases](https://github.com/SickSartori/CarveCAM/releases/latest)
+`CarveCAM-X.Y.Z-win-x64-setup.exe` ed eseguilo. Installa nella tua cartella personale (non servono i diritti di
+amministratore), crea l'**icona sul desktop** e la voce nel **menu Start**: da lì apri CarveCAM con un doppio clic e si
+apre il browser su <http://localhost:5080>. Per uscire chiudi la finestra nera. Chi preferisce non installare usa lo zip
+`CarveCAM-X.Y.Z-win-x64.zip`: lo scompatta in una cartella personale (non in `C:\Programmi`) e fa doppio clic su
+`CarveCAM.exe`. Il programma non è firmato, quindi Windows può avvisare all'apertura dell'installatore o del
+programma: *Ulteriori informazioni › Esegui comunque*. Disinstallando dal pannello di Windows i tuoi dati (`App_Data`)
+restano nella cartella. Serve una connessione a internet, perché Three.js e OpenCascade (importazione STEP/IGES) si
+caricano da CDN.
 
-**Aggiornamenti:** dalla 0.4.1 CarveCAM controlla da solo, all'avvio, se su GitHub c'è una versione nuova (non invia dati
-del progetto). Se c'è, la scarica in background, ne verifica l'SHA256 e la installa al riavvio successivo, oppure subito
-da *Info › Aggiornamenti*. Utensili, setup, copie di sicurezza e `appsettings.json` restano dove sono. Si spegne in
-*Opzioni › Avvio* o con `Update:Enabled` a `false` in `appsettings.json`. La 0.4.0 non lo fa: va aggiornata a mano una volta.
+**Aggiornamenti:** dalla 0.4.1, quando CarveCAM è aperto controlla da solo su GitHub se c'è una versione nuova e te lo
+dice (non invia dati del progetto). Non scarica né installa nulla senza il tuo comando: da *Info › Aggiornamenti* la
+scarichi, ne viene verificato l'SHA256 e la installi con un riavvio. Utensili, setup, copie di sicurezza e
+`appsettings.json` restano dove sono. Si spegne in *Opzioni › Avvio* o con `Update:Enabled` a `false` in
+`appsettings.json`. La 0.4.0 non ha questa funzione: va aggiornata a mano una volta.
 
 **Dai sorgenti** (serve il [.NET SDK 10](https://dotnet.microsoft.com/download)):
 
