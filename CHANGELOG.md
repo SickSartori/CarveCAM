@@ -9,6 +9,9 @@ versione si scarica dalla pagina [Releases](https://github.com/SickSartori/Carve
 ### Aggiunto
 - **Prova online** con GitHub Codespaces (cartella `.devcontainer` e pulsante nel README): compila e avvia CarveCAM in un
   ambiente di GitHub, senza installare nulla. Serve un account GitHub.
+- **Modalità demo** (`Demo:Enabled`, usata dalla prova online): il programma si apre sul progetto di esempio e restano
+  spenti progetto nuovo, apri, importa, salva, copie di sicurezza, schermata iniziale, archivi di utensili e macchine,
+  log e blackbox. Si può guardare, cambiare i parametri, ricalcolare, simulare ed esportare il G-code.
 
 ## [0.4.1] - 2026-11-05
 

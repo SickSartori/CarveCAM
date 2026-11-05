@@ -3,6 +3,8 @@
   // Serve solo per provarlo: il codespace si spegne dopo un po' di inattività e i progetti vanno salvati sul proprio PC.
   "name": "CarveCAM (prova online)",
   "image": "mcr.microsoft.com/devcontainers/dotnet:1-10.0",
+  // modalità demo: si apre sul progetto di esempio e restano spenti apertura, importazione e salvataggio
+  "containerEnv": { "Demo__Enabled": "true" },
   "forwardPorts": [5080],
   "portsAttributes": {
     "5080": { "label": "CarveCAM", "onAutoForward": "openBrowser" }

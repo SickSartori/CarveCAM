@@ -16,8 +16,12 @@ on imported 3D models and primitive solids, with free work planes in space (3+2)
 
 The button opens CarveCAM in a GitHub environment (Codespaces): it builds the program and opens the browser tab. You need
 a GitHub account, a free one will do. The first start takes a couple of minutes and uses your account's free monthly
-hours. It is only a trial: the codespace shuts down after a while of inactivity, so save your project to your own PC
-before closing it. To work for real, install the program (see *Quick start*).
+hours.
+
+It is a **limited version**: it opens straight on the sample project (a plaque with a logo and three operations already
+computed). You can look at it from every side, change the parameters, recompute, simulate the material being removed and
+export the G-code. You cannot open, import or save projects. To use your own models, install the program (see *Quick
+start*).
 
 ## What it is for
 

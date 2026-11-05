@@ -116,7 +116,10 @@ Public Module Program
         app.UseStaticFiles(New StaticFileOptions With {
             .OnPrepareResponse = Sub(ctx) ctx.Context.Response.Headers.CacheControl = "no-cache"})
         app.MapControllers()
-        app.MapGet("/api/version", CType(Function() New With {.version = version}, Func(Of Object)))
+        ' demo: la prova online (Codespaces) imposta Demo:Enabled; l'interfaccia si apre sul progetto di esempio e spegne apertura, importazione e salvataggio
+        Dim demo = builder.Configuration.GetValue(Of Boolean)("Demo:Enabled", False)
+        If demo Then life.LogInformation("Modalità demo attiva: solo il progetto di esempio")
+        app.MapGet("/api/version", CType(Function() New With {.version = version, .demo = demo}, Func(Of Object)))
 
         Dim lifetime = app.Services.GetRequiredService(Of IHostApplicationLifetime)()
         lifetime.ApplicationStarted.Register(

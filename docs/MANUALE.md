@@ -428,6 +428,12 @@ Verificare sempre il programma con il simulatore della propria macchina prima de
   - **Fiducia:** il pacchetto è verificato con l'SHA256 pubblicato da GitHub, ma non è firmato dagli autori. Chi
     controlla l'account GitHub `SickSartori` può quindi pubblicare codice che le installazioni eseguono: ci si fida di
     GitHub e di quell'account. Chi non vuole questa fiducia spegne la funzione e aggiorna a mano.
+- **Modalità demo** (`"Demo": { "Enabled": true }` in `appsettings.json`, oppure la variabile d'ambiente `Demo__Enabled`).
+  Il programma si apre direttamente sul progetto di esempio e restano spenti progetto nuovo, apri, importa, salva,
+  rinomina, copie di sicurezza, schermata iniziale, esportazione e importazione degli archivi, file di log, blackbox e
+  aggiornamenti; si può guardare, cambiare i parametri, ricalcolare, simulare ed esportare il G-code. La usa la prova
+  online in Codespaces (`.devcontainer`). È un limite dell'interfaccia e non una protezione: il server accetta ancora le
+  stesse richieste, quindi non basta per aprire a molte persone un servizio pubblico.
 - **Installazione con l'installatore** (`CarveCAM-X.Y.Z-win-x64-setup.exe`). Installa in `%LOCALAPPDATA%\Programs\CarveCAM`
   (cartella personale: nessun diritto di amministratore, e scrivibile, quindi gli aggiornamenti funzionano), crea
   l'icona sul desktop (si può togliere la spunta durante l'installazione) e la voce nel menu Start. Reinstallando o
