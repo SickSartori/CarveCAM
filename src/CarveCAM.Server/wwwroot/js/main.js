@@ -28,6 +28,7 @@ import { fmt } from './geom.js';
 import { previousSessionCrashed, startSession } from './recovery.js';
 import { initLoaders, splashText, splashDone } from './loader.js';
 import { HomeScreen } from './home.js';
+import { checkOnStartup } from './update.js';
 import { openGuide, initGuide, guideOpen } from './guide.js';
 
 applyTheme();
@@ -436,6 +437,7 @@ window.addEventListener('beforeunload', e => {
 // ------------------------------------------------------------------ avvio
 (async function start() {
   try { await startUp(); } catch (e) { log.error('Avvio non riuscito', e); } finally { splashDone(); }
+  setTimeout(checkOnStartup, 4000);   // dopo l'avvio, senza rallentarlo
 })();
 
 async function startUp() {

@@ -2,6 +2,8 @@
 import { log } from './log.js';
 
 const SLOW_MS = 5000;
+/** Le richieste che cambiano qualcosa negli aggiornamenti portano questa intestazione: una pagina qualunque non può aggiungerla. */
+const APP_HEADER = { 'X-CarveCAM': '1' };
 
 /** fetch con registrazione di esito e durata. */
 async function req(url, opts = {}) {
@@ -178,6 +180,22 @@ export const api = {
   },
   async logTail(file, lines = 400) {
     return (await check(await req(`/api/log/${encodeURIComponent(file)}?tail=${lines}`))).text();
+  },
+
+  // ---------------------------------------------------------------- aggiornamenti automatici
+  /** Stato (senza req: si interroga ogni secondo durante lo scaricamento e non deve riempire il log). */
+  async updateStatus() {
+    return (await check(await fetch('/api/update'))).json();
+  },
+  /** force: interroga GitHub anche se l'ultimo esito ha meno di un'ora (il controllo all'avvio non lo forza). */
+  async updateCheck(force = false) {
+    return (await check(await req(`/api/update/check${force ? '?force=true' : ''}`, { method: 'POST', headers: APP_HEADER }))).json();
+  },
+  async updateDownload() {
+    return (await check(await req('/api/update/download', { method: 'POST', headers: APP_HEADER }))).json();
+  },
+  async updateRestart() {
+    return (await check(await req('/api/update/restart', { method: 'POST', headers: APP_HEADER }))).json();
   },
 };
 

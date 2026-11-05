@@ -4,6 +4,25 @@ Le versioni seguono [Semantic Versioning](https://semver.org/lang/it/): finché 
 in sviluppo e i formati possono cambiare. Il numero è in `Directory.Build.props`. Il pacchetto Windows di ogni
 versione si scarica dalla pagina [Releases](https://github.com/SickSartori/CarveCAM/releases).
 
+## [0.4.1] - 2026-11-05
+
+### Aggiunto
+- **Installatore per Windows** (`CarveCAM-0.4.1-win-x64-setup.exe`): installa nella cartella personale, senza diritti
+  di amministratore, e crea l'**icona sul desktop** e la voce nel **menu Start**. Lo zip resta per chi non vuole
+  installare. Il programma ha ora un'icona e i dati del file (prodotto, descrizione, copyright).
+- **Aggiornamenti** dall'interno dell'app. Quando CarveCAM è aperto cerca su GitHub una versione nuova e avvisa;
+  *Info › Aggiornamenti* la scarica, ne verifica l'SHA256 e la installa con un riavvio. Utensili, setup, copie di
+  sicurezza e `appsettings.json` non si toccano; se l'installazione non riesce si resta sulla versione in uso. Non
+  parte nulla da solo: a un avvio normale il programma non scarica, sostituisce né riavvia niente. L'avviso si spegne in
+  *Opzioni › Avvio*, tutta la funzione con `Update:Enabled` a `false` in `appsettings.json`.
+
+### Da sapere
+- La 0.4.0 non ha gli aggiornamenti: va aggiornata a mano una volta (con l'installatore, o copiando `App_Data` nella
+  nuova cartella se si usa lo zip).
+- Il pacchetto è verificato con l'SHA256 pubblicato da GitHub ma non è firmato dagli autori: ci si fida di GitHub e
+  dell'account del repository. Anche installatore e programma sono senza firma, quindi Windows o un antivirus possono
+  avvisare.
+
 ## [0.4.0] - 2026-11-05
 
 Prima versione pubblica.
@@ -95,6 +114,7 @@ Prima versione, sviluppata dal 2026-09-27.
   copie di sicurezza e recupero.
 - Pacchetto di distribuzione per Windows con eseguibile autonomo.
 
+[0.4.1]: https://github.com/SickSartori/CarveCAM/releases/tag/v0.4.1
 [0.4.0]: https://github.com/SickSartori/CarveCAM/releases/tag/v0.4.0
 [0.3.2]: https://github.com/SickSartori/CarveCAM/releases/tag/v0.3.2
 [0.3.1]: https://github.com/SickSartori/CarveCAM/releases/tag/v0.3.1

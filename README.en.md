@@ -63,19 +63,29 @@ spindle, coolant, tool change).
   extruded profiles and booleans; profiles derived from the 3D model.
 - **G-code:** configurable machine library (GRBL 1.1 / grblHAL / FluidNC, Fanuc/ISO with `G68.2`, LinuxCNC,
   Mach3/Mach4, generic controller) with `G2`/`G3` arcs, preview and export; CL data as an alternative.
-- **Also:** start screen, illustrated guide (F1), simulation, automatic backups and recovery, interface in Italian
-  and English, light or dark theme.
+- **Also:** start screen, illustrated guide (F1), simulation, automatic backups and recovery, automatic updates,
+  interface in Italian and English, light or dark theme.
 
 It runs on your PC: a local server (VB.NET, .NET 10) and the interface in your browser (Three.js). Your data (tool
 library, setups, backups, logs) stays in the `App_Data` folder next to the program.
 
 ## Quick start
 
-**Windows 10/11, 64 bit:** download the zip from the [Releases](https://github.com/SickSartori/CarveCAM/releases/latest)
-page, extract it to a personal folder (not `C:\Program Files`) and double-click `CarveCAM.exe`: the browser opens at
-<http://localhost:5080>. Close the black window to quit. On first run Windows may warn that the program is unsigned:
-*More info › Run anyway*. An internet connection is needed because Three.js and OpenCascade (STEP/IGES import) load
-from a CDN.
+**Windows 10/11, 64 bit:** download `CarveCAM-X.Y.Z-win-x64-setup.exe` from the
+[Releases](https://github.com/SickSartori/CarveCAM/releases/latest) page and run it. It installs into your personal
+folder (no administrator rights needed) and creates a **desktop icon** and a **Start menu** entry: open CarveCAM from
+there with a double-click and the browser opens at <http://localhost:5080>. Close the black window to quit. If you
+prefer not to install, use the zip `CarveCAM-X.Y.Z-win-x64.zip`: extract it to a personal folder (not
+`C:\Program Files`) and double-click `CarveCAM.exe`. The program is unsigned, so Windows may warn when you open the
+installer or the program: *More info › Run anyway*. If you uninstall from the Windows control panel, your data
+(`App_Data`) stays in the folder. An internet connection is needed because Three.js and OpenCascade (STEP/IGES
+import) load from a CDN.
+
+**Updates:** from 0.4.1 on, while CarveCAM is open it checks GitHub for a new version and tells you (it sends no
+project data). It never downloads or installs anything without your command: from *Info › Updates* you download it,
+its SHA256 is verified, and you install it with a restart. Your tool library, setups, backups and `appsettings.json`
+stay where they are. Turn the check off in *Options › Startup* or by setting `Update:Enabled` to `false` in
+`appsettings.json`. Version 0.4.0 does not have this feature: it has to be updated by hand once.
 
 **From source** (needs the [.NET SDK 10](https://dotnet.microsoft.com/download)):
 

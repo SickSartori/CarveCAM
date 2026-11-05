@@ -402,6 +402,38 @@ Verificare sempre il programma con il simulatore della propria macchina prima de
   apribile con Esplora risorse e 7-Zip. Il valore predefinito è pubblico (è in questo repository): l'archivio evita
   l'apertura casuale ma **non è riservato**. Contiene il progetto e i log, quindi non va allegato a una segnalazione
   pubblica: si invia in privato a chi presta assistenza; chi lo gestisce può cambiare la password.
+- **Aggiornamenti** (dalla 0.4.1, solo con il pacchetto per Windows; non con `dotnet run`). Tutto passa dall'interno
+  dell'app, quando è aperta: il server non contatta GitHub da solo e a un avvio normale non scarica, sostituisce né
+  riavvia nulla.
+  - **Avviso.** Quando la pagina è aperta CarveCAM legge da GitHub l'ultima release (`api.github.com`): la prima volta
+    dopo ogni avvio e poi al massimo una volta all'ora, salvo il pulsante *Cerca aggiornamenti*. Non invia dati del
+    progetto, solo il nome e la versione del programma. Se c'è una versione nuova compare un avviso. GitHub concede
+    un numero limitato di richieste per indirizzo internet: con molti PC dietro lo stesso indirizzo si può spegnere
+    la ricerca su alcuni.
+  - **Scaricamento.** *Info › Aggiornamenti › Scarica* scarica `CarveCAM-X.Y.Z-win-x64.zip`, ne controlla l'**SHA256**
+    (quello che GitHub pubblica per l'allegato: senza SHA256 o con un valore diverso il pacchetto si scarta) e lo
+    scompatta in `App_Data/updates`. Un pacchetto scaricato e non installato si cancella al prossimo avvio.
+  - **Installazione.** Solo con *Riavvia e installa ora*, dopo una conferma: il programma si riavvia, sostituisce
+    l'eseguibile, `wwwroot` e i documenti e riparte. `App_Data` (magazzini, copie di sicurezza, log) e
+    `appsettings.json` restano come sono. Se qualcosa non riesce tutto torna come prima e si continua con la versione
+    in uso (il motivo è nel log).
+  - Si spegne in *Opzioni › Avvio* (solo l'avviso all'apertura; *Info › Aggiornamenti* resta disponibile) oppure del
+    tutto con `"Update": { "Enabled": false }` in `appsettings.json`.
+  - Se la cartella non è scrivibile (per esempio `C:\Programmi`) il programma avvisa che c'è una versione nuova ma non
+    la installa: va scaricata a mano dalla pagina Releases. L'installatore usa la cartella personale proprio per
+    questo.
+  - Se un antivirus isola il file scaricato il programma lo dice e basta scaricarlo di nuovo o aggiornare a mano.
+  - La versione 0.4.0 non ha questa funzione: chi la usa scarica la 0.4.1 a mano una volta (copiando `App_Data`
+    nella nuova cartella per tenere i dati).
+  - **Fiducia:** il pacchetto è verificato con l'SHA256 pubblicato da GitHub, ma non è firmato dagli autori. Chi
+    controlla l'account GitHub `SickSartori` può quindi pubblicare codice che le installazioni eseguono: ci si fida di
+    GitHub e di quell'account. Chi non vuole questa fiducia spegne la funzione e aggiorna a mano.
+- **Installazione con l'installatore** (`CarveCAM-X.Y.Z-win-x64-setup.exe`). Installa in `%LOCALAPPDATA%\Programs\CarveCAM`
+  (cartella personale: nessun diritto di amministratore, e scrivibile, quindi gli aggiornamenti funzionano), crea
+  l'icona sul desktop (si può togliere la spunta durante l'installazione) e la voce nel menu Start. Reinstallando o
+  aggiornando restano `App_Data` e `appsettings.json`. Disinstallando dal pannello di Windows si tolgono programma e
+  collegamenti ma si lasciano i dati in `App_Data`, da cancellare a mano se non servono. L'installatore si costruisce
+  con `publish.ps1` se c'è Inno Setup 6; lo zip resta per chi non vuole installare.
 
 ## Limiti noti
 
