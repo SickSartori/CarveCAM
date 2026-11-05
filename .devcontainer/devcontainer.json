@@ -11,8 +11,9 @@
   },
   // compilato una volta alla creazione, in Release (il motore di calcolo è molto più veloce che in Debug)
   "postCreateCommand": "dotnet build src/CarveCAM.Server/CarveCAM.Server.vbproj -c Release",
-  // a ogni apertura avvia il server (stesso comando provato in locale); la porta 5080 è quella di appsettings.json
+  // a ogni collegamento avvia il server, ma solo se non risponde già (Codespaces può collegarsi più volte: una seconda copia
+  // darebbe "address already in use"); la porta 5080 è quella di appsettings.json
   "postAttachCommand": {
-    "CarveCAM": "dotnet run -c Release --no-build --no-launch-profile --project src/CarveCAM.Server/CarveCAM.Server.vbproj"
+    "CarveCAM": "if curl -fs -o /dev/null http://localhost:5080/api/version; then echo 'CarveCAM è già in esecuzione: apri la porta 5080 dalla scheda Porte.'; else dotnet run -c Release --no-build --no-launch-profile --project src/CarveCAM.Server/CarveCAM.Server.vbproj; fi"
   }
 }
