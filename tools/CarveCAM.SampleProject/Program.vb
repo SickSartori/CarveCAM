@@ -205,9 +205,10 @@ Module Program
     Private Function OperationJson(o As OperationDef, sketchId As String) As Object
         Return New With {
             .Id = o.Id, .Name = o.Name, .Kind = o.Kind, .SketchId = sketchId, .Visible = True, .Strategy = o.Strategy,
-            .Tool = New With {.Number = o.Tool.Number, .Type = o.Tool.Type, .Diameter = o.Tool.Diameter, .CornerRadius = o.Tool.CornerRadius},
+            .Tool = New With {.Number = o.Tool.Number, .Type = o.Tool.Type, .Diameter = o.Tool.Diameter, .CornerRadius = o.Tool.CornerRadius,
+                              .Rotation = o.Tool.Rotation, .Climb = o.Tool.Climb},
             .Stepover = o.Stepover, .Stepdown = o.Stepdown, .MaxDepth = o.MaxDepth, .Stock = o.Stock, .SafeHeight = o.SafeHeight,
-            .Clearance = o.Clearance, .Angle = o.Angle, .Climb = o.Climb, .ToolInside = o.ToolInside, .ContourPass = o.ContourPass,
+            .Clearance = o.Clearance, .Angle = o.Angle, .ToolInside = o.ToolInside, .ContourPass = o.ContourPass,
             .Resolution = o.Resolution, .Tolerance = o.Tolerance, .Feed = o.Feed, .Plunge = o.Plunge, .Spindle = o.Spindle,
             .Entry = o.Entry, .RampAngle = o.RampAngle, .HelixRadius = o.HelixRadius, .RampFeed = o.RampFeed}
     End Function

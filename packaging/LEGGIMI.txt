@@ -1,5 +1,12 @@
-CarveCAM - versione di prova
-============================
+CarveCAM - software CAM per mini CNC
+====================================
+
+Programma libero con licenza MIT (file LICENSE). Componenti di terze parti: THIRD-PARTY-NOTICES.md.
+Sorgenti, manuale e nuove versioni: https://github.com/SickSartori/CarveCAM
+
+ATTENZIONE
+  Il programma è in sviluppo (versione 0.x). Verificare sempre il G-code con il simulatore della
+  propria macchina prima di lavorare un pezzo: gli autori non rispondono di danni a macchine, utensili o pezzi.
 
 AVVIO
   Doppio clic su CarveCAM.exe: si apre una finestra nera (il server) e subito dopo
@@ -27,8 +34,11 @@ DATI
   Va bene il Desktop, Documenti o qualsiasi cartella personale.
 
 SEGNALARE UN PROBLEMA
-  Indicare la versione (Aiuto > Informazioni su CarveCAM) e allegare il file di log del
-  giorno, che si trova in App_Data\logs (carvecam-AAAAMMGG.log).
+  Aprire una segnalazione su https://github.com/SickSartori/CarveCAM/issues indicando la versione
+  (Aiuto > Informazioni su CarveCAM) e allegando il file di log del giorno, che si trova in
+  App_Data\logs (carvecam-AAAAMMGG.log). Il log può contenere i nomi dei file aperti: controllarlo prima di pubblicarlo.
+  Non allegare la blackbox (Aiuto > Esporta blackbox) a una segnalazione pubblica: contiene il progetto e la
+  sua password è pubblica. Se serve, si invia in privato su richiesta.
 
 PORTA
   CarveCAM usa la porta 5080. Se è occupata da un altro programma, cambiarla in

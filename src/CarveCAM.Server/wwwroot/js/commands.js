@@ -2015,7 +2015,7 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
         h('div', { class: 'form-row' }, h('label', {}, t('Descrizione del problema')), desc),
         h('div', { class: 'form-row' }, h('label', {}, t('Includi le mesh dei modelli')), h('div', {}, meshes)),
         h('div', { class: 'form-row' }, h('label', {}, t('File di log')), days),
-        h('p', { class: 'p-note', style: { margin: 0 } }, t('La password dell\'archivio è nota all\'assistenza: invia il file così com\'è.'))),
+        h('p', { class: 'p-note', style: { margin: 0 } }, t('Contiene il tuo progetto e i log e la password è pubblica: non allegarlo a una segnalazione su GitHub, invialo in privato a chi ti assiste.'))),
       onOpen: () => setTimeout(() => desc.focus(), 60),
       buttons: [{ label: t('Annulla'), value: false }, { label: t('Esporta'), value: true, primary: true }],
     });
@@ -2144,8 +2144,10 @@ export function createCommands({ vp, sync, sketch, sim, gizmo }) {
         h('p', { style: { color: 'var(--text-faint)' } }, t('Unità: millimetri. Utensili: fresa cilindrica, torica, sferica e conica. Ingressi: affondo, rampa, elica.')),
         h('div', { class: 'p-sec about-sec' }, t('Sviluppo')),
         h('ul', { class: 'credits' }, h('li', {}, 'William Veronesi'), h('li', {}, 'Gabriel S. Sartori')),
+        h('div', { class: 'p-sec about-sec' }, t('Licenza')),
+        h('p', { class: 'p-note', style: { margin: 0 } }, t('Software libero con licenza MIT.')),
         h('div', { class: 'p-sec about-sec' }, t('Componenti di terze parti')),
-        h('p', { class: 'p-note', style: { margin: 0 } }, 'Three.js · Clipper2 · OpenCascade (occt-import-js) · ASP.NET Core')),
+        h('p', { class: 'p-note', style: { margin: 0 } }, 'Three.js · three-mesh-bvh · three-bvh-csg · Clipper2 · OpenCascade (occt-import-js) · ASP.NET Core')),
     });
   };
 
